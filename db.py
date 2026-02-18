@@ -1,42 +1,61 @@
-import os
-import psycopg
-from psycopg.rows import dict_row
+from fastapi import FastAPI
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-def get_db_url() -> str:
-    db_url = os.getenv("DATABASE_URL", "").strip()
-    if not db_url:
-        raise RuntimeError("DATABASE_URL is not set")
-    return db_url
+from db import init_db_safe, get_conn
 
-def get_conn():
-    return psycopg.connect(get_db_url(), row_factory=dict_row)
+app = FastAPI(title="Stratmap Chile")
 
-def init_db_safe() -> tuple[bool, str]:
-    """
-    Intenta crear tabla. Si falla, NO rompe el servicio.
-    Retorna (ok, message).
-    """
-    sql = """
-    CREATE TABLE IF NOT EXISTS opportunities (
-        id BIGSERIAL PRIMARY KEY,
-        source TEXT NOT NULL,
-        title TEXT NOT NULL,
-        url TEXT NOT NULL UNIQUE,
-        company TEXT,
-        contractor TEXT,
-        sector TEXT,
-        score INT DEFAULT 0,
-        region TEXT,
-        phase TEXT,
-        entry_strategy TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    """
+DB_STATUS_OK = False
+DB_STATUS_MSG = "not checked"
+
+def ch_time():
+    return datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d %H:%M:%S CLT")
+
+@app.on_event("startup")
+def startup():
+    global DB_STATUS_OK, DB_STATUS_MSG
+    ok, msg = init_db_safe()
+    DB_STATUS_OK, DB_STATUS_MSG = ok, msg
+    # NO levantamos excepción: el servicio debe quedar online igual
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "stratmap-chile", "time": ch_time()}
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "time": ch_time(),
+        "db_ok": DB_STATUS_OK,
+        "db_msg": DB_STATUS_MSG,
+    }
+
+@app.get("/opportunities")
+def opportunities(limit: int = 50):
+    limit = max(1, min(limit, 200))
+
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(sql)
-            conn.commit()
-        return True, "db ok"
+                cur.execute(
+                    """
+                    SELECT source, title, url, company, contractor, sector, score, region, phase, entry_strategy, created_at
+                    FROM opportunities
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                rows = cur.fetchall()
+        return {"count": len(rows), "items": rows, "time": ch_time()}
+
     except Exception as e:
-        return False, f"db error: {type(e).__name__}: {e}"
+        # Devuelve error “amigable” en vez de romper la app
+        return {
+            "count": 0,
+            "items": [],
+            "time": ch_time(),
+            "error": f"{type(e).__name__}: {e}",
+        }
