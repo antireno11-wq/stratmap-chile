@@ -14,3 +14,6 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok", "time": ch_time()}
+@app.get("/opportunities")
+def opportunities():
+    return {"count": 0, "items": []}
