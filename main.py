@@ -1,26 +1,56 @@
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, Query
-from db import init_db, get_conn
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
+from db import init_db_safe, db_health, upsert_opportunity, list_opportunities
 
+APP_TZ = os.getenv("APP_TZ", "America/Santiago")
 SERVICE_NAME = os.getenv("SERVICE_NAME", "stratmap-chile")
 
-app = FastAPI(title="Stratmap Chile")
+app = FastAPI(title="Stratmap Chile API", version="0.1.0")
 
 
 def now_clt() -> str:
-    return datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d %H:%M:%S CLT")
+    return datetime.now(ZoneInfo(APP_TZ)).strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
+# =========================
+# Models
+# =========================
+class OpportunityIn(BaseModel):
+    source: str = Field(..., description="Origen: sea|rss|manual|otro")
+    title: str
+    url: str
+    company: Optional[str] = None
+    contractor: Optional[str] = None
+    industry: Optional[str] = None  # Minería | Energía | Oil & Gas | Infraestructura | etc.
+    region: Optional[str] = None
+    phase: Optional[str] = None
+    score: Optional[int] = 0
+    entry: Optional[str] = None  # antes 'Estrategia de Entrada' / 'Entrada'
+    raw: Optional[Dict[str, Any]] = None  # payload completo por si quieres guardar más
+
+
+class IngestBody(BaseModel):
+    items: List[OpportunityIn]
+
+
+# =========================
+# Startup
+# =========================
 @app.on_event("startup")
 def startup():
-    # crea tabla si no existe
-    init_db()
+    # Importante: NO caer si DB está temporalmente abajo
+    init_db_safe()
 
 
+# =========================
+# Routes
+# =========================
 @app.get("/")
 def root():
     return {"ok": True, "service": SERVICE_NAME, "time": now_clt()}
@@ -28,45 +58,26 @@ def root():
 
 @app.get("/health")
 def health():
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("select 1 as ok;")
-                _ = cur.fetchone()
-        return {"status": "ok", "time": now_clt(), "db_ok": True, "db_msg": "ok"}
-    except Exception as e:
-        return {"status": "ok", "time": now_clt(), "db_ok": False, "db_msg": f"db error: {e}"}
+    ok, msg = db_health()
+    return {"status": "ok", "time": now_clt(), "db_ok": ok, "db_msg": msg}
+
+
+@app.post("/ingest")
+def ingest(body: IngestBody):
+    # Inserta/actualiza por URL (idempotente)
+    inserted = 0
+    for it in body.items:
+        try:
+            upsert_opportunity(it.model_dump())
+            inserted += 1
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"db error ingest: {e}")
+    return {"ok": True, "inserted": inserted, "time": now_clt()}
 
 
 @app.get("/opportunities")
-def list_opportunities(
-    limit: int = Query(50, ge=1, le=200),
-    q: str = Query("", description="filtro simple por texto en título/empresa"),
-):
-    q = (q or "").strip()
-
-    if q:
-        sql = """
-        select id, source, title, url, summary, company, contractor, sector, region, phase, score, created_at
-        from opportunities
-        where (title ilike %s) or (company ilike %s) or (contractor ilike %s)
-        order by created_at desc
-        limit %s;
-        """
-        like = f"%{q}%"
-        params = (like, like, like, limit)
-    else:
-        sql = """
-        select id, source, title, url, summary, company, contractor, sector, region, phase, score, created_at
-        from opportunities
-        order by created_at desc
-        limit %s;
-        """
-        params = (limit,)
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
+def opportunities(q: Optional[str] = None, limit: int = 50):
+    # limit razonable
+    limit = max(1, min(500, int(limit)))
+    rows = list_opportunities(q=q, limit=limit)
     return {"count": len(rows), "items": rows, "time": now_clt()}
