@@ -6,31 +6,33 @@ from typing import Any, Optional, List, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from db import init_db, upsert_opportunities, list_opportunities
+from db import init_db_safe, db_health, upsert_opportunities, list_opportunities
 
 
 SERVICE_NAME = os.getenv("SERVICE_NAME", "stratmap-chile")
-TZ = os.getenv("TZ", "America/Santiago")
+TZ = ZoneInfo("America/Santiago")
+
+app = FastAPI(title="Stratmap Chile API", version="0.1.0")
 
 
-def now_cl() -> str:
-    return datetime.now(ZoneInfo(TZ)).strftime("%Y-%m-%d %H:%M:%S %Z")
+def now_clt() -> str:
+    return datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S CLT")
 
 
+# -------------------------
+# Models
+# -------------------------
 class OpportunityIn(BaseModel):
     source: str = Field(..., description="Origen: sea|rss|manual|otro")
     title: str
     url: str
-
     company: Optional[str] = None
     contractor: Optional[str] = None
     industry: Optional[str] = None
     region: Optional[str] = None
     phase: Optional[str] = None
-
     score: Optional[int] = 0
     entry: Optional[str] = None
-
     raw: Optional[Dict[str, Any]] = None
 
 
@@ -38,35 +40,42 @@ class IngestBody(BaseModel):
     items: List[OpportunityIn]
 
 
-app = FastAPI(title="Stratmap Chile API", version="0.1.0")
-
-
+# -------------------------
+# Startup
+# -------------------------
 @app.on_event("startup")
-def startup():
-    init_db()
+def startup() -> None:
+    # NO mates el server si DB no está listo: deja “safe”
+    init_db_safe()
 
 
+# -------------------------
+# Routes
+# -------------------------
 @app.get("/")
 def root():
-    return {"ok": True, "service": SERVICE_NAME, "time": now_cl()}
+    return {"ok": True, "service": SERVICE_NAME, "time": now_clt()}
 
 
 @app.get("/health")
 def health():
-    # Simplemente confirma que la app está arriba (DB la valida init_db)
-    return {"status": "ok", "time": now_cl()}
+    ok, msg = db_health()
+    return {"status": "ok", "time": now_clt(), "db_ok": ok, "db_msg": msg}
 
 
 @app.post("/ingest")
 def ingest(body: IngestBody):
-    if not body.items:
-        raise HTTPException(status_code=400, detail="items viene vacío")
-
+    """
+    Inserta/actualiza oportunidades (upsert por url).
+    """
     try:
-        items = [it.model_dump() for it in body.items]
-        ids = upsert_opportunities(items)
-        return {"ok": True, "ingested": len(items), "ids": ids[:50], "time": now_cl()}
+        # Convertimos a dict plano para que DB no se pelee con Pydantic
+        items_dicts = [x.model_dump() for x in body.items]
+        res = upsert_opportunities(items_dicts)
+        res["time"] = now_clt()
+        return res
     except Exception as e:
+        # Esto te devuelve el error en JSON (como lo estás viendo)
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
@@ -74,20 +83,6 @@ def ingest(body: IngestBody):
 def opportunities(q: Optional[str] = None, limit: int = 50):
     try:
         rows = list_opportunities(q=q, limit=limit)
-        return {"count": len(rows), "items": rows, "time": now_cl()}
+        return {"count": len(rows), "items": rows, "time": now_clt()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
-
-
-@app.get("/routes")
-def routes():
-    base = os.getenv("PUBLIC_BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
-    return {
-        "base": base,
-        "docs": f"{base}/docs",
-        "openapi": f"{base}/openapi.json",
-        "health": f"{base}/health",
-        "ingest_post": f"{base}/ingest",
-        "opportunities": f"{base}/opportunities?limit=50",
-        "time": now_cl(),
-    }
