@@ -1,83 +1,93 @@
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Optional, List, Dict, Any
+from typing import Any, Optional, List, Dict
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from db import init_db_safe, db_health, upsert_opportunity, list_opportunities
+from db import init_db, upsert_opportunities, list_opportunities
 
-APP_TZ = os.getenv("APP_TZ", "America/Santiago")
+
 SERVICE_NAME = os.getenv("SERVICE_NAME", "stratmap-chile")
-
-app = FastAPI(title="Stratmap Chile API", version="0.1.0")
-
-
-def now_clt() -> str:
-    return datetime.now(ZoneInfo(APP_TZ)).strftime("%Y-%m-%d %H:%M:%S %Z")
+TZ = os.getenv("TZ", "America/Santiago")
 
 
-# =========================
-# Models
-# =========================
+def now_cl() -> str:
+    return datetime.now(ZoneInfo(TZ)).strftime("%Y-%m-%d %H:%M:%S %Z")
+
+
 class OpportunityIn(BaseModel):
     source: str = Field(..., description="Origen: sea|rss|manual|otro")
     title: str
     url: str
+
     company: Optional[str] = None
     contractor: Optional[str] = None
-    industry: Optional[str] = None  # Minería | Energía | Oil & Gas | Infraestructura | etc.
+    industry: Optional[str] = None
     region: Optional[str] = None
     phase: Optional[str] = None
+
     score: Optional[int] = 0
-    entry: Optional[str] = None  # antes 'Estrategia de Entrada' / 'Entrada'
-    raw: Optional[Dict[str, Any]] = None  # payload completo por si quieres guardar más
+    entry: Optional[str] = None
+
+    raw: Optional[Dict[str, Any]] = None
 
 
 class IngestBody(BaseModel):
     items: List[OpportunityIn]
 
 
-# =========================
-# Startup
-# =========================
+app = FastAPI(title="Stratmap Chile API", version="0.1.0")
+
+
 @app.on_event("startup")
 def startup():
-    # Importante: NO caer si DB está temporalmente abajo
-    init_db_safe()
+    init_db()
 
 
-# =========================
-# Routes
-# =========================
 @app.get("/")
 def root():
-    return {"ok": True, "service": SERVICE_NAME, "time": now_clt()}
+    return {"ok": True, "service": SERVICE_NAME, "time": now_cl()}
 
 
 @app.get("/health")
 def health():
-    ok, msg = db_health()
-    return {"status": "ok", "time": now_clt(), "db_ok": ok, "db_msg": msg}
+    # Simplemente confirma que la app está arriba (DB la valida init_db)
+    return {"status": "ok", "time": now_cl()}
 
 
 @app.post("/ingest")
 def ingest(body: IngestBody):
-    # Inserta/actualiza por URL (idempotente)
-    inserted = 0
-    for it in body.items:
-        try:
-            upsert_opportunity(it.model_dump())
-            inserted += 1
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"db error ingest: {e}")
-    return {"ok": True, "inserted": inserted, "time": now_clt()}
+    if not body.items:
+        raise HTTPException(status_code=400, detail="items viene vacío")
+
+    try:
+        items = [it.model_dump() for it in body.items]
+        ids = upsert_opportunities(items)
+        return {"ok": True, "ingested": len(items), "ids": ids[:50], "time": now_cl()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 @app.get("/opportunities")
 def opportunities(q: Optional[str] = None, limit: int = 50):
-    # limit razonable
-    limit = max(1, min(500, int(limit)))
-    rows = list_opportunities(q=q, limit=limit)
-    return {"count": len(rows), "items": rows, "time": now_clt()}
+    try:
+        rows = list_opportunities(q=q, limit=limit)
+        return {"count": len(rows), "items": rows, "time": now_cl()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
+
+@app.get("/routes")
+def routes():
+    base = os.getenv("PUBLIC_BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
+    return {
+        "base": base,
+        "docs": f"{base}/docs",
+        "openapi": f"{base}/openapi.json",
+        "health": f"{base}/health",
+        "ingest_post": f"{base}/ingest",
+        "opportunities": f"{base}/opportunities?limit=50",
+        "time": now_cl(),
+    }
