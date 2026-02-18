@@ -17,8 +17,13 @@ def ch_time():
 @app.on_event("startup")
 def startup():
     global DB_STATUS_OK, DB_STATUS_MSG
+    print("[startup] starting…")
+
     ok, msg = init_db_safe()
     DB_STATUS_OK, DB_STATUS_MSG = ok, msg
+
+    print(f"[startup] db_ok={DB_STATUS_OK} msg={DB_STATUS_MSG}")
+    print("[startup] done.")
 
 
 @app.get("/")
