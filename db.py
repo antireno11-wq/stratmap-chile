@@ -11,14 +11,16 @@ def get_db_url() -> str:
 
 
 def get_conn():
-    return psycopg.connect(get_db_url(), row_factory=dict_row)
+    # timeout para que NO se quede pegado en startup
+    # (Railway a veces demora en levantar Postgres o la red interna)
+    return psycopg.connect(
+        get_db_url(),
+        row_factory=dict_row,
+        connect_timeout=5,  # <- clave
+    )
 
 
 def init_db_safe() -> tuple[bool, str]:
-    """
-    Crea tablas si puede. Si NO puede (DB caída/no conectada),
-    NO rompe la app: devuelve (False, "motivo").
-    """
     sql = """
     CREATE TABLE IF NOT EXISTS opportunities (
         id BIGSERIAL PRIMARY KEY,
