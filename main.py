@@ -1,18 +1,30 @@
-from fastapi import FastAPI
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from fastapi import FastAPI, Query
+from storage import init_db, insert_item, list_items
 
-app = FastAPI(title="StratMap Chile API")
+app = FastAPI(title="Stratmap Chile")
+
+@app.on_event("startup")
+def _startup():
+    init_db()
 
 @app.get("/")
-def home():
-    return {
-        "product": "StratMap",
-        "country": "Chile",
-        "status": "running",
-        "time_cl": datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d %H:%M:%S"),
-    }
+def root():
+    return {"ok": True}
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {"status": "ok"}
+
+@app.get("/projects")
+def projects(limit: int = Query(50, ge=1, le=500)):
+    return {"items": list_items(limit=limit)}
+
+@app.post("/ingest")
+def ingest():
+    # Por ahora: inserta 1 item demo para probar el flujo end-to-end
+    insert_item(
+        title="Demo: Proyecto ejemplo",
+        url="https://www.sea.gob.cl/",
+        source="demo",
+    )
+    return {"ok": True, "inserted": 1}
