@@ -1,23 +1,12 @@
-import os
 from fastapi import FastAPI
-from db import init_db, list_opportunities
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-app = FastAPI(title="Stratmap Chile")
+app = FastAPI()
 
-@app.on_event("startup")
-def on_startup():
-    # Crea tablas al iniciar
-    init_db()
+def ch_time():
+    return datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d %H:%M:%S CLT")
 
 @app.get("/")
 def root():
-    return {"ok": True, "service": "stratmap-chile"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-@app.get("/opportunities")
-def opportunities(limit: int = 50):
-    rows = list_opportunities(limit=limit)
-    return {"count": len(rows), "items": rows}
+    return {"ok": True, "time": ch_time()}
