@@ -1,76 +1,96 @@
 import os
+import json
+from datetime import datetime, timezone
+
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Json
 
 
-def get_db_url() -> str:
-    db_url = os.getenv("DATABASE_URL", "").strip()
-    if not db_url:
-        raise RuntimeError("DATABASE_URL no está seteada.")
-    return db_url
+def _db_url() -> str:
+    """
+    Railway suele exponer DATABASE_URL (o PGDATABASE/PGHOST/etc).
+    Preferimos DATABASE_URL si existe.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        return db_url
+    # fallback (por si Railway expone variables separadas)
+    host = os.getenv("PGHOST")
+    port = os.getenv("PGPORT", "5432")
+    user = os.getenv("PGUSER")
+    password = os.getenv("PGPASSWORD")
+    dbname = os.getenv("PGDATABASE")
+    if host and user and password and dbname:
+        return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+    raise RuntimeError("DATABASE_URL no está configurada (ni variables PG*).")
 
 
 def get_conn():
-    return psycopg.connect(get_db_url(), row_factory=dict_row, connect_timeout=10)
+    return psycopg.connect(_db_url(), row_factory=dict_row)
 
 
-def init_db() -> None:
-    # 1) Crea tabla base si no existe
-    ddl_base = """
+def init_db():
+    """
+    Crea tabla si no existe y asegura columnas necesarias.
+    """
+    ddl = """
     CREATE TABLE IF NOT EXISTS opportunities (
-        id BIGSERIAL PRIMARY KEY,
-        source TEXT NOT NULL,
-        title TEXT NOT NULL,
-        url TEXT NOT NULL UNIQUE,
-
-        company TEXT,
-        contractor TEXT,
-        industry TEXT,
-        region TEXT,
-        phase TEXT,
-
-        score INT DEFAULT 0,
-
-        raw JSONB,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      id BIGSERIAL PRIMARY KEY,
+      source TEXT NOT NULL,
+      title TEXT NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      company TEXT,
+      contractor TEXT,
+      industry TEXT,
+      region TEXT,
+      phase TEXT,
+      score INT DEFAULT 0,
+      entry TEXT,
+      raw JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     """
 
-    # 2) Migraciones seguras: agrega columnas que tu código espera
-    # (Si ya existen, no hace nada)
-    ddl_migrations = """
-    ALTER TABLE opportunities
-      ADD COLUMN IF NOT EXISTS entry TEXT;
-
-    ALTER TABLE opportunities
-      ADD COLUMN IF NOT EXISTS raw JSONB;
-
-    ALTER TABLE opportunities
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-    """
-
-    ddl_indexes = """
-    CREATE INDEX IF NOT EXISTS idx_opportunities_score ON opportunities(score DESC);
-    CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities(company);
-    CREATE INDEX IF NOT EXISTS idx_opportunities_industry ON opportunities(industry);
-    """
+    # Por si tu tabla existía sin algunas columnas (migración suave)
+    alter_cols = [
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS entry TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS raw JSONB;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS contractor TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS company TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS industry TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS region TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS phase TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS score INT DEFAULT 0;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS source TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS title TEXT;",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS url TEXT;",
+        # si por alguna razón no quedó UNIQUE
+        "CREATE UNIQUE INDEX IF NOT EXISTS opportunities_url_uq ON opportunities(url);",
+    ]
 
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(ddl_base)
-            cur.execute(ddl_migrations)
-            cur.execute(ddl_indexes)
+            cur.execute(ddl)
+            for q in alter_cols:
+                cur.execute(q)
         conn.commit()
 
 
-def upsert_opportunities(items: list[dict]) -> list[int]:
+def upsert_opportunities(items: list[dict]) -> int:
+    """
+    Inserta o actualiza por url.
+    Devuelve cantidad procesada (insert+update).
+    """
+    if not items:
+        return 0
+
     sql = """
     INSERT INTO opportunities
       (source, title, url, company, contractor, industry, region, phase, score, entry, raw, updated_at)
     VALUES
-      (%(source)s, %(title)s, %(url)s, %(company)s, %(contractor)s, %(industry)s, %(region)s, %(phase)s,
-       %(score)s, %(entry)s, %(raw)s::jsonb, NOW())
+      (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
     ON CONFLICT (url) DO UPDATE SET
       source = EXCLUDED.source,
       title = EXCLUDED.title,
@@ -83,41 +103,67 @@ def upsert_opportunities(items: list[dict]) -> list[int]:
       entry = EXCLUDED.entry,
       raw = EXCLUDED.raw,
       updated_at = NOW()
-    RETURNING id;
+    ;
     """
 
-    ids: list[int] = []
+    processed = 0
     with get_conn() as conn:
         with conn.cursor() as cur:
             for it in items:
-                cur.execute(sql, it)
-                row = cur.fetchone()
-                if row and "id" in row:
-                    ids.append(int(row["id"]))
+                raw_val = it.get("raw")
+                # ✅ CLAVE: convertir dict → JSON
+                if raw_val is not None:
+                    raw_val = Json(raw_val)  # psycopg3 lo manda a jsonb
+                cur.execute(
+                    sql,
+                    (
+                        it.get("source"),
+                        it.get("title"),
+                        it.get("url"),
+                        it.get("company"),
+                        it.get("contractor"),
+                        it.get("industry"),
+                        it.get("region"),
+                        it.get("phase"),
+                        int(it.get("score") or 0),
+                        it.get("entry"),
+                        raw_val,
+                    ),
+                )
+                processed += 1
         conn.commit()
-    return ids
+
+    return processed
 
 
 def list_opportunities(q: str | None = None, limit: int = 50) -> list[dict]:
-    limit = max(1, min(int(limit), 200))
+    limit = max(1, min(int(limit or 50), 200))
 
-    base = """
-    SELECT
-      id, source, title, url, company, contractor, industry, region, phase, score, entry,
-      created_at, updated_at
-    FROM opportunities
-    """
-    params = {}
-    where = ""
     if q:
-        where = "WHERE (title ILIKE %(q)s OR company ILIKE %(q)s OR contractor ILIKE %(q)s OR industry ILIKE %(q)s)"
-        params["q"] = f"%{q}%"
-
-    order = "ORDER BY score DESC, updated_at DESC"
-    sql = f"{base} {where} {order} LIMIT {limit};"
+        sql = """
+        SELECT id, source, title, url, company, contractor, industry, region, phase, score, entry, created_at, updated_at
+        FROM opportunities
+        WHERE
+          title ILIKE %s
+          OR company ILIKE %s
+          OR contractor ILIKE %s
+          OR industry ILIKE %s
+          OR region ILIKE %s
+        ORDER BY score DESC, updated_at DESC
+        LIMIT %s;
+        """
+        like = f"%{q}%"
+        params = (like, like, like, like, like, limit)
+    else:
+        sql = """
+        SELECT id, source, title, url, company, contractor, industry, region, phase, score, entry, created_at, updated_at
+        FROM opportunities
+        ORDER BY score DESC, updated_at DESC
+        LIMIT %s;
+        """
+        params = (limit,)
 
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
-            rows = cur.fetchall()
-    return rows
+            return cur.fetchall()
