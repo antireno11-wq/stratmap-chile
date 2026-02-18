@@ -2,13 +2,20 @@ import os
 import psycopg
 from psycopg.rows import dict_row
 
-def get_conn():
-    db_url = os.getenv("DATABASE_URL")
+def get_db_url() -> str:
+    db_url = os.getenv("DATABASE_URL", "").strip()
     if not db_url:
         raise RuntimeError("DATABASE_URL is not set")
-    return psycopg.connect(db_url, row_factory=dict_row)
+    return db_url
 
-def init_db():
+def get_conn():
+    return psycopg.connect(get_db_url(), row_factory=dict_row)
+
+def init_db_safe() -> tuple[bool, str]:
+    """
+    Intenta crear tabla. Si falla, NO rompe el servicio.
+    Retorna (ok, message).
+    """
     sql = """
     CREATE TABLE IF NOT EXISTS opportunities (
         id BIGSERIAL PRIMARY KEY,
@@ -25,7 +32,11 @@ def init_db():
         created_at TIMESTAMPTZ DEFAULT NOW()
     );
     """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql)
-        conn.commit()
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+            conn.commit()
+        return True, "db ok"
+    except Exception as e:
+        return False, f"db error: {type(e).__name__}: {e}"
