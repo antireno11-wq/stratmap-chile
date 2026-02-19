@@ -1,11 +1,14 @@
-fastapi==0.110.0
-uvicorn[standard]==0.29.0
+fastapi==0.115.8
+uvicorn[standard]==0.30.6
 
-# Postgres (Python 3.13 compatible)
+# Postgres
 psycopg[binary]==3.2.13
 
+# HTTP
 requests==2.32.3
+
+# Config
 python-dotenv==1.0.1
 
-# FastAPI 0.110 funciona con Pydantic 2.x
-pydantic==2.6.4
+# Pydantic (compatible con Python 3.13)
+pydantic==2.10.6
