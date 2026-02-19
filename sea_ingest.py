@@ -1,53 +1,82 @@
 import os
-import requests
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from typing import Any
 
-BASE_URL = os.getenv("BASE_URL")
+import requests
 
-SEA_TEST_URL = "https://www.sea.gob.cl/buscador-de-proyectos?texto=9030"
+from connectors.sea import fetch_sea  # tu función actual
+
+# =========================
+# Config
+# =========================
+BASE_URL = os.getenv("BASE_URL", "http://stratmap-chile:8080").rstrip("/")
+SEA_DAYS_BACK = int(os.getenv("SEA_DAYS_BACK", "90"))
+SEA_LIMIT = int(os.getenv("SEA_LIMIT", "400"))  # baja default
+INGEST_BATCH = int(os.getenv("INGEST_BATCH", "100"))  # lote por POST
+INGEST_TIMEOUT = int(os.getenv("INGEST_TIMEOUT", "60"))  # ojo gateway
+INGEST_RETRIES = int(os.getenv("INGEST_RETRIES", "5"))
+INGEST_RETRY_SLEEP = int(os.getenv("INGEST_RETRY_SLEEP", "5"))
+
+DEBUG = os.getenv("DEBUG", "0") == "1"
 
 
-def now_clt():
+def now_clt() -> str:
     return datetime.now(ZoneInfo("America/Santiago")).strftime("%Y-%m-%d %H:%M:%S CLT")
 
 
-def fetch_sea():
-    # Ejemplo simple
-    return [{
-        "source": "sea",
-        "title": "Proyecto Modificación Faena Minera Caserones (SEIA 9030)",
-        "url": SEA_TEST_URL,
-        "company": "Caserones",
-        "contractor": None,
-        "industry": "Minería",
-        "region": "Atacama",
-        "phase": "Ambiental en curso",
-        "score": 90,
-        "entry": "continuidad / expansión",
-        "raw": {}
-    }]
+def chunked(lst: list[dict], size: int):
+    for i in range(0, len(lst), size):
+        yield lst[i : i + size]
 
 
-def ingest(items):
-    r = requests.post(f"{BASE_URL}/ingest", json={"items": items}, timeout=120)
-    r.raise_for_status()
-    return r.json()
+def post_ingest_batch(batch: list[dict]) -> dict:
+    url = f"{BASE_URL}/ingest"
+    payload = {"items": batch}
+
+    last_err: Exception | None = None
+
+    for attempt in range(1, INGEST_RETRIES + 1):
+        try:
+            r = requests.post(url, json=payload, timeout=INGEST_TIMEOUT)
+
+            # si es error, loguea cuerpo (muy útil)
+            if r.status_code >= 400:
+                if DEBUG:
+                    print(f"[{now_clt()}] ingest HTTP {r.status_code}: {r.text[:800]}")
+                r.raise_for_status()
+
+            return r.json()
+
+        except Exception as e:
+            last_err = e
+            print(f"[{now_clt()}] ingest attempt {attempt}/{INGEST_RETRIES} failed: {e}")
+            time.sleep(INGEST_RETRY_SLEEP)
+
+    raise RuntimeError(f"Ingest failed after {INGEST_RETRIES} retries: {last_err}")
 
 
 def run_sea_ingest():
-    print(f"[{now_clt()}] SEA ingest start")
+    print(f"[{now_clt()}] SEA ingest start -> {BASE_URL}")
 
-    items = fetch_sea()
-    print(f"[{now_clt()}] fetched {len(items)}")
+    items = fetch_sea(days_back=SEA_DAYS_BACK, limit=SEA_LIMIT)
+    print(f"[{now_clt()}] SEA fetched: {len(items)} items")
 
     if not items:
-        return {"ok": True, "fetched": 0}
+        print(f"[{now_clt()}] nothing to ingest")
+        return
 
-    res = ingest(items)
-    print(f"[{now_clt()}] ingest result: {res}")
+    total_inserted = 0
+    total_updated = 0
 
-    return {"ok": True, "fetched": len(items), "result": res}
+    for n, batch in enumerate(chunked(items, INGEST_BATCH), start=1):
+        print(f"[{now_clt()}] ingest batch {n} size={len(batch)}")
+        res = post_ingest_batch(batch)
+        total_inserted += int(res.get("inserted", 0))
+        total_updated += int(res.get("updated", 0))
+
+    print(f"[{now_clt()}] DONE sea_ingest inserted={total_inserted} updated={total_updated}")
 
 
 if __name__ == "__main__":
