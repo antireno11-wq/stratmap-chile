@@ -1,7 +1,5 @@
 import os
-import json
-from datetime import datetime, timezone
-from typing import Optional, Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
@@ -19,9 +17,6 @@ def get_conn():
 
 
 def init_db_safe() -> None:
-    """
-    Crea tabla si no existe. NO bota la app si DB está caída.
-    """
     try:
         init_db()
     except Exception as e:
@@ -59,7 +54,7 @@ def init_db() -> None:
             cur.execute(sql)
         conn.commit()
 
-    # Por si tenías una tabla antigua sin 'entry'
+    # compat: por si venías de una tabla antigua
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS entry TEXT NULL;")
@@ -71,17 +66,13 @@ def db_health() -> Tuple[bool, str]:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 as ok;")
-                _ = cur.fetchone()
+                cur.fetchone()
         return True, "ok"
     except Exception as e:
         return False, f"db error: {type(e).__name__}: {e}"
 
 
 def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
-    """
-    Inserta o actualiza por url (UNIQUE).
-    Retorna (inserted, updated)
-    """
     inserted = 0
     updated = 0
 
@@ -105,17 +96,7 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     RETURNING (xmax = 0) AS inserted;
     """
 
-    # NORMALIZA RAW: dict -> JSON string -> JSONB via psycopg
     for it in items:
-        raw = it.get("raw")
-        if isinstance(raw, (dict, list)):
-            it["raw"] = psycopg.types.json.Json(raw)
-        elif raw is None:
-            it["raw"] = None
-        else:
-            # si viene como string u otro, lo guardamos como string
-            it["raw"] = psycopg.types.json.Json({"value": str(raw)})
-
         it.setdefault("company", None)
         it.setdefault("contractor", None)
         it.setdefault("industry", None)
@@ -123,6 +104,14 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
         it.setdefault("phase", None)
         it.setdefault("score", 0)
         it.setdefault("entry", None)
+
+        raw = it.get("raw")
+        if isinstance(raw, (dict, list)):
+            it["raw"] = psycopg.types.json.Json(raw)
+        elif raw is None:
+            it["raw"] = None
+        else:
+            it["raw"] = psycopg.types.json.Json({"value": str(raw)})
 
     with get_conn() as conn:
         with conn.cursor() as cur:
