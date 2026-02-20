@@ -12,7 +12,7 @@ from connectors.sea import fetch_sea  # tu fetch_sea actual que devuelve list[di
 
 TZ = ZoneInfo("America/Santiago")
 
-BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
+BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app")
 SEA_DAYS_BACK = int(os.getenv("SEA_DAYS_BACK", "90"))
 SEA_LIMIT = int(os.getenv("SEA_LIMIT", "800"))
 
