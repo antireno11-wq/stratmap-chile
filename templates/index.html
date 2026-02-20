@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stratmap Chile</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div>
+        <div class="title">Stratmap</div>
+        <div class="subtitle">Oportunidades (SEA primero)</div>
+      </div>
+    </div>
+
+    <div class="right">
+      <a class="btn" href="/docs" target="_blank">API Docs</a>
+      <button class="btn primary" id="btnRefresh">Actualizar</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="row">
+        <input id="q" class="input" placeholder="Buscar (título, empresa, región, industria…)" />
+        <select id="limit" class="input">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+        <button class="btn" id="btnSearch">Buscar</button>
+      </div>
+
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="card">
+      <div class="tableWrap">
+        <table class="table" id="table">
+          <thead>
+            <tr>
+              <th>Score</th>
+              <th>Título</th>
+              <th>Empresa</th>
+              <th>Industria</th>
+              <th>Región</th>
+              <th>Fuente</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="7" class="muted">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
