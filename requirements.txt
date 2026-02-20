@@ -1,14 +1,9 @@
-fastapi==0.115.8
-uvicorn[standard]==0.30.6
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
 
-# Postgres
 psycopg[binary]==3.2.13
 
-# HTTP
 requests==2.32.3
-
-# Config
 python-dotenv==1.0.1
 
-# Pydantic (compatible con Python 3.13)
 pydantic==2.10.6
