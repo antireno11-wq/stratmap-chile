@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional, Any, Dict, List, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
@@ -54,7 +54,7 @@ def init_db() -> None:
             cur.execute(sql)
         conn.commit()
 
-    # compat: por si venías de una tabla antigua
+    # compat si venías con tabla antigua
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS entry TEXT NULL;")
@@ -66,7 +66,7 @@ def db_health() -> Tuple[bool, str]:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 as ok;")
-                cur.fetchone()
+                _ = cur.fetchone()
         return True, "ok"
     except Exception as e:
         return False, f"db error: {type(e).__name__}: {e}"
@@ -97,14 +97,6 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     """
 
     for it in items:
-        it.setdefault("company", None)
-        it.setdefault("contractor", None)
-        it.setdefault("industry", None)
-        it.setdefault("region", None)
-        it.setdefault("phase", None)
-        it.setdefault("score", 0)
-        it.setdefault("entry", None)
-
         raw = it.get("raw")
         if isinstance(raw, (dict, list)):
             it["raw"] = psycopg.types.json.Json(raw)
@@ -112,6 +104,14 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
             it["raw"] = None
         else:
             it["raw"] = psycopg.types.json.Json({"value": str(raw)})
+
+        it.setdefault("company", None)
+        it.setdefault("contractor", None)
+        it.setdefault("industry", None)
+        it.setdefault("region", None)
+        it.setdefault("phase", None)
+        it.setdefault("score", 0)
+        it.setdefault("entry", None)
 
     with get_conn() as conn:
         with conn.cursor() as cur:
