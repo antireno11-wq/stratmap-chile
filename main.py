@@ -7,5 +7,4 @@ app = FastAPI()
 def health():
     return {"status": "ok"}
 
-# Monta la UI (debe ir al final)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
