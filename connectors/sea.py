@@ -1,104 +1,168 @@
-# sea_ingest.py - actualizado para múltiples fuentes
-import os
-import time
-import random
-from datetime import datetime
+# connectors/sea.py
+import re
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
 import requests
-from connectors.chilebcompra import fetch_chilebcompra
 
 TZ = ZoneInfo("America/Santiago")
-BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
-SEA_DAYS_BACK = int(os.getenv("SEA_DAYS_BACK", "365"))
-SEA_LIMIT = int(os.getenv("SEA_LIMIT", "2000"))
-CHILEBCOMPRA_DAYS_BACK = int(os.getenv("CHILEBCOMPRA_DAYS_BACK", "30"))
-CHILEBCOMPRA_LIMIT = int(os.getenv("CHILEBCOMPRA_LIMIT", "500"))
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "100"))
-INGEST_TIMEOUT = int(os.getenv("INGEST_TIMEOUT", "120"))
-INGEST_RETRIES = int(os.getenv("INGEST_RETRIES", "6"))
-WAIT_HEALTH_SECONDS = int(os.getenv("WAIT_HEALTH_SECONDS", "180"))
-HEALTH_POLL_SECONDS = float(os.getenv("HEALTH_POLL_SECONDS", "5"))
 
-HEADERS = {
-    "User-Agent": "StratmapWorker/0.2 (+railway; contact=ops)",
-    "Accept": "application/json",
+SEA_LAYERS = [
+    "https://arcgisv11.sea.gob.cl/server/rest/services/WEBServices/ProyectosSEIA/MapServer/1",
+    "https://arcgisv11.sea.gob.cl/server/rest/services/WEBServices/ProyectosSEIA/MapServer/2",
+]
+
+REGION_MAP = {
+    "I": "Tarapacá",
+    "II": "Antofagasta",
+    "III": "Atacama",
+    "IV": "Coquimbo",
+    "V": "Valparaíso",
+    "VI": "O'Higgins",
+    "VII": "Maule",
+    "VIII": "Biobío",
+    "IX": "La Araucanía",
+    "X": "Los Lagos",
+    "XI": "Aysén",
+    "XII": "Magallanes",
+    "RM": "Región Metropolitana",
+    "XIV": "Los Ríos",
+    "XV": "Arica y Parinacota",
+    "XVI": "Ñuble",
 }
 
 
-def now_clt() -> str:
-    return datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S CLT")
+def arcgis_query(layer_url: str, where: str = "1=1", limit: int = 500) -> List[Dict[str, Any]]:
+    url = layer_url.rstrip("/") + "/query"
+    params = {
+        "where": where,
+        "outFields": "*",
+        "f": "json",
+        "resultRecordCount": limit,
+    }
+    r = requests.get(url, params=params, timeout=60)
+    r.raise_for_status()
+    data = r.json()
+    feats = data.get("features", [])
+    out = []
+    for f in feats:
+        attrs = f.get("attributes") or {}
+        out.append(attrs)
+    return out
 
 
-def wait_for_health(session: requests.Session) -> bool:
-    url = f"{BASE_URL}/health"
-    print(f"[{now_clt()}] waiting health: {url} (max {WAIT_HEALTH_SECONDS}s)")
-    deadline = time.time() + WAIT_HEALTH_SECONDS
-    while time.time() < deadline:
-        try:
-            r = session.get(url, timeout=15, headers=HEADERS)
-            if r.status_code == 200 and r.json().get("db_ok"):
-                print(f"[{now_clt()}] health OK")
-                return True
-        except Exception as e:
-            print(f"[{now_clt()}] health check: {e}")
-        time.sleep(HEALTH_POLL_SECONDS)
-    print(f"[{now_clt()}] health NOT OK after {WAIT_HEALTH_SECONDS}s -> continue anyway")
-    return False
+def parse_arcgis_date(ms: Any) -> Optional[datetime]:
+    try:
+        if ms is None:
+            return None
+        ms = int(ms)
+        return datetime.fromtimestamp(ms / 1000, tz=TZ)
+    except Exception:
+        return None
 
 
-def post_ingest_batch(session: requests.Session, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-    url = f"{BASE_URL}/ingest"
-    last_err = None
-    for attempt in range(1, INGEST_RETRIES + 1):
-        try:
-            r = session.post(url, json={"items": batch}, timeout=INGEST_TIMEOUT, headers=HEADERS)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            last_err = e
-            wait = min(60, 2 ** attempt) + random.uniform(0, 0.6)
-            print(f"[{now_clt()}] ingest attempt {attempt}/{INGEST_RETRIES} failed: {e} | sleep {wait:.1f}s")
-            time.sleep(wait)
-    raise RuntimeError(f"Ingest failed after {INGEST_RETRIES} retries: {last_err}")
+def region_label(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    code = str(code).strip().upper()
+    return REGION_MAP.get(code, code)
 
 
-def ingest_items(session: requests.Session, items: List[Dict[str, Any]], source: str) -> None:
-    if not items:
-        print(f"[{now_clt()}] {source}: nothing to ingest")
-        return
+def classify_industry(title: str, typology: Optional[str]) -> Optional[str]:
+    t = (title or "").lower()
+    ty = (typology or "").lower()
+    blob = f"{t} {ty}"
 
-    total_ins = total_upd = 0
-    for i in range(0, len(items), BATCH_SIZE):
-        batch = items[i:i + BATCH_SIZE]
-        res = post_ingest_batch(session, batch)
-        total_ins += int(res.get("inserted", 0))
-        total_upd += int(res.get("updated", 0))
-        print(f"[{now_clt()}] {source} batch ok: inserted={res.get('inserted')} updated={res.get('updated')}")
-        time.sleep(0.25)
-
-    print(f"[{now_clt()}] {source} DONE: inserted={total_ins} updated={total_upd}")
-
-
-def run() -> None:
-    print(f"[{now_clt()}] Worker start -> {BASE_URL}")
-    session = requests.Session()
-    wait_for_health(session)
-
-    # ── SEA ──
-    print(f"[{now_clt()}] Fetching SEA...")
-    sea_items = fetch_sea(days_back=SEA_DAYS_BACK, limit=SEA_LIMIT)
-    print(f"[{now_clt()}] SEA fetched: {len(sea_items)} items")
-    ingest_items(session, sea_items, "SEA")
-
-    # ── ChileCompra ──
-    print(f"[{now_clt()}] Fetching ChileCompra...")
-    cb_items = fetch_chilebcompra(days_back=CHILEBCOMPRA_DAYS_BACK, limit=CHILEBCOMPRA_LIMIT)
-    print(f"[{now_clt()}] ChileCompra fetched: {len(cb_items)} items")
-    ingest_items(session, cb_items, "ChileCompra")
-
-    print(f"[{now_clt()}] Worker finished")
+    if any(k in blob for k in ["minera", "faena", "yacimiento", "mina", "relave", "concentradora", "chancado"]):
+        return "Minería"
+    if any(k in blob for k in ["agroindustria", "packing", "fruta", "congelamiento", "empacamiento"]):
+        return "Agroindustria"
+    if any(k in blob for k in ["energía", "fotovolta", "eólica", "subestación", "línea de transmisión"]):
+        return "Energía"
+    if any(k in blob for k in ["puerto", "terminal", "muelle"]):
+        return "Portuario"
+    if any(k in blob for k in ["carretera", "ruta", "camino", "puente"]):
+        return "Infraestructura"
+    return None
 
 
-if __name__ == "__main__":
-    run()
+def score_v1(industry: Optional[str], title: str, inv_usd: Optional[float]) -> int:
+    base = 30
+    if industry == "Minería":
+        base = 60
+    elif industry == "Energía":
+        base = 55
+    elif industry == "Infraestructura":
+        base = 45
+    elif industry == "Agroindustria":
+        base = 40
+
+    t = (title or "").lower()
+    kw = 0
+    if any(k in t for k in ["ampliación", "expansión", "aumento"]):
+        kw += 10
+    if any(k in t for k in ["planta", "campamento", "oficinas", "instalación"]):
+        kw += 8
+    if any(k in t for k in ["construcción", "montaje", "habilitación"]):
+        kw += 8
+
+    inv = 0
+    try:
+        if inv_usd is not None:
+            inv_usd = float(inv_usd)
+            if inv_usd >= 50_000_000:
+                inv = 20
+            elif inv_usd >= 10_000_000:
+                inv = 15
+            elif inv_usd >= 1_000_000:
+                inv = 10
+            elif inv_usd >= 100_000:
+                inv = 5
+    except Exception:
+        pass
+
+    return max(0, min(100, int(base + kw + inv)))
+
+
+def fetch_sea(days_back: int = 90, limit: int = 800) -> List[Dict[str, Any]]:
+    cutoff = datetime.now(TZ) - timedelta(days=days_back)
+    out: List[Dict[str, Any]] = []
+
+    for layer in SEA_LAYERS:
+        rows = arcgis_query(layer, where="1=1", limit=limit)
+
+        for a in rows:
+            title = (a.get("NOMBRE_PROYECTO") or a.get("NOMBRE") or a.get("PROYECTO") or f"Proyecto SEA {a.get('OBJECTID')}").strip()
+
+            dt = parse_arcgis_date(a.get("FECHA_PRESENTACION")) or parse_arcgis_date(a.get("FECHA_CALIFICACION"))
+            if dt and dt < cutoff:
+                continue
+
+            url = a.get("URL_EXPEDIENTE")
+            if not url:
+                q = requests.utils.quote(title[:80])
+                url = f"https://www.sea.gob.cl/buscador-de-proyectos?texto={q}"
+
+            company = a.get("TITULAR") or None
+            region = region_label(a.get("REGION"))
+            typology = a.get("NOMBRE_TIPOLOGIA") or None
+            industry = classify_industry(title, typology)
+            inv_usd = a.get("INVERSION_US")
+            score = score_v1(industry, title, inv_usd)
+
+            out.append({
+                "source": "sea",
+                "title": title,
+                "url": url,
+                "company": company,
+                "contractor": None,
+                "industry": industry,
+                "region": region,
+                "phase": a.get("ESTADO_EVALUACION") or "Ambiental en curso",
+                "score": score,
+                "entry": None,
+                "raw": a,
+            })
+
+    return out
