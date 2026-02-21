@@ -1,7 +1,7 @@
 # connectors/jobs_scraper.py
 """
 Detecta señales de contratación en empresas mineras chilenas.
-Fuentes: portales de carreras directos de cada empresa.
+Usa Playwright para renderizar páginas con JavaScript.
 Actualiza jobs_count y signal_score en la tabla opportunities.
 """
 
@@ -10,144 +10,71 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-import requests
-from bs4 import BeautifulSoup
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/121.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
-}
-
 # ── Configuración de empresas y sus portales directos ─────────────────────────
 
 MINING_COMPANIES = [
     {
         "name": "BHP",
         "career_url": "https://careers.bhp.com/search-jobs/Chile/107/1",
-        "count_selectors": ["span.search-results-count", "div.result-count", "h1.results-count"],
-        "card_selectors": ["li.search-result", "div.job-card", "article.job"],
+        "wait_for": "ul.search-results",
+        "count_selector": "span.search-results-count",
+        "card_selector": "li.search-result",
     },
     {
         "name": "Codelco",
         "career_url": "https://empleos.codelco.cl/",
-        "count_selectors": ["span.total", "div.count", "h2.results"],
-        "card_selectors": ["div.vacante", "article.job", "li.empleo", "div.oferta"],
+        "wait_for": "body",
+        "count_selector": None,
+        "card_selector": "div.vacante, article.job, li.empleo, div.oferta, a.job-link",
     },
     {
         "name": "SQM",
         "career_url": "https://www.sqm.com/es/sobre-sqm/trabaja-con-nosotros/",
-        "count_selectors": ["span.count", "div.jobs-count"],
-        "card_selectors": ["div.job", "li.position", "article.vacante", "a.job-link"],
+        "wait_for": "body",
+        "count_selector": None,
+        "card_selector": "div.job, li.position, article.vacante, a.career-link",
     },
     {
         "name": "Anglo American",
         "career_url": "https://careers.angloamerican.com/search/?q=&locationsearch=Chile",
-        "count_selectors": ["span.paginationLabel", "div.results-count", "span#totalJobCount"],
-        "card_selectors": ["li.job-result", "div.job-item", "article.job-listing"],
+        "wait_for": "body",
+        "count_selector": "span#totalJobCount",
+        "card_selector": "li.job-result, div.job-item",
     },
     {
         "name": "Teck",
         "career_url": "https://jobs.teck.com/search/?q=&locationsearch=Chile",
-        "count_selectors": ["span.paginationLabel", "div.results-count"],
-        "card_selectors": ["li.job-result", "div.job-item"],
+        "wait_for": "body",
+        "count_selector": "span.paginationLabel",
+        "card_selector": "li.job-result, div.job-item",
     },
     {
         "name": "Antofagasta Minerals",
-        "career_url": "https://www.aminerals.cl/es/personas/trabaja-con-nosotros/",
-        "count_selectors": ["span.count", "div.total-jobs"],
-        "card_selectors": ["div.job", "li.vacante", "article.position", "a.job-link"],
-    },
-    {
-        "name": "Freeport-McMoRan",
-        "career_url": "https://jobs.freeportinmycommunity.com/search/?q=&locationsearch=Chile",
-        "count_selectors": ["span.paginationLabel", "div.results-count"],
-        "card_selectors": ["li.job-result", "div.job-card"],
+        "career_url": "https://www.aminerals.cl/trabaja-con-nosotros/",
+        "wait_for": "body",
+        "count_selector": None,
+        "card_selector": "div.job, li.vacante, article.position, a.job-link",
     },
     {
         "name": "Glencore",
-        "career_url": "https://www.glencore.com/careers/vacancies?country=Chile",
-        "count_selectors": ["span.count", "div.results-number"],
-        "card_selectors": ["div.vacancy", "li.job", "article.position"],
+        "career_url": "https://www.glencore.com/careers/vacancies",
+        "wait_for": "body",
+        "count_selector": "span.count",
+        "card_selector": "div.vacancy, li.job, article.position",
+    },
+    {
+        "name": "Freeport-McMoRan",
+        "career_url": "https://jobs.fcx.com/search/?q=&locationsearch=Chile",
+        "wait_for": "body",
+        "count_selector": "span.paginationLabel",
+        "card_selector": "li.job-result, div.job-card",
     },
 ]
-
-# ── Scraper genérico por portal directo ───────────────────────────────────────
-
-def scrape_career_page(company: Dict[str, Any]) -> int:
-    """
-    Scraping directo del portal de carreras de una empresa.
-    Intenta múltiples selectores para encontrar el conteo de empleos.
-    """
-    try:
-        r = requests.get(company["career_url"], headers=HEADERS, timeout=25)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # Intento 1 — buscar contador numérico explícito
-        for selector in company.get("count_selectors", []):
-            tag_name, *class_parts = selector.split(".")
-            class_name = class_parts[0] if class_parts else None
-            el = soup.find(tag_name, class_=class_name)
-            if el:
-                nums = re.findall(r"\d+", el.get_text())
-                if nums:
-                    count = int(nums[0])
-                    print(f"[jobs] {company['name']}: contador encontrado → {count}")
-                    return count
-
-        # Intento 2 — buscar número en texto tipo "X empleos" o "X vacantes"
-        text = soup.get_text()
-        patterns = [
-            r"(\d+)\s*(empleos|vacantes|posiciones|cargos|oportunidades|jobs|positions)",
-            r"(empleos|vacantes|posiciones|jobs|positions)[:\s]+(\d+)",
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                nums = [g for g in match.groups() if g and g.isdigit()]
-                if nums:
-                    count = int(nums[0])
-                    print(f"[jobs] {company['name']}: texto encontrado → {count}")
-                    return count
-
-        # Intento 3 — contar tarjetas de empleo
-        total_cards = 0
-        for selector in company.get("card_selectors", []):
-            parts = selector.split(".")
-            tag = parts[0]
-            cls = parts[1] if len(parts) > 1 else None
-            cards = soup.find_all(tag, class_=cls) if cls else soup.find_all(tag)
-            total_cards = max(total_cards, len(cards))
-
-        if total_cards > 0:
-            print(f"[jobs] {company['name']}: tarjetas encontradas → {total_cards}")
-            return total_cards
-
-        print(f"[jobs] {company['name']}: página cargó pero sin empleos detectados")
-        return 0
-
-    except requests.exceptions.HTTPError as e:
-        print(f"[jobs] {company['name']} HTTP error: {e}")
-        return 0
-    except requests.exceptions.ConnectionError as e:
-        print(f"[jobs] {company['name']} conexión fallida: {e}")
-        return 0
-    except Exception as e:
-        print(f"[jobs] {company['name']} error inesperado: {e}")
-        return 0
 
 
 # ── Scoring de señales ─────────────────────────────────────────────────────────
 
 def jobs_to_signal_score(jobs_count: int) -> int:
-    """
-    Convierte cantidad de empleos en score adicional (0-30 puntos).
-    """
     if jobs_count >= 50:
         return 30
     elif jobs_count >= 30:
@@ -163,17 +90,113 @@ def jobs_to_signal_score(jobs_count: int) -> int:
     return 0
 
 
+# ── Scraper con Playwright ─────────────────────────────────────────────────────
+
+def scrape_with_playwright(company: Dict[str, Any]) -> int:
+    """Usa Playwright para renderizar la página con JS y contar empleos."""
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--no-first-run",
+                    "--no-zygote",
+                    "--single-process",
+                ]
+            )
+            page = browser.new_page(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/121.0.0.0 Safari/537.36"
+                )
+            )
+
+            page.goto(company["career_url"], timeout=30000)
+
+            # Esperar a que cargue el contenido
+            try:
+                if company.get("wait_for"):
+                    page.wait_for_selector(company["wait_for"], timeout=10000)
+            except Exception:
+                pass
+
+            # Esperar un poco más para JS
+            page.wait_for_timeout(3000)
+
+            # Intento 1 — selector de contador explícito
+            if company.get("count_selector"):
+                try:
+                    el = page.query_selector(company["count_selector"])
+                    if el:
+                        text = el.inner_text()
+                        nums = re.findall(r"\d+", text)
+                        if nums:
+                            count = int(nums[0])
+                            print(f"[jobs] {company['name']}: contador → {count}")
+                            browser.close()
+                            return count
+                except Exception:
+                    pass
+
+            # Intento 2 — buscar número en texto de página
+            try:
+                text = page.inner_text("body")
+                patterns = [
+                    r"(\d+)\s*(empleos|vacantes|posiciones|cargos|oportunidades|jobs|positions|results)",
+                    r"(showing|encontr\w+)\s+(\d+)",
+                ]
+                for pattern in patterns:
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        nums = [g for g in match.groups() if g and g.isdigit()]
+                        if nums:
+                            count = int(nums[0])
+                            print(f"[jobs] {company['name']}: texto → {count}")
+                            browser.close()
+                            return count
+            except Exception:
+                pass
+
+            # Intento 3 — contar tarjetas de empleo
+            if company.get("card_selector"):
+                try:
+                    max_cards = 0
+                    for selector in company["card_selector"].split(","):
+                        selector = selector.strip()
+                        cards = page.query_selector_all(selector)
+                        max_cards = max(max_cards, len(cards))
+                    if max_cards > 0:
+                        print(f"[jobs] {company['name']}: tarjetas → {max_cards}")
+                        browser.close()
+                        return max_cards
+                except Exception:
+                    pass
+
+            browser.close()
+            print(f"[jobs] {company['name']}: página cargó pero sin empleos detectados")
+            return 0
+
+    except Exception as e:
+        print(f"[jobs] {company['name']} error Playwright: {e}")
+        return 0
+
+
 # ── Función principal ──────────────────────────────────────────────────────────
 
 def fetch_jobs_signals() -> List[Dict[str, Any]]:
-    """
-    Escanea todos los portales de carreras y retorna señales detectadas.
-    """
+    """Escanea todos los portales de carreras y retorna señales detectadas."""
     results: List[Dict[str, Any]] = []
     now = datetime.now(timezone.utc)
 
     for company in MINING_COMPANIES:
-        jobs_count = scrape_career_page(company)
+        jobs_count = scrape_with_playwright(company)
         score_impact = jobs_to_signal_score(jobs_count)
 
         if jobs_count > 0:
@@ -193,7 +216,7 @@ def fetch_jobs_signals() -> List[Dict[str, Any]]:
         else:
             print(f"[jobs] {company['name']}: sin empleos detectados")
 
-        time.sleep(2)  # Respetar rate limiting entre empresas
+        time.sleep(2)
 
     return results
 
@@ -207,7 +230,7 @@ def get_companies_hiring_summary() -> List[Dict[str, Any]]:
 # ── Entry point standalone ────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("🔍 Escaneando portales de carreras mineras...")
+    print("🔍 Escaneando portales de carreras mineras con Playwright...")
     results = fetch_jobs_signals()
     print(f"\n✅ Total empresas con actividad: {len(results)}")
     for r in results:
