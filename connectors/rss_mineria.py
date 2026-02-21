@@ -6,20 +6,20 @@ from typing import Any, Dict, List, Optional
 
 RSS_FEEDS = [
     # Minería
-    {"url": "https://www.portalminero.com/rss.xml", "source": "Portal Minero", "industry": "Minería"},
+    {"url": "https://www.portalminero.com/wp/feed/", "source": "Portal Minero", "industry": "Minería"},
     {"url": "https://www.mch.cl/feed/", "source": "Minería Chilena", "industry": "Minería"},
-    {"url": "https://www.mynewsdesk.com/cl/cochilco/feed/latest", "source": "COCHILCO Noticias", "industry": "Minería"},
-    {"url": "https://www.mining.com/feed/", "source": "Mining.com", "industry": "Minería"},
+    {"url": "https://www.cochilco.cl/web/feed/", "source": "COCHILCO Noticias", "industry": "Minería"},
+    {"url": "https://www.df.cl/noticias/site/list/port/rss.xml", "source": "Diario Financiero", "industry": None},
     # Infraestructura
-    {"url": "https://www.mop.cl/Prensa/Lists/Noticias/rss.aspx", "source": "MOP", "industry": "Infraestructura"},
-    {"url": "https://www.cchc.cl/feed", "source": "CChC", "industry": "Infraestructura"},
+    {"url": "https://www.cchc.cl/feed/", "source": "CChC", "industry": "Infraestructura"},
     # Energía
-    {"url": "https://www.cne.cl/feed/", "source": "CNE", "industry": "Energía"},
     {"url": "https://www.revistaei.cl/feed/", "source": "Revista EI", "industry": "Energía"},
+    {"url": "https://www.electricidad.cl/feed/", "source": "Revista Electricidad", "industry": "Energía"},
     # General Chile negocios
-    {"url": "https://www.biobiochile.cl/lista/categorias/economia/feed", "source": "BioBioChile", "industry": None},
-    {"url": "https://www.latercera.com/feed/", "source": "La Tercera", "industry": None},
     {"url": "https://radio.uchile.cl/feed/", "source": "Radio U. de Chile", "industry": None},
+    {"url": "https://www.biobiochile.cl/feed/", "source": "BioBioChile", "industry": None},
+    {"url": "https://www.emol.com/rss/Noticias_del_Dia.xml", "source": "Emol", "industry": None},
+    {"url": "https://www.cooperativa.cl/noticias/rss/economia.xml", "source": "Cooperativa Economía", "industry": None},
 ]
 
 KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "codelco", "bhp", "teck", "yacimiento", "salar", "antofagasta minerals", "collahuasi", "escondida", "spence", "chuquicamata"]
