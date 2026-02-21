@@ -9,12 +9,16 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #fafafa;
-    --text: #111;
-    --muted: #999;
-    --border: #e5e5e5;
-    --green: #16a34a;
+    --bg: #f7f8fa;
+    --text: #1a2340;
+    --muted: #8a96b0;
+    --border: #e2e6ef;
+    --navy: #1a2340;
+    --blue: #3b9fcc;
+    --salmon: #d4957a;
+    --green: #2a9d6f;
     --yellow: #d97706;
+    --surface: #ffffff;
   }
 
   body {
@@ -26,18 +30,34 @@
   }
 
   header {
-    padding: 32px 40px 24px;
+    background: var(--surface);
+    padding: 20px 40px;
     border-bottom: 1px solid var(--border);
-    display: flex;xa
+    display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .logo { display: flex; align-items: baseline; gap: 10px; }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
 
-  h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo img {
+    height: 44px;
+    width: 44px;
+    object-fit: contain;
+  }
 
-  .logo-sub {
+  .logo-text h1 {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--navy);
+    letter-spacing: -0.3px;
+  }
+
+  .logo-text span {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
     color: var(--muted);
@@ -53,7 +73,7 @@
   }
 
   .dot {
-    width: 5px; height: 5px;
+    width: 6px; height: 6px;
     border-radius: 50%;
     background: var(--green);
     animation: pulse 2.5s infinite;
@@ -74,17 +94,18 @@
   input[type="text"] {
     flex: 1;
     border: 1px solid var(--border);
-    background: #fff;
+    background: var(--surface);
     color: var(--text);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 13px;
-    padding: 9px 14px;
+    padding: 10px 16px;
     outline: none;
-    border-radius: 4px;
+    border-radius: 6px;
     transition: border-color 0.15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
 
-  input[type="text"]:focus { border-color: #aaa; }
+  input[type="text"]:focus { border-color: var(--blue); }
   input[type="text"]::placeholder { color: var(--muted); }
 
   .count {
@@ -92,6 +113,14 @@
     font-size: 12px;
     color: var(--muted);
     white-space: nowrap;
+  }
+
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   }
 
   table { width: 100%; border-collapse: collapse; }
@@ -102,24 +131,26 @@
     letter-spacing: 1.5px;
     text-transform: uppercase;
     color: var(--muted);
-    padding: 10px 16px;
+    padding: 12px 18px;
     text-align: left;
     border-bottom: 1px solid var(--border);
+    background: #f9fafc;
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
   }
 
-  thead th:hover { color: var(--text); }
+  thead th:hover { color: var(--navy); }
 
   tbody tr {
     border-bottom: 1px solid var(--border);
     transition: background 0.1s;
   }
 
-  tbody tr:hover { background: #f4f4f4; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f4f7fb; }
 
-  td { padding: 13px 16px; vertical-align: middle; }
+  td { padding: 14px 18px; vertical-align: middle; }
 
   .score {
     font-family: 'IBM Plex Mono', monospace;
@@ -130,42 +161,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 5px;
   }
 
-  .score-high { background: #dcfce7; color: var(--green); }
-  .score-mid  { background: #fef9c3; color: var(--yellow); }
-  .score-low  { background: #f5f5f5; color: var(--muted); }
+  .score-high { background: #dcf5eb; color: var(--green); }
+  .score-mid  { background: #fef3e2; color: var(--yellow); }
+  .score-low  { background: #f0f2f7; color: var(--muted); }
 
-  .title { font-weight: 500; }
+  .title { font-weight: 500; color: var(--navy); }
   .subtitle {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
     color: var(--muted);
-    margin-top: 2px;
+    margin-top: 3px;
   }
 
   .phase {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    color: var(--muted);
-    background: #f0f0f0;
-    padding: 3px 8px;
-    border-radius: 3px;
+    color: var(--blue);
+    background: #eaf5fb;
+    padding: 3px 9px;
+    border-radius: 4px;
     white-space: nowrap;
   }
 
   a.link {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    color: var(--text);
+    color: var(--blue);
     text-decoration: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(59,159,204,0.3);
     padding-bottom: 1px;
     transition: border-color 0.15s;
   }
 
-  a.link:hover { border-color: var(--text); }
+  a.link:hover { border-color: var(--blue); }
 
   .state {
     text-align: center;
@@ -177,8 +208,8 @@
 
   .spinner {
     width: 16px; height: 16px;
-    border: 1.5px solid var(--border);
-    border-top-color: var(--muted);
+    border: 2px solid var(--border);
+    border-top-color: var(--blue);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
     margin: 0 auto 12px;
@@ -195,16 +226,21 @@
   .pagination button {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    background: #fff;
+    background: var(--surface);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 6px 14px;
-    border-radius: 4px;
+    padding: 7px 16px;
+    border-radius: 5px;
     cursor: pointer;
-    transition: background 0.1s;
+    transition: all 0.1s;
   }
 
-  .pagination button:hover:not(:disabled) { background: #f0f0f0; }
+  .pagination button:hover:not(:disabled) {
+    background: var(--navy);
+    color: #fff;
+    border-color: var(--navy);
+  }
+
   .pagination button:disabled { opacity: 0.35; cursor: not-allowed; }
 
   .page-info {
@@ -229,8 +265,11 @@
 
 <header>
   <div class="logo">
-    <h1>Stratmap Chile</h1>
-    <span class="logo-sub">/ oportunidades industriales</span>
+    <img src="/Gemini_Generated_Image_5e1ouq5e1ouq5e1o.png" alt="Stratmap" />
+    <div class="logo-text">
+      <h1>Stratmap Chile</h1>
+      <span>/ oportunidades industriales</span>
+    </div>
   </div>
   <div class="status">
     <span class="dot"></span>
@@ -244,21 +283,23 @@
     <span class="count" id="count"></span>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th onclick="sortBy('score')">Score</th>
-        <th>Proyecto</th>
-        <th onclick="sortBy('company')">Empresa</th>
-        <th onclick="sortBy('region')">Región</th>
-        <th>Fase</th>
-        <th>Link</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr><td colspan="6"><div class="state"><div class="spinner"></div>Cargando...</div></td></tr>
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('score')">Score</th>
+          <th>Proyecto</th>
+          <th onclick="sortBy('company')">Empresa</th>
+          <th onclick="sortBy('region')">Región</th>
+          <th>Fase</th>
+          <th>Link</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="6"><div class="state"><div class="spinner"></div>Cargando...</div></td></tr>
+      </tbody>
+    </table>
+  </div>
 
   <div class="pagination">
     <button id="prev" onclick="changePage(-1)" disabled>← Anterior</button>
