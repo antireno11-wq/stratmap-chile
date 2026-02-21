@@ -1,45 +1,36 @@
 # connectors/rss.py
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-from typing import Any, Dict, List, Optional
-import requests
 import hashlib
-
-TZ = ZoneInfo("America/Santiago")
+import requests
+from typing import Any, Dict, List, Optional
 
 RSS_FEEDS = [
     {
-        "url": "https://www.cochilco.cl/rss/noticias.xml",
-        "source": "COCHILCO",
-        "industry": "Minería",
+        "url": "https://www.biobiochile.cl/lista/categorias/economia/feed",
+        "source": "BioBioChile - Economía",
+        "industry": None,
     },
     {
-        "url": "https://minmineria.gob.cl/feed/",
-        "source": "Ministerio de Minería",
-        "industry": "Minería",
+        "url": "https://www.emol.com/rss/Noticias_del_Dia.xml",
+        "source": "Emol",
+        "industry": None,
     },
     {
-        "url": "https://www.mop.cl/Prensa/Paginas/RSS.aspx",
-        "source": "MOP",
-        "industry": "Infraestructura",
+        "url": "https://radio.uchile.cl/feed/",
+        "source": "Radio Universidad de Chile",
+        "industry": None,
     },
     {
-        "url": "https://www.df.cl/rss/noticias.xml",
-        "source": "Diario Financiero",
-        "industry": None,  # se clasifica automáticamente
-    },
-    {
-        "url": "https://www.elmercurio.com/rss/xml_portadas.aspx?idp=18",
-        "source": "El Mercurio - Negocios",
+        "url": "https://www.latercera.com/feed/",
+        "source": "La Tercera",
         "industry": None,
     },
 ]
 
-KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "codelco", "bhp", "antofagasta minerals", "teck", "yacimiento", "salar"]
-KEYWORDS_INFRA = ["infraestructura", "carretera", "puente", "camino", "ruta", "mop", "concesión vial", "obras públicas"]
-KEYWORDS_ENERGIA = ["energía", "fotovoltai", "eólica", "subestación", "transmisión", "solar", "renovable"]
-KEYWORDS_OIL = ["petróleo", "gas natural", "enap", "combustible", "hidrocarburo", "gasoducto"]
+KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "codelco", "bhp", "teck", "yacimiento", "salar", "antofagasta minerals"]
+KEYWORDS_INFRA = ["infraestructura", "carretera", "puente", "ruta", "mop", "concesión vial", "obras públicas", "autopista"]
+KEYWORDS_ENERGIA = ["energía", "fotovoltai", "eólica", "subestación", "transmisión", "solar", "renovable", "generación eléctrica"]
+KEYWORDS_OIL = ["petróleo", "gas natural", "enap", "hidrocarburo", "gasoducto", "refinería"]
 
 
 def classify_industry(text: str) -> Optional[str]:
@@ -70,30 +61,26 @@ def score_rss(industry: Optional[str], title: str) -> int:
     kw = 0
     if any(k in t for k in ["inversión", "proyecto", "planta", "ampliación", "construcción"]):
         kw += 10
-    if any(k in t for k in ["millones", "mdd", "usd", "millardos"]):
+    if any(k in t for k in ["millones", "mdd", "usd"]):
         kw += 8
 
     return max(0, min(100, base + kw))
 
 
-def make_url_hash(url: str, title: str) -> str:
-    """Genera URL única para artículos RSS sin URL propia"""
-    return f"rss://{hashlib.md5((url + title).encode()).hexdigest()}"
-
-
-def fetch_feed(feed: Dict[str, Any], days_back: int = 7) -> List[Dict[str, Any]]:
-    cutoff = datetime.now(TZ) - timedelta(days=days_back)
+def fetch_feed(feed: Dict[str, Any]) -> List[Dict[str, Any]]:
     out = []
-
     try:
-        r = requests.get(feed["url"], timeout=20, headers={"User-Agent": "StratmapWorker/0.2"})
+        r = requests.get(
+            feed["url"], timeout=20,
+            headers={"User-Agent": "StratmapWorker/0.2"},
+            verify=False
+        )
         r.raise_for_status()
         root = ET.fromstring(r.content)
     except Exception as e:
         print(f"[rss] error {feed['source']}: {e}")
         return []
 
-    # Soporte para RSS y Atom
     items = root.findall(".//item") or root.findall(".//{http://www.w3.org/2005/Atom}entry")
 
     for item in items:
@@ -119,7 +106,7 @@ def fetch_feed(feed: Dict[str, Any], days_back: int = 7) -> List[Dict[str, Any]]
         url = (
             item.findtext("link") or
             item.findtext("{http://www.w3.org/2005/Atom}id") or
-            make_url_hash(feed["url"], title)
+            f"rss://{hashlib.md5((feed['url'] + title).encode()).hexdigest()}"
         ).strip()
 
         score = score_rss(industry, title)
@@ -135,16 +122,18 @@ def fetch_feed(feed: Dict[str, Any], days_back: int = 7) -> List[Dict[str, Any]]
             "phase": "Noticia",
             "score": score,
             "entry": None,
-            "raw": {"title": title, "description": description[:1000], "feed": feed["url"]},
+            "raw": {"title": title, "description": description[:500]},
         })
 
     return out
 
 
 def fetch_rss(days_back: int = 7, limit: int = 200) -> List[Dict[str, Any]]:
+    import urllib3
+    urllib3.disable_warnings()
     out = []
     for feed in RSS_FEEDS:
-        items = fetch_feed(feed, days_back=days_back)
+        items = fetch_feed(feed)
         print(f"[rss] {feed['source']}: {len(items)} artículos relevantes")
         out.extend(items)
         if len(out) >= limit:
