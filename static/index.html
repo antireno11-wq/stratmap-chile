@@ -1,20 +1,372 @@
-Stratmap Chile
-/ oportunidades industriales
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stratmap Chile</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-conectando...
+  :root {
+    --bg: #fafafa;
+    --text: #111;
+    --muted: #999;
+    --border: #e5e5e5;
+    --green: #16a34a;
+    --yellow: #d97706;
+  }
 
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
 
-SCORE
-PROYECTO
-EMPRESA
-REGIÓN
-FASE
-LINK
+  header {
+    padding: 32px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;xa
+    align-items: center;
+    justify-content: space-between;
+  }
 
-Cargando...
-← Anterior
+  .logo { display: flex; align-items: baseline; gap: 10px; }
 
-Siguiente →
-Stratmap Chile 2026
+  h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
 
+  .logo-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
 
+  .status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2.5s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  main { padding: 32px 40px; }
+
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: center;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 14px;
+    outline: none;
+    border-radius: 4px;
+    transition: border-color 0.15s;
+  }
+
+  input[type="text"]:focus { border-color: #aaa; }
+  input[type="text"]::placeholder { color: var(--muted); }
+
+  .count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  thead th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  thead th:hover { color: var(--text); }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  tbody tr:hover { background: #f4f4f4; }
+
+  td { padding: 13px 16px; vertical-align: middle; }
+
+  .score {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    width: 44px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .score-high { background: #dcfce7; color: var(--green); }
+  .score-mid  { background: #fef9c3; color: var(--yellow); }
+  .score-low  { background: #f5f5f5; color: var(--muted); }
+
+  .title { font-weight: 500; }
+  .subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .phase {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    background: #f0f0f0;
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  a.link {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1px;
+    transition: border-color 0.15s;
+  }
+
+  a.link:hover { border-color: var(--text); }
+
+  .state {
+    text-align: center;
+    padding: 64px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border);
+    border-top-color: var(--muted);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .pagination button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: #fff;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .pagination button:hover:not(:disabled) { background: #f0f0f0; }
+  .pagination button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .page-info {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  footer {
+    margin-top: 48px;
+    padding: 20px 40px;
+    border-top: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <h1>Stratmap Chile</h1>
+    <span class="logo-sub">/ oportunidades industriales</span>
+  </div>
+  <div class="status">
+    <span class="dot"></span>
+    <span id="status-text">conectando...</span>
+  </div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Buscar proyecto, empresa, región..." />
+    <span class="count" id="count"></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th onclick="sortBy('score')">Score</th>
+        <th>Proyecto</th>
+        <th onclick="sortBy('company')">Empresa</th>
+        <th onclick="sortBy('region')">Región</th>
+        <th>Fase</th>
+        <th>Link</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="6"><div class="state"><div class="spinner"></div>Cargando...</div></td></tr>
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <button id="prev" onclick="changePage(-1)" disabled>← Anterior</button>
+    <span class="page-info" id="page-info"></span>
+    <button id="next" onclick="changePage(1)" disabled>Siguiente →</button>
+  </div>
+</main>
+
+<footer>
+  <span>Stratmap Chile 2026</span>
+  <span id="last-update"></span>
+</footer>
+
+<script>
+  const API = 'https://stratmap-chile-production.up.railway.app';
+  const PER_PAGE = 25;
+  let all = [], filtered = [], page = 0, sortKey = 'score', sortAsc = false;
+
+  async function load() {
+    try {
+      const res = await fetch(`${API}/opportunities?limit=500`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      all = Array.isArray(data) ? data : (data.items || data.data || []);
+      document.getElementById('status-text').textContent = 'online';
+      document.getElementById('last-update').textContent = 'actualizado ' + new Date().toLocaleTimeString('es-CL');
+      filter();
+    } catch (e) {
+      document.getElementById('status-text').textContent = 'sin conexión';
+      document.getElementById('tbody').innerHTML =
+        `<tr><td colspan="6"><div class="state">Error: ${e.message}</div></td></tr>`;
+    }
+  }
+
+  function filter() {
+    const q = document.getElementById('search').value.toLowerCase();
+    filtered = all.filter(o =>
+      !q ||
+      (o.title||'').toLowerCase().includes(q) ||
+      (o.company||'').toLowerCase().includes(q) ||
+      (o.region||'').toLowerCase().includes(q)
+    );
+    filtered.sort((a, b) => {
+      let av = sortKey === 'score' ? (Number(a[sortKey])||0) : (a[sortKey]||'');
+      let bv = sortKey === 'score' ? (Number(b[sortKey])||0) : (b[sortKey]||'');
+      return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+    });
+    page = 0;
+    render();
+  }
+
+  function render() {
+    const total = filtered.length;
+    const pages = Math.ceil(total / PER_PAGE) || 1;
+    const slice = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+
+    document.getElementById('count').textContent = `${total} resultado${total !== 1 ? 's' : ''}`;
+    document.getElementById('page-info').textContent = `${page + 1} / ${pages}`;
+    document.getElementById('prev').disabled = page === 0;
+    document.getElementById('next').disabled = page >= pages - 1;
+
+    if (!slice.length) {
+      document.getElementById('tbody').innerHTML =
+        '<tr><td colspan="6"><div class="state">Sin resultados</div></td></tr>';
+      return;
+    }
+
+    document.getElementById('tbody').innerHTML = slice.map(o => {
+      const s = Number(o.score) || 0;
+      const sc = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
+      return `<tr>
+        <td><div class="score ${sc}">${s}</div></td>
+        <td>
+          <div class="title">${esc(o.title || '—')}</div>
+          ${o.industry ? `<div class="subtitle">${esc(o.industry)}</div>` : ''}
+        </td>
+        <td>${esc(o.company || '—')}</td>
+        <td>${esc(o.region || '—')}</td>
+        <td>${o.phase ? `<span class="phase">${esc(o.phase)}</span>` : '—'}</td>
+        <td>${o.url ? `<a class="link" href="${esc(o.url)}" target="_blank" rel="noopener">ver →</a>` : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function sortBy(key) {
+    sortAsc = sortKey === key ? !sortAsc : false;
+    sortKey = key;
+    filter();
+  }
+
+  function changePage(d) {
+    page += d;
+    render();
+    scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  let t;
+  document.getElementById('search').addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(filter, 250);
+  });
+
+  load();
+  setInterval(load, 300000);
+</script>
+</body>
+</html>
