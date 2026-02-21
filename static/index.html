@@ -6,6 +6,8 @@
 <title>Stratmap Chile</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -193,6 +195,18 @@ a.link:hover { text-decoration: underline; }
 .modal-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--blue); text-decoration: none; }
 .modal-link:hover { text-decoration: underline; }
 
+
+/* MAP */
+.map-card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 24px; }
+.map-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.map-title { font-size: 14px; font-weight: 600; color: var(--navy); }
+#project-map { height: 420px; width: 100%; z-index: 1; }
+.leaflet-popup-content { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; min-width: 200px; }
+.popup-title { font-weight: 600; color: var(--navy); margin-bottom: 6px; line-height: 1.4; }
+.popup-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.popup-score { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-bottom: 8px; }
+.popup-btn { display: inline-block; background: var(--blue); color: #fff; border: none; padding: 5px 12px; border-radius: 5px; font-size: 12px; cursor: pointer; font-family: inherit; }
+
 @media (max-width: 768px) {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .charts-row, .rankings-row { grid-template-columns: 1fr; }
@@ -290,7 +304,16 @@ a.link:hover { text-decoration: underline; }
 
     <!-- Dashboard view -->
     <div id="view-dashboard">
-      <div class="kpi-grid">
+<!-- Map -->
+      <div class="map-card">
+        <div class="map-header">
+          <div class="map-title">Mapa de Proyectos</div>
+          <div style="font-size:12px;color:var(--muted)" id="map-count"></div>
+        </div>
+        <div id="project-map"></div>
+      </div>
+
+            <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-label">Total Proyectos</div>
           <div class="kpi-value" id="kpi-total">—</div>
@@ -577,6 +600,7 @@ function applyFilters() {
   updateRankings();
   renderTable();
   renderDashTable();
+  if (currentView === 'dashboard') updateMap();
 }
 
 // ── KPIs ──
@@ -821,6 +845,7 @@ function setView(view) {
     if (el.textContent.trim().toLowerCase().includes(view === 'dashboard' ? 'dashboard' : 'proyecto')) el.classList.add('active');
   });
   document.getElementById('view-dashboard').style.display = view === 'dashboard' ? 'block' : 'none';
+  if (view === 'dashboard') { setTimeout(() => { initMap(); updateMap(); }, 50); }
   document.getElementById('dash-table').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('view-projects').style.display = view === 'projects' ? 'block' : 'none';
 }
@@ -861,6 +886,119 @@ function formatDate(iso) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+
+// ── Map ──
+const REGION_COORDS = {
+  'Tarapacá': [-20.2, -69.3],
+  'Antofagasta': [-23.6, -70.4],
+  'Atacama': [-27.3, -70.3],
+  'Coquimbo': [-29.9, -71.2],
+  'Valparaíso': [-33.0, -71.5],
+  "O'Higgins": [-34.5, -71.0],
+  'Maule': [-35.4, -71.6],
+  'Biobío': [-37.5, -72.0],
+  'La Araucanía': [-38.9, -72.6],
+  'Los Lagos': [-41.5, -72.9],
+  'Aysén': [-45.6, -72.1],
+  'Magallanes': [-53.1, -70.9],
+  'Región Metropolitana': [-33.4, -70.6],
+  'Los Ríos': [-39.8, -73.2],
+  'Arica y Parinacota': [-18.5, -69.5],
+  'Ñuble': [-36.6, -71.9],
+};
+
+const INDUSTRY_COLORS = {
+  'Minería': '#2563eb',
+  'Infraestructura': '#16a34a',
+  'Energía': '#d97706',
+  'Oil & Gas': '#7c3aed',
+  'Agroindustria': '#0891b2',
+  'Portuario': '#dc2626',
+};
+
+let map = null;
+let mapMarkers = [];
+
+function initMap() {
+  if (map) return;
+  map = L.map('project-map', { zoomControl: true }).setView([-33.4, -70.6], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18
+  }).addTo(map);
+}
+
+function getCoords(o) {
+  // Try raw ArcGIS geometry
+  const raw = o.raw || {};
+  if (raw.geometry) {
+    const g = raw.geometry;
+    if (g.x && g.y) return [g.y, g.x];
+    if (g.lat && g.lon) return [g.lat, g.lon];
+  }
+  // Try raw fields
+  if (raw.LATITUD && raw.LONGITUD) return [parseFloat(raw.LATITUD), parseFloat(raw.LONGITUD)];
+  if (raw.Y_COORD && raw.X_COORD) return [parseFloat(raw.Y_COORD), parseFloat(raw.X_COORD)];
+  // Fallback to region centroid with small random offset
+  const region = o.region;
+  if (region && REGION_COORDS[region]) {
+    const [lat, lon] = REGION_COORDS[region];
+    return [lat + (Math.random()-0.5)*0.8, lon + (Math.random()-0.5)*0.8];
+  }
+  return null;
+}
+
+function updateMap() {
+  if (!map) initMap();
+  // Clear old markers
+  mapMarkers.forEach(m => map.removeLayer(m));
+  mapMarkers = [];
+
+  let placed = 0;
+  filtered.forEach((o, idx) => {
+    const coords = getCoords(o);
+    if (!coords) return;
+    const s = Number(o.score)||0;
+    const color = INDUSTRY_COLORS[o.industry] || '#6b7280';
+    const radius = Math.max(6, Math.min(16, 6 + (s/100)*10));
+
+    const marker = L.circleMarker(coords, {
+      radius,
+      fillColor: color,
+      color: '#fff',
+      weight: 1.5,
+      opacity: 1,
+      fillOpacity: 0.85
+    });
+
+    const sc = s >= 70 ? 'background:#dcfce7;color:#16a34a' : s >= 40 ? 'background:#fef3c7;color:#d97706' : 'background:#f3f4f6;color:#6b7280';
+    marker.bindPopup(`
+      <div class="popup-title">${esc(o.title||'')}</div>
+      <span class="popup-score" style="${sc}">${s}/100</span>
+      <div class="popup-meta">🏢 ${esc(o.company||'—')}</div>
+      <div class="popup-meta">📍 ${esc(o.region||'—')} &nbsp;·&nbsp; ${esc(o.industry||'—')}</div>
+      <div class="popup-meta">⚡ ${esc(o.phase||'—')}</div>
+      <br><button class="popup-btn" onclick="openModalFromMap(${idx})">Ver detalle</button>
+    `, { maxWidth: 260 });
+
+    marker.addTo(map);
+    mapMarkers.push(marker);
+    placed++;
+  });
+
+  document.getElementById('map-count').textContent = `${placed} proyectos en mapa`;
+  if (mapMarkers.length > 0) {
+    try {
+      const group = L.featureGroup(mapMarkers);
+      map.fitBounds(group.getBounds().pad(0.1));
+    } catch(e) {}
+  }
+}
+
+function openModalFromMap(idx) {
+  openModal(idx, false);
 }
 
 let searchTimer;
