@@ -15,6 +15,9 @@ from connectors.rss_mineria import fetch_rss_mineria
 from connectors.cochilco import fetch_cochilco
 from connectors.mop import fetch_mop
 from connectors.scraper import fetch_scraper
+from connectors.jobs_scraper import fetch_jobs_signals
+
+import db
 
 TZ = ZoneInfo("America/Santiago")
 BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
@@ -81,6 +84,36 @@ def ingest(session: requests.Session, items: List[Dict[str, Any]], source: str) 
     print(f"[{now_clt()}] {source} DONE: inserted={total_ins} updated={total_upd}")
 
 
+def run_jobs_signals() -> None:
+    """
+    Corre el scraper de empleos y actualiza el signal_score
+    de las oportunidades que coincidan con cada empresa.
+    """
+    print(f"[{now_clt()}] Fetching Jobs Signals...")
+    signals = fetch_jobs_signals()
+    print(f"[{now_clt()}] Jobs: {len(signals)} empresas con actividad detectada")
+
+    total_updated = 0
+    for signal in signals:
+        company_name = signal["company"]
+        # Buscar oportunidades que coincidan con esta empresa
+        opportunities = db.get_opportunities_by_company(company_name)
+
+        if not opportunities:
+            print(f"[{now_clt()}] Jobs: '{company_name}' sin oportunidades en BD — skipping")
+            continue
+
+        for opp in opportunities:
+            try:
+                db.save_job_signal(opp["id"], signal)
+                total_updated += 1
+                print(f"[{now_clt()}] Jobs: '{company_name}' → opp_id={opp['id']} +{signal['score_impact']}pts ({signal['jobs_count']} empleos)")
+            except Exception as e:
+                print(f"[{now_clt()}] Jobs: error guardando señal para opp_id={opp['id']}: {e}")
+
+    print(f"[{now_clt()}] Jobs DONE: {total_updated} oportunidades actualizadas")
+
+
 def run() -> None:
     print(f"[{now_clt()}] Worker start -> {BASE_URL}")
     session = requests.Session()
@@ -121,6 +154,9 @@ def run() -> None:
     items = fetch_rss_mineria(limit=300)
     print(f"[{now_clt()}] RSS: {len(items)} items")
     ingest(session, items, "RSS")
+
+    # Jobs Signals — actualiza signal_score según empleos detectados
+    run_jobs_signals()
 
     print(f"[{now_clt()}] Worker finished")
 
