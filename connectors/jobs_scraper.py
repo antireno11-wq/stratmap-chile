@@ -1,7 +1,7 @@
 # connectors/jobs_scraper.py
 """
 Detecta señales de contratación en empresas mineras chilenas.
-Fuentes: trabajando.cl, indeed.com/chile, portales directos de empresas.
+Fuentes: portales de carreras directos de cada empresa.
 Actualiza jobs_count y signal_score en la tabla opportunities.
 """
 
@@ -13,51 +13,6 @@ from typing import Any, Dict, List
 import requests
 from bs4 import BeautifulSoup
 
-# ── Empresas mineras a monitorear ─────────────────────────────────────────────
-
-MINING_COMPANIES = [
-    {
-        "name": "BHP",
-        "keywords": ["bhp", "escondida", "spence"],
-        "regions": ["Antofagasta", "Tarapacá"],
-    },
-    {
-        "name": "Codelco",
-        "keywords": ["codelco", "chuquicamata", "el teniente", "andina", "radomiro tomic"],
-        "regions": ["Antofagasta", "O'Higgins", "Atacama"],
-    },
-    {
-        "name": "Antofagasta Minerals",
-        "keywords": ["antofagasta minerals", "los pelambres", "centinela", "zaldivar", "antucoya"],
-        "regions": ["Antofagasta", "Coquimbo"],
-    },
-    {
-        "name": "Anglo American",
-        "keywords": ["anglo american", "los bronces", "el soldado"],
-        "regions": ["Región Metropolitana", "Valparaíso"],
-    },
-    {
-        "name": "Teck",
-        "keywords": ["teck", "quebrada blanca", "carmen de andacollo"],
-        "regions": ["Tarapacá", "Coquimbo"],
-    },
-    {
-        "name": "Freeport-McMoRan",
-        "keywords": ["freeport", "el abra"],
-        "regions": ["Antofagasta"],
-    },
-    {
-        "name": "Glencore",
-        "keywords": ["glencore", "lomas bayas"],
-        "regions": ["Antofagasta"],
-    },
-    {
-        "name": "SQM",
-        "keywords": ["sqm", "soquimich"],
-        "regions": ["Antofagasta", "Tarapacá"],
-    },
-]
-
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -66,85 +21,124 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "es-CL,es;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
 }
 
-# ── Scrapers por fuente ────────────────────────────────────────────────────────
+# ── Configuración de empresas y sus portales directos ─────────────────────────
 
-def fetch_trabajando(company_keyword: str) -> int:
-    """Retorna cantidad de empleos en trabajando.cl"""
+MINING_COMPANIES = [
+    {
+        "name": "BHP",
+        "career_url": "https://careers.bhp.com/search-jobs/Chile/107/1",
+        "count_selectors": ["span.search-results-count", "div.result-count", "h1.results-count"],
+        "card_selectors": ["li.search-result", "div.job-card", "article.job"],
+    },
+    {
+        "name": "Codelco",
+        "career_url": "https://empleos.codelco.cl/",
+        "count_selectors": ["span.total", "div.count", "h2.results"],
+        "card_selectors": ["div.vacante", "article.job", "li.empleo", "div.oferta"],
+    },
+    {
+        "name": "SQM",
+        "career_url": "https://www.sqm.com/es/sobre-sqm/trabaja-con-nosotros/",
+        "count_selectors": ["span.count", "div.jobs-count"],
+        "card_selectors": ["div.job", "li.position", "article.vacante", "a.job-link"],
+    },
+    {
+        "name": "Anglo American",
+        "career_url": "https://careers.angloamerican.com/search/?q=&locationsearch=Chile",
+        "count_selectors": ["span.paginationLabel", "div.results-count", "span#totalJobCount"],
+        "card_selectors": ["li.job-result", "div.job-item", "article.job-listing"],
+    },
+    {
+        "name": "Teck",
+        "career_url": "https://jobs.teck.com/search/?q=&locationsearch=Chile",
+        "count_selectors": ["span.paginationLabel", "div.results-count"],
+        "card_selectors": ["li.job-result", "div.job-item"],
+    },
+    {
+        "name": "Antofagasta Minerals",
+        "career_url": "https://www.aminerals.cl/es/personas/trabaja-con-nosotros/",
+        "count_selectors": ["span.count", "div.total-jobs"],
+        "card_selectors": ["div.job", "li.vacante", "article.position", "a.job-link"],
+    },
+    {
+        "name": "Freeport-McMoRan",
+        "career_url": "https://jobs.freeportinmycommunity.com/search/?q=&locationsearch=Chile",
+        "count_selectors": ["span.paginationLabel", "div.results-count"],
+        "card_selectors": ["li.job-result", "div.job-card"],
+    },
+    {
+        "name": "Glencore",
+        "career_url": "https://www.glencore.com/careers/vacancies?country=Chile",
+        "count_selectors": ["span.count", "div.results-number"],
+        "card_selectors": ["div.vacancy", "li.job", "article.position"],
+    },
+]
+
+# ── Scraper genérico por portal directo ───────────────────────────────────────
+
+def scrape_career_page(company: Dict[str, Any]) -> int:
+    """
+    Scraping directo del portal de carreras de una empresa.
+    Intenta múltiples selectores para encontrar el conteo de empleos.
+    """
     try:
-        url = f"https://www.trabajando.cl/trabajo/{requests.utils.quote(company_keyword)}"
-        r = requests.get(url, headers=HEADERS, timeout=20)
+        r = requests.get(company["career_url"], headers=HEADERS, timeout=25)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Busca contador de resultados
-        for tag in soup.find_all(string=re.compile(r"\d+\s*(empleo|trabajo|cargo|resultado)", re.I)):
-            nums = re.findall(r"\d+", tag)
-            if nums:
-                return int(nums[0])
+        # Intento 1 — buscar contador numérico explícito
+        for selector in company.get("count_selectors", []):
+            tag_name, *class_parts = selector.split(".")
+            class_name = class_parts[0] if class_parts else None
+            el = soup.find(tag_name, class_=class_name)
+            if el:
+                nums = re.findall(r"\d+", el.get_text())
+                if nums:
+                    count = int(nums[0])
+                    print(f"[jobs] {company['name']}: contador encontrado → {count}")
+                    return count
 
-        # Cuenta tarjetas de empleo
-        cards = soup.find_all(["div", "article", "li"], class_=re.compile(r"job|empleo|oferta|aviso|card", re.I))
-        return len(cards)
+        # Intento 2 — buscar número en texto tipo "X empleos" o "X vacantes"
+        text = soup.get_text()
+        patterns = [
+            r"(\d+)\s*(empleos|vacantes|posiciones|cargos|oportunidades|jobs|positions)",
+            r"(empleos|vacantes|posiciones|jobs|positions)[:\s]+(\d+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                nums = [g for g in match.groups() if g and g.isdigit()]
+                if nums:
+                    count = int(nums[0])
+                    print(f"[jobs] {company['name']}: texto encontrado → {count}")
+                    return count
 
-    except Exception as e:
-        print(f"[jobs] trabajando.cl error para '{company_keyword}': {e}")
+        # Intento 3 — contar tarjetas de empleo
+        total_cards = 0
+        for selector in company.get("card_selectors", []):
+            parts = selector.split(".")
+            tag = parts[0]
+            cls = parts[1] if len(parts) > 1 else None
+            cards = soup.find_all(tag, class_=cls) if cls else soup.find_all(tag)
+            total_cards = max(total_cards, len(cards))
+
+        if total_cards > 0:
+            print(f"[jobs] {company['name']}: tarjetas encontradas → {total_cards}")
+            return total_cards
+
+        print(f"[jobs] {company['name']}: página cargó pero sin empleos detectados")
         return 0
 
-
-def fetch_indeed(company_keyword: str) -> int:
-    """Retorna cantidad de empleos en cl.indeed.com"""
-    try:
-        url = f"https://cl.indeed.com/jobs?q={requests.utils.quote(company_keyword)}&l=Chile"
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # Busca el contador de resultados de Indeed
-        count_el = soup.find("div", {"id": "searchCountPages"})
-        if count_el:
-            nums = re.findall(r"[\d,]+", count_el.get_text())
-            if nums:
-                return int(nums[0].replace(",", ""))
-
-        # Cuenta tarjetas de empleo
-        cards = soup.find_all("div", class_=re.compile(r"jobsearch-SerpJobCard|tapItem|job_seen_beacon", re.I))
-        return len(cards)
-
-    except Exception as e:
-        print(f"[jobs] indeed error para '{company_keyword}': {e}")
+    except requests.exceptions.HTTPError as e:
+        print(f"[jobs] {company['name']} HTTP error: {e}")
         return 0
-
-
-def fetch_getonbrd(company_keyword: str) -> int:
-    """Retorna cantidad de empleos en getonbrd.com (muy usado en minería Chile)"""
-    try:
-        url = f"https://www.getonbrd.com/empleos?query={requests.utils.quote(company_keyword)}"
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        cards = soup.find_all(["div", "article"], class_=re.compile(r"job|empleo|position", re.I))
-        return len(cards)
-    except Exception as e:
-        print(f"[jobs] getonbrd error para '{company_keyword}': {e}")
+    except requests.exceptions.ConnectionError as e:
+        print(f"[jobs] {company['name']} conexión fallida: {e}")
         return 0
-
-
-def fetch_codelco_direct() -> int:
-    """Scraping directo del portal de empleos de Codelco."""
-    try:
-        url = "https://www.codelco.com/trabaja-con-nosotros/prontus_codelco/2012-03-26/120000.html"
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        # Busca links a vacantes
-        links = soup.find_all("a", href=re.compile(r"vacan|cargo|empleo|trabaj", re.I))
-        return len(links)
     except Exception as e:
-        print(f"[jobs] codelco directo error: {e}")
+        print(f"[jobs] {company['name']} error inesperado: {e}")
         return 0
 
 
@@ -173,72 +167,39 @@ def jobs_to_signal_score(jobs_count: int) -> int:
 
 def fetch_jobs_signals() -> List[Dict[str, Any]]:
     """
-    Escanea todas las empresas mineras y retorna lista de señales detectadas.
+    Escanea todos los portales de carreras y retorna señales detectadas.
     """
     results: List[Dict[str, Any]] = []
     now = datetime.now(timezone.utc)
 
     for company in MINING_COMPANIES:
-        total_jobs = 0
-        sources_checked = []
+        jobs_count = scrape_career_page(company)
+        score_impact = jobs_to_signal_score(jobs_count)
 
-        for keyword in company["keywords"]:
-            # trabajando.cl
-            jobs_t = fetch_trabajando(keyword)
-            total_jobs += jobs_t
-            if jobs_t > 0:
-                sources_checked.append(f"trabajando.cl/{keyword}: {jobs_t}")
-            time.sleep(2)
-
-            # indeed chile
-            jobs_i = fetch_indeed(keyword)
-            total_jobs += jobs_i
-            if jobs_i > 0:
-                sources_checked.append(f"indeed/{keyword}: {jobs_i}")
-            time.sleep(2)
-
-            # getonbrd
-            jobs_g = fetch_getonbrd(keyword)
-            total_jobs += jobs_g
-            if jobs_g > 0:
-                sources_checked.append(f"getonbrd/{keyword}: {jobs_g}")
-            time.sleep(1)
-
-        # Para Codelco, también revisamos directo
-        if company["name"] == "Codelco":
-            jobs_c = fetch_codelco_direct()
-            total_jobs += jobs_c
-            if jobs_c > 0:
-                sources_checked.append(f"codelco.com: {jobs_c}")
-
-        score_impact = jobs_to_signal_score(total_jobs)
-
-        if total_jobs > 0:
+        if jobs_count > 0:
             results.append({
                 "company": company["name"],
                 "signal_type": "jobs",
-                "signal_source": "trabajando.cl + indeed + getonbrd",
+                "signal_source": company["career_url"],
                 "signal_data": {
-                    "jobs_count": total_jobs,
-                    "sources": sources_checked,
-                    "keywords_checked": company["keywords"],
-                    "regions": company["regions"],
+                    "jobs_count": jobs_count,
+                    "career_url": company["career_url"],
                 },
                 "score_impact": score_impact,
-                "jobs_count": total_jobs,
+                "jobs_count": jobs_count,
                 "detected_at": now,
             })
-            print(f"[jobs] {company['name']}: {total_jobs} empleos detectados → +{score_impact} puntos")
+            print(f"[jobs] ✅ {company['name']}: {jobs_count} empleos → +{score_impact} pts")
         else:
             print(f"[jobs] {company['name']}: sin empleos detectados")
+
+        time.sleep(2)  # Respetar rate limiting entre empresas
 
     return results
 
 
 def get_companies_hiring_summary() -> List[Dict[str, Any]]:
-    """
-    Versión resumida para el dashboard.
-    """
+    """Versión resumida para el dashboard."""
     signals = fetch_jobs_signals()
     return sorted(signals, key=lambda x: x["jobs_count"], reverse=True)
 
@@ -246,7 +207,7 @@ def get_companies_hiring_summary() -> List[Dict[str, Any]]:
 # ── Entry point standalone ────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("🔍 Escaneando empleos en empresas mineras...")
+    print("🔍 Escaneando portales de carreras mineras...")
     results = fetch_jobs_signals()
     print(f"\n✅ Total empresas con actividad: {len(results)}")
     for r in results:
