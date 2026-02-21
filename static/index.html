@@ -196,6 +196,40 @@ a.link:hover { text-decoration: underline; }
 .modal-link:hover { text-decoration: underline; }
 
 
+
+/* PROFILE */
+.profile-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+.profile-card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); padding: 24px; }
+.profile-avatar { width: 72px; height: 72px; border-radius: 50%; background: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff; font-weight: 700; margin-bottom: 16px; }
+.profile-name { font-size: 18px; font-weight: 700; color: var(--navy); }
+.profile-email { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.profile-plan { display: inline-block; margin-top: 12px; background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+.profile-stat { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+.profile-stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.profile-stat-value { font-size: 24px; font-weight: 700; color: var(--navy); margin-top: 4px; }
+
+.prefs-section { margin-bottom: 24px; }
+.prefs-title { font-size: 14px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.prefs-desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.tags-input-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; min-height: 44px; background: #f9fafb; cursor: text; }
+.tags-input-wrap:focus-within { border-color: var(--blue); background: #fff; }
+.tag-item { display: inline-flex; align-items: center; gap: 5px; background: var(--blue-light); color: var(--blue); font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+.tag-item button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+.tag-input { border: none; outline: none; font-size: 13px; background: transparent; min-width: 120px; font-family: inherit; }
+.checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 7px; cursor: pointer; transition: all 0.15s; }
+.checkbox-item:hover { border-color: var(--blue); background: var(--blue-light); }
+.checkbox-item.checked { border-color: var(--blue); background: var(--blue-light); }
+.checkbox-item input { accent-color: var(--blue); }
+.checkbox-item label { font-size: 13px; cursor: pointer; }
+.save-btn { background: var(--blue); color: #fff; border: none; padding: 11px 28px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+.save-btn:hover { background: #1d4ed8; }
+.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.save-msg { font-size: 13px; color: var(--green); margin-left: 12px; }
+.range-wrap { display: flex; align-items: center; gap: 12px; }
+.range-wrap input[type=range] { flex: 1; accent-color: var(--blue); }
+.range-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--navy); min-width: 30px; }
+
 /* MAP */
 .map-card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 24px; }
 .map-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
@@ -265,6 +299,10 @@ a.link:hover { text-decoration: underline; }
     <div class="sidebar-item" onclick="setView('projects')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       Proyectos
+    </div>
+    <div class="sidebar-item" onclick="setView('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Mi Perfil
     </div>
 
     <div class="sidebar-section" style="margin-top:16px">Filtros</div>
@@ -393,6 +431,91 @@ a.link:hover { text-decoration: underline; }
       </div>
     </div>
 
+    <!-- Profile view -->
+    <div id="view-profile" style="display:none">
+      <div style="margin-bottom:20px">
+        <div style="font-size:20px;font-weight:700;color:var(--navy)">Mi Perfil</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">Configura tus preferencias para personalizar tu experiencia</div>
+      </div>
+      <div class="profile-grid">
+        <!-- Left: user info -->
+        <div>
+          <div class="profile-card">
+            <div class="profile-avatar" id="profile-avatar">?</div>
+            <div class="profile-name" id="profile-name">—</div>
+            <div class="profile-email" id="profile-email">—</div>
+            <div class="profile-plan">Plan Básico</div>
+            <div class="profile-stat">
+              <div class="profile-stat-label">Proyectos monitoreados</div>
+              <div class="profile-stat-value" id="profile-total">—</div>
+            </div>
+            <div class="profile-stat" style="margin-top:16px">
+              <div class="profile-stat-label">Score promedio</div>
+              <div class="profile-stat-value" id="profile-avg-score">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: preferences -->
+        <div class="profile-card">
+          <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:20px">Preferencias</div>
+
+          <!-- Industries -->
+          <div class="prefs-section">
+            <div class="prefs-title">Industrias de interés</div>
+            <div class="prefs-desc">Selecciona los rubros que quieres monitorear</div>
+            <div class="checkbox-grid" id="pref-industries">
+              ${['Minería','Infraestructura','Energía','Oil & Gas','Agroindustria','Portuario'].map(i =>
+                `<div class="checkbox-item" id="ci-${i}" onclick="toggleIndustry('${i}')">
+                  <input type="checkbox" id="chk-ind-${i}" />
+                  <label for="chk-ind-${i}">${i}</label>
+                </div>`
+              ).join('')}
+            </div>
+          </div>
+
+          <!-- Regions -->
+          <div class="prefs-section">
+            <div class="prefs-title">Regiones de interés</div>
+            <div class="prefs-desc">Selecciona las regiones que quieres seguir</div>
+            <div class="checkbox-grid" id="pref-regions">
+              ${['Antofagasta','Atacama','Tarapacá','Coquimbo','Valparaíso','Región Metropolitana','Biobío','La Araucanía','Los Lagos','Magallanes','Arica y Parinacota','Aysén'].map(r =>
+                `<div class="checkbox-item" id="cr-${r.replace(/ /g,'-')}" onclick="toggleRegion('${r}')">
+                  <input type="checkbox" id="chk-reg-${r.replace(/ /g,'-')}" />
+                  <label for="chk-reg-${r.replace(/ /g,'-')}">${r}</label>
+                </div>`
+              ).join('')}
+            </div>
+          </div>
+
+          <!-- Keywords -->
+          <div class="prefs-section">
+            <div class="prefs-title">Palabras clave</div>
+            <div class="prefs-desc">Agrega términos específicos de tu negocio (ej: explosivos, ventilación, topografía)</div>
+            <div class="tags-input-wrap" onclick="document.getElementById('kw-input').focus()">
+              <div id="kw-tags"></div>
+              <input type="text" id="kw-input" class="tag-input" placeholder="Escribe y presiona Enter..." />
+            </div>
+          </div>
+
+          <!-- Min score -->
+          <div class="prefs-section">
+            <div class="prefs-title">Score mínimo</div>
+            <div class="prefs-desc">Solo mostrar proyectos con score mayor a este valor</div>
+            <div class="range-wrap">
+              <input type="range" min="0" max="90" step="5" value="0" id="pref-min-score" oninput="document.getElementById('min-score-val').textContent=this.value" />
+              <span class="range-val" id="min-score-val">0</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;margin-top:8px">
+            <button class="save-btn" id="save-prefs-btn" onclick="savePreferences()">Guardar preferencias</button>
+            <span class="save-msg" id="save-msg" style="display:none">✓ Guardado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Dashboard table preview -->
     <div class="table-card" id="dash-table" style="margin-top:16px">
       <div class="table-header">
@@ -511,6 +634,8 @@ async function load() {
     all = Array.isArray(data) ? data : (data.items || []);
     buildFilters();
     applyFilters();
+    loadProfile();
+    setTimeout(() => { initMap(); updateMap(); }, 300);
   } catch (e) {
     console.error(e);
   }
@@ -845,7 +970,7 @@ function setView(view) {
     if (el.textContent.trim().toLowerCase().includes(view === 'dashboard' ? 'dashboard' : 'proyecto')) el.classList.add('active');
   });
   document.getElementById('view-dashboard').style.display = view === 'dashboard' ? 'block' : 'none';
-  if (view === 'dashboard') { setTimeout(() => { initMap(); updateMap(); }, 50); }
+  if (view === 'dashboard') { setTimeout(() => { initMap(); updateMap(); }, 200); }
   document.getElementById('dash-table').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('view-projects').style.display = view === 'projects' ? 'block' : 'none';
 }
@@ -999,6 +1124,152 @@ function updateMap() {
 
 function openModalFromMap(idx) {
   openModal(idx, false);
+}
+
+
+// ── Profile ──
+let userPrefs = { preferred_industries: [], preferred_regions: [], keywords: [], min_investment_usd: 0 };
+let userInfo = {};
+
+async function loadProfile() {
+  // Get user info from token
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    userInfo = { email: payload.email };
+    document.getElementById('profile-email').textContent = payload.email;
+    document.getElementById('profile-avatar').textContent = payload.email[0].toUpperCase();
+    document.getElementById('topbar-user').textContent = payload.email;
+  } catch(e) {}
+
+  // Load preferences
+  try {
+    const res = await fetch(`${API}/me/preferences`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const prefs = await res.json();
+      userPrefs = prefs;
+      applyPrefsToUI(prefs);
+    }
+  } catch(e) {}
+
+  // Stats
+  document.getElementById('profile-total').textContent = all.length;
+  const avg = all.length ? Math.round(all.reduce((s,o) => s+(Number(o.score)||0), 0) / all.length) : 0;
+  document.getElementById('profile-avg-score').textContent = avg + '/100';
+}
+
+function applyPrefsToUI(prefs) {
+  // Industries
+  (prefs.preferred_industries || []).forEach(ind => {
+    const el = document.getElementById(`ci-${ind}`);
+    const chk = document.getElementById(`chk-ind-${ind}`);
+    if (el) el.classList.add('checked');
+    if (chk) chk.checked = true;
+  });
+  // Regions
+  (prefs.preferred_regions || []).forEach(reg => {
+    const key = reg.replace(/ /g,'-');
+    const el = document.getElementById(`cr-${key}`);
+    const chk = document.getElementById(`chk-reg-${key}`);
+    if (el) el.classList.add('checked');
+    if (chk) chk.checked = true;
+  });
+  // Keywords
+  (prefs.keywords || []).forEach(kw => addKeywordTag(kw));
+  // Min score
+  const minScore = prefs.min_investment_usd || 0;
+  document.getElementById('pref-min-score').value = minScore;
+  document.getElementById('min-score-val').textContent = minScore;
+}
+
+function toggleIndustry(val) {
+  const el = document.getElementById(`ci-${val}`);
+  const chk = document.getElementById(`chk-ind-${val}`);
+  const arr = userPrefs.preferred_industries || [];
+  const idx = arr.indexOf(val);
+  if (idx === -1) { arr.push(val); el.classList.add('checked'); if(chk) chk.checked=true; }
+  else { arr.splice(idx,1); el.classList.remove('checked'); if(chk) chk.checked=false; }
+  userPrefs.preferred_industries = arr;
+}
+
+function toggleRegion(val) {
+  const key = val.replace(/ /g,'-');
+  const el = document.getElementById(`cr-${key}`);
+  const chk = document.getElementById(`chk-reg-${key}`);
+  const arr = userPrefs.preferred_regions || [];
+  const idx = arr.indexOf(val);
+  if (idx === -1) { arr.push(val); el.classList.add('checked'); if(chk) chk.checked=true; }
+  else { arr.splice(idx,1); el.classList.remove('checked'); if(chk) chk.checked=false; }
+  userPrefs.preferred_regions = arr;
+}
+
+function addKeywordTag(kw) {
+  if (!kw.trim()) return;
+  const container = document.getElementById('kw-tags');
+  const span = document.createElement('span');
+  span.className = 'tag-item';
+  span.innerHTML = `${esc(kw)} <button onclick="removeKeyword(this,'${esc(kw)}')">×</button>`;
+  container.appendChild(span);
+}
+
+function removeKeyword(btn, kw) {
+  btn.parentElement.remove();
+  userPrefs.keywords = (userPrefs.keywords||[]).filter(k => k !== kw);
+}
+
+document.getElementById('kw-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.trim().replace(/,$/, '');
+    if (val) {
+      addKeywordTag(val);
+      if (!userPrefs.keywords) userPrefs.keywords = [];
+      userPrefs.keywords.push(val);
+      e.target.value = '';
+    }
+  }
+});
+
+async function savePreferences() {
+  const btn = document.getElementById('save-prefs-btn');
+  const msg = document.getElementById('save-msg');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  // Collect keywords from UI
+  const tags = document.querySelectorAll('#kw-tags .tag-item');
+  userPrefs.keywords = Array.from(tags).map(t => t.textContent.replace('×','').trim());
+  userPrefs.min_investment_usd = parseInt(document.getElementById('pref-min-score').value) || 0;
+
+  try {
+    const res = await fetch(`${API}/me/preferences`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preferred_industries: userPrefs.preferred_industries || [],
+        preferred_regions: userPrefs.preferred_regions || [],
+        preferred_phases: [],
+        preferred_companies: [],
+        keywords: userPrefs.keywords || [],
+        min_investment_usd: userPrefs.min_investment_usd || 0,
+        weight_region: 1.0,
+        weight_industry: 1.0,
+        weight_investment: 1.0,
+        weight_phase: 1.0,
+        weight_company: 1.0
+      })
+    });
+    if (res.ok) {
+      msg.style.display = 'inline';
+      setTimeout(() => msg.style.display = 'none', 3000);
+    }
+  } catch(e) {
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar preferencias';
+  }
 }
 
 let searchTimer;
