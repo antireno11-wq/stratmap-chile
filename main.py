@@ -118,7 +118,7 @@ def ingest(payload: IngestPayload):
 @app.get("/opportunities")
 def opportunities(
     q: Optional[str] = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=200, ge=1, le=2000),
     user=Depends(get_current_user),
 ):
     rows = list_opportunities(q=q, limit=limit)
