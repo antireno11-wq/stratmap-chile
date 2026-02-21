@@ -83,8 +83,8 @@ def fetch_licitaciones_page(fecha_ini: str, fecha_fin: str, page: int = 1) -> Di
 
 def fetch_chilebcompra(days_back: int = 30, limit: int = 500) -> List[Dict[str, Any]]:
     now = datetime.now(TZ)
-    fecha_ini = (now - timedelta(days=days_back)).strftime("%d%m%Y")
-    fecha_fin = now.strftime("%d%m%Y")
+    fecha_ini = (now - timedelta(days=days_back)).strftime("%d-%m-%Y")
+    fecha_fin = now.strftime("%d-%m-%Y")
 
     print(f"[chilebcompra] buscando licitaciones {fecha_ini} → {fecha_fin}")
 
