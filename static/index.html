@@ -475,7 +475,7 @@ Sé específico y concreto. Máximo 200 palabras.`;
       });
 
       if (res.status === 401) {
-        const key = prompt('Ingresa tu API key de Anthropic (console.anthropic.com):');
+        // replaced
         if (key) {
           localStorage.setItem('anthropic_key', key);
           btn.disabled = false;
@@ -520,6 +520,15 @@ Sé específico y concreto. Máximo 200 palabras.`;
     clearTimeout(t);
     t = setTimeout(filter, 250);
   });
+
+
+  function saveApiKey() {
+    const key = document.getElementById('api-key-input')?.value?.trim();
+    if (!key) return;
+    localStorage.setItem('anthropic_key', key);
+    document.getElementById('ai-result').className = 'ai-result loading';
+    document.getElementById('ai-result').textContent = 'API key guardada. Haz click en "Analizar con Claude".';
+  }
 
   setInterval(() => { if (token) load(); }, 300000);
 </script>
