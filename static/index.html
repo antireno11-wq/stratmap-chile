@@ -465,12 +465,12 @@ a.link:hover { text-decoration: underline; }
             <div class="prefs-title">Industrias de interés</div>
             <div class="prefs-desc">Selecciona los rubros que quieres monitorear</div>
             <div class="checkbox-grid" id="pref-industries">
-              ${['Minería','Infraestructura','Energía','Oil & Gas','Agroindustria','Portuario'].map(i =>
-                `<div class="checkbox-item" id="ci-${i}" onclick="toggleIndustry('${i}')">
-                  <input type="checkbox" id="chk-ind-${i}" />
-                  <label for="chk-ind-${i}">${i}</label>
-                </div>`
-              ).join('')}
+              <div class="checkbox-item" id="ci-Minería" onclick="toggleIndustry('Minería')"><input type="checkbox" id="chk-ind-Minería" /><label for="chk-ind-Minería">Minería</label></div>
+              <div class="checkbox-item" id="ci-Infraestructura" onclick="toggleIndustry('Infraestructura')"><input type="checkbox" id="chk-ind-Infraestructura" /><label for="chk-ind-Infraestructura">Infraestructura</label></div>
+              <div class="checkbox-item" id="ci-Energía" onclick="toggleIndustry('Energía')"><input type="checkbox" id="chk-ind-Energía" /><label for="chk-ind-Energía">Energía</label></div>
+              <div class="checkbox-item" id="ci-Oil &amp; Gas" onclick="toggleIndustry('Oil & Gas')"><input type="checkbox" id="chk-ind-Oil-Gas" /><label for="chk-ind-Oil-Gas">Oil &amp; Gas</label></div>
+              <div class="checkbox-item" id="ci-Agroindustria" onclick="toggleIndustry('Agroindustria')"><input type="checkbox" id="chk-ind-Agroindustria" /><label for="chk-ind-Agroindustria">Agroindustria</label></div>
+              <div class="checkbox-item" id="ci-Portuario" onclick="toggleIndustry('Portuario')"><input type="checkbox" id="chk-ind-Portuario" /><label for="chk-ind-Portuario">Portuario</label></div>
             </div>
           </div>
 
@@ -479,12 +479,18 @@ a.link:hover { text-decoration: underline; }
             <div class="prefs-title">Regiones de interés</div>
             <div class="prefs-desc">Selecciona las regiones que quieres seguir</div>
             <div class="checkbox-grid" id="pref-regions">
-              ${['Antofagasta','Atacama','Tarapacá','Coquimbo','Valparaíso','Región Metropolitana','Biobío','La Araucanía','Los Lagos','Magallanes','Arica y Parinacota','Aysén'].map(r =>
-                `<div class="checkbox-item" id="cr-${r.replace(/ /g,'-')}" onclick="toggleRegion('${r}')">
-                  <input type="checkbox" id="chk-reg-${r.replace(/ /g,'-')}" />
-                  <label for="chk-reg-${r.replace(/ /g,'-')}">${r}</label>
-                </div>`
-              ).join('')}
+              <div class="checkbox-item" id="cr-Antofagasta" onclick="toggleRegion('Antofagasta')"><input type="checkbox" id="chk-reg-Antofagasta" /><label for="chk-reg-Antofagasta">Antofagasta</label></div>
+              <div class="checkbox-item" id="cr-Atacama" onclick="toggleRegion('Atacama')"><input type="checkbox" id="chk-reg-Atacama" /><label for="chk-reg-Atacama">Atacama</label></div>
+              <div class="checkbox-item" id="cr-Tarapacá" onclick="toggleRegion('Tarapacá')"><input type="checkbox" id="chk-reg-Tarapacá" /><label for="chk-reg-Tarapacá">Tarapacá</label></div>
+              <div class="checkbox-item" id="cr-Coquimbo" onclick="toggleRegion('Coquimbo')"><input type="checkbox" id="chk-reg-Coquimbo" /><label for="chk-reg-Coquimbo">Coquimbo</label></div>
+              <div class="checkbox-item" id="cr-Valparaíso" onclick="toggleRegion('Valparaíso')"><input type="checkbox" id="chk-reg-Valparaíso" /><label for="chk-reg-Valparaíso">Valparaíso</label></div>
+              <div class="checkbox-item" id="cr-Región-Metropolitana" onclick="toggleRegion('Región Metropolitana')"><input type="checkbox" id="chk-reg-Región-Metropolitana" /><label for="chk-reg-Región-Metropolitana">Región Metropolitana</label></div>
+              <div class="checkbox-item" id="cr-Biobío" onclick="toggleRegion('Biobío')"><input type="checkbox" id="chk-reg-Biobío" /><label for="chk-reg-Biobío">Biobío</label></div>
+              <div class="checkbox-item" id="cr-La-Araucanía" onclick="toggleRegion('La Araucanía')"><input type="checkbox" id="chk-reg-La-Araucanía" /><label for="chk-reg-La-Araucanía">La Araucanía</label></div>
+              <div class="checkbox-item" id="cr-Los-Lagos" onclick="toggleRegion('Los Lagos')"><input type="checkbox" id="chk-reg-Los-Lagos" /><label for="chk-reg-Los-Lagos">Los Lagos</label></div>
+              <div class="checkbox-item" id="cr-Magallanes" onclick="toggleRegion('Magallanes')"><input type="checkbox" id="chk-reg-Magallanes" /><label for="chk-reg-Magallanes">Magallanes</label></div>
+              <div class="checkbox-item" id="cr-Arica-y-Parinacota" onclick="toggleRegion('Arica y Parinacota')"><input type="checkbox" id="chk-reg-Arica-y-Parinacota" /><label for="chk-reg-Arica-y-Parinacota">Arica y Parinacota</label></div>
+              <div class="checkbox-item" id="cr-Aysén" onclick="toggleRegion('Aysén')"><input type="checkbox" id="chk-reg-Aysén" /><label for="chk-reg-Aysén">Aysén</label></div>
             </div>
           </div>
 
