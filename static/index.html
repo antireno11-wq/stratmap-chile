@@ -21,364 +21,96 @@
     --red: #dc2626;
   }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    min-height: 100vh;
-  }
+  body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; min-height: 100vh; }
 
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
-  /* ── LOGIN ── */
-  #login-screen {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg);
-  }
+  #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
 
-  .login-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 40px;
-    width: 100%;
-    max-width: 380px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-    animation: fadeIn 0.3s ease;
-  }
+  .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 40px; width: 100%; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); animation: fadeIn 0.3s ease; }
 
-  .login-logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 28px;
-  }
+  .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+  .login-logo img { height: 40px; width: 40px; object-fit: contain; }
+  .login-logo-text h2 { font-size: 16px; font-weight: 600; color: var(--navy); }
+  .login-logo-text span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); }
 
-  .login-logo img {
-    height: 40px;
-    width: 40px;
-    object-fit: contain;
-  }
-
-  .login-logo-text h2 {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--navy);
-  }
-
-  .login-logo-text span {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-  }
-
-  .login-box label {
-    display: block;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 6px;
-    margin-top: 16px;
-  }
-
-  .login-box input {
-    width: 100%;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    padding: 10px 14px;
-    outline: none;
-    border-radius: 6px;
-    transition: border-color 0.15s;
-  }
-
+  .login-box label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; margin-top: 16px; }
+  .login-box input { width: 100%; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; padding: 10px 14px; outline: none; border-radius: 6px; transition: border-color 0.15s; }
   .login-box input:focus { border-color: var(--blue); }
 
-  .login-btn {
-    width: 100%;
-    margin-top: 24px;
-    padding: 11px;
-    background: var(--navy);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
+  .login-btn { width: 100%; margin-top: 24px; padding: 11px; background: var(--navy); color: #fff; border: none; border-radius: 6px; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
   .login-btn:hover { background: #2a3560; }
   .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .login-error { margin-top: 12px; font-size: 12px; color: var(--red); font-family: 'IBM Plex Mono', monospace; text-align: center; }
 
-  .login-error {
-    margin-top: 12px;
-    font-size: 12px;
-    color: var(--red);
-    font-family: 'IBM Plex Mono', monospace;
-    text-align: center;
-  }
-
-  /* ── APP ── */
   #app-screen { display: none; }
 
-  header {
-    background: var(--surface);
-    padding: 16px 40px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .logo img {
-    height: 38px;
-    width: 38px;
-    object-fit: contain;
-  }
-
-  .logo-text h1 {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--navy);
-  }
-
-  .logo-text span {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .status {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--green);
-    animation: pulse 2.5s infinite;
-  }
-
-  .logout-btn {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    background: none;
-    border: 1px solid var(--border);
-    padding: 5px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
+  header { background: var(--surface); padding: 16px 40px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: center; gap: 14px; }
+  .logo img { height: 38px; width: 38px; object-fit: contain; }
+  .logo-text h1 { font-size: 16px; font-weight: 600; color: var(--navy); }
+  .logo-text span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .status { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2.5s infinite; }
+  .logout-btn { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); background: none; border: 1px solid var(--border); padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.15s; }
   .logout-btn:hover { color: var(--red); border-color: var(--red); }
 
   main { padding: 28px 40px; }
 
-  .toolbar {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-    align-items: center;
-  }
-
-  input[type="text"] {
-    flex: 1;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 13px;
-    padding: 10px 16px;
-    outline: none;
-    border-radius: 6px;
-    transition: border-color 0.15s;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  }
-
+  .toolbar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; }
+  input[type="text"] { flex: 1; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; padding: 10px 16px; outline: none; border-radius: 6px; transition: border-color 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
   input[type="text"]:focus { border-color: var(--blue); }
   input[type="text"]::placeholder { color: var(--muted); }
+  .count { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
 
-  .count {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
 
-  .table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  }
-
-  table { width: 100%; border-collapse: collapse; }
-
-  thead th {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--muted);
-    padding: 12px 18px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    background: #f9fafc;
-    cursor: pointer;
-    white-space: nowrap;
-    user-select: none;
-  }
-
+  thead th { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); background: #f9fafc; cursor: pointer; white-space: nowrap; user-select: none; }
   thead th:hover { color: var(--navy); }
 
-  tbody tr {
-    border-bottom: 1px solid var(--border);
-    transition: background 0.1s;
-  }
-
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: #f4f7fb; }
+  td { padding: 12px 16px; vertical-align: middle; }
 
-  td { padding: 13px 18px; vertical-align: middle; }
-
-  .score {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    font-weight: 500;
-    width: 44px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 5px;
-  }
-
+  .score { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; width: 40px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
   .score-high { background: #dcf5eb; color: var(--green); }
   .score-mid  { background: #fef3e2; color: var(--yellow); }
   .score-low  { background: #f0f2f7; color: var(--muted); }
 
-  .title { font-weight: 500; color: var(--navy); }
-  .subtitle {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 3px;
-  }
+  .title { font-weight: 500; color: var(--navy); font-size: 13px; }
+  .subtitle { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-  .phase {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--blue);
-    background: #eaf5fb;
-    padding: 3px 9px;
-    border-radius: 4px;
-    white-space: nowrap;
-  }
+  .source-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 2px 7px; border-radius: 3px; background: #f0f2f7; color: var(--muted); white-space: nowrap; }
+  .source-sea { background: #e8f4fd; color: var(--blue); }
+  .source-chilebcompra { background: #fef3e2; color: var(--yellow); }
+  .source-rss { background: #dcf5eb; color: var(--green); }
 
-  a.link {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--blue);
-    text-decoration: none;
-    border-bottom: 1px solid rgba(59,159,204,0.3);
-    padding-bottom: 1px;
-    transition: border-color 0.15s;
-  }
+  .phase { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--blue); background: #eaf5fb; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
 
+  .date-cell { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  a.link { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(59,159,204,0.3); padding-bottom: 1px; transition: border-color 0.15s; }
   a.link:hover { border-color: var(--blue); }
 
-  .state {
-    text-align: center;
-    padding: 64px;
-    color: var(--muted);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-  }
+  .state { text-align: center; padding: 64px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
 
-  .spinner {
-    width: 16px; height: 16px;
-    border: 2px solid var(--border);
-    border-top-color: var(--blue);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    margin: 0 auto 12px;
-  }
-
-  .pagination {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 20px;
-  }
-
-  .pagination button {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 7px 16px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.1s;
-  }
-
+  .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .pagination button { font-family: 'IBM Plex Mono', monospace; font-size: 11px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 7px 16px; border-radius: 5px; cursor: pointer; transition: all 0.1s; }
   .pagination button:hover:not(:disabled) { background: var(--navy); color: #fff; border-color: var(--navy); }
   .pagination button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .page-info { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
 
-  .page-info {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  footer {
-    margin-top: 40px;
-    padding: 20px 40px;
-    border-top: 1px solid var(--border);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    display: flex;
-    justify-content: space-between;
-  }
+  footer { margin-top: 40px; padding: 20px 40px; border-top: 1px solid var(--border); font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
     <div class="login-logo">
@@ -397,7 +129,6 @@
   </div>
 </div>
 
-<!-- APP -->
 <div id="app-screen">
   <header>
     <div class="logo">
@@ -408,10 +139,7 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="status">
-        <span class="dot"></span>
-        <span id="status-text">online</span>
-      </div>
+      <div class="status"><span class="dot"></span><span id="status-text">online</span></div>
       <button class="logout-btn" onclick="doLogout()">Salir</button>
     </div>
   </header>
@@ -428,14 +156,16 @@
           <tr>
             <th onclick="sortBy('score')">Score</th>
             <th>Proyecto</th>
+            <th onclick="sortBy('source')">Fuente</th>
             <th onclick="sortBy('company')">Empresa</th>
             <th onclick="sortBy('region')">Región</th>
             <th>Fase</th>
+            <th onclick="sortBy('created_at')">Fecha</th>
             <th>Link</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="6"><div class="state"><div class="spinner"></div>Cargando...</div></td></tr>
+          <tr><td colspan="8"><div class="state"><div class="spinner"></div>Cargando...</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -456,12 +186,10 @@
 <script>
   const API = 'https://stratmap-chile-production.up.railway.app';
   const PER_PAGE = 25;
-  let all = [], filtered = [], page = 0, sortKey = 'score', sortAsc = false;
+  let all = [], filtered = [], page = 0, sortKey = 'created_at', sortAsc = false;
   let token = localStorage.getItem('stratmap_token');
 
-  // ── Init ──
-  if (token) showApp();
-  else showLogin();
+  if (token) showApp(); else showLogin();
 
   function showLogin() {
     document.getElementById('login-screen').style.display = 'flex';
@@ -474,19 +202,13 @@
     load();
   }
 
-  // ── Login ──
   async function doLogin() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     const btn = document.getElementById('login-btn');
     const err = document.getElementById('login-error');
-
     if (!email || !password) { err.textContent = 'Completa todos los campos'; return; }
-
-    btn.disabled = true;
-    btn.textContent = 'Ingresando...';
-    err.textContent = '';
-
+    btn.disabled = true; btn.textContent = 'Ingresando...'; err.textContent = '';
     try {
       const res = await fetch(`${API}/auth/login`, {
         method: 'POST',
@@ -501,14 +223,14 @@
     } catch (e) {
       err.textContent = e.message;
     } finally {
-      btn.disabled = false;
-      btn.textContent = 'Ingresar';
+      btn.disabled = false; btn.textContent = 'Ingresar';
     }
   }
 
-  // Enter en login
-  document.getElementById('login-password')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('login-password')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
   });
 
   function doLogout() {
@@ -517,7 +239,6 @@
     showLogin();
   }
 
-  // ── Data ──
   async function load() {
     try {
       const res = await fetch(`${API}/opportunities?limit=500`, {
@@ -526,13 +247,13 @@
       if (res.status === 401) { doLogout(); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      all = Array.isArray(data) ? data : (data.items || data.data || []);
+      all = Array.isArray(data) ? data : (data.items || []);
       document.getElementById('last-update').textContent = 'actualizado ' + new Date().toLocaleTimeString('es-CL');
       filter();
     } catch (e) {
       document.getElementById('status-text').textContent = 'sin conexión';
       document.getElementById('tbody').innerHTML =
-        `<tr><td colspan="6"><div class="state">Error: ${e.message}</div></td></tr>`;
+        `<tr><td colspan="8"><div class="state">Error: ${e.message}</div></td></tr>`;
     }
   }
 
@@ -542,7 +263,8 @@
       !q ||
       (o.title||'').toLowerCase().includes(q) ||
       (o.company||'').toLowerCase().includes(q) ||
-      (o.region||'').toLowerCase().includes(q)
+      (o.region||'').toLowerCase().includes(q) ||
+      (o.source||'').toLowerCase().includes(q)
     );
     filtered.sort((a, b) => {
       let av = sortKey === 'score' ? (Number(a[sortKey])||0) : (a[sortKey]||'');
@@ -551,6 +273,21 @@
     });
     page = 0;
     render();
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    } catch { return '—'; }
+  }
+
+  function sourceClass(source) {
+    const s = (source || '').toLowerCase();
+    if (s === 'sea') return 'source-sea';
+    if (s === 'chilebcompra') return 'source-chilebcompra';
+    return 'source-rss';
   }
 
   function render() {
@@ -565,7 +302,7 @@
 
     if (!slice.length) {
       document.getElementById('tbody').innerHTML =
-        '<tr><td colspan="6"><div class="state">Sin resultados</div></td></tr>';
+        '<tr><td colspan="8"><div class="state">Sin resultados</div></td></tr>';
       return;
     }
 
@@ -578,9 +315,11 @@
           <div class="title">${esc(o.title || '—')}</div>
           ${o.industry ? `<div class="subtitle">${esc(o.industry)}</div>` : ''}
         </td>
+        <td><span class="source-badge ${sourceClass(o.source)}">${esc(o.source || '—')}</span></td>
         <td>${esc(o.company || '—')}</td>
         <td>${esc(o.region || '—')}</td>
         <td>${o.phase ? `<span class="phase">${esc(o.phase)}</span>` : '—'}</td>
+        <td><span class="date-cell">${formatDate(o.created_at)}</span></td>
         <td>${o.url ? `<a class="link" href="${esc(o.url)}" target="_blank" rel="noopener">ver →</a>` : '—'}</td>
       </tr>`;
     }).join('');
