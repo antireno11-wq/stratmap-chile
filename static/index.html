@@ -973,12 +973,17 @@ function setView(view) {
   currentView = view;
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(el => {
-    if (el.textContent.trim().toLowerCase().includes(view === 'dashboard' ? 'dashboard' : 'proyecto')) el.classList.add('active');
+    const t = el.textContent.trim().toLowerCase();
+    if (view === 'dashboard' && t.includes('dashboard')) el.classList.add('active');
+    if (view === 'projects' && t.includes('proyecto')) el.classList.add('active');
+    if (view === 'profile' && t.includes('perfil')) el.classList.add('active');
   });
   document.getElementById('view-dashboard').style.display = view === 'dashboard' ? 'block' : 'none';
-  if (view === 'dashboard') { setTimeout(() => { initMap(); updateMap(); }, 200); }
   document.getElementById('dash-table').style.display = view === 'dashboard' ? 'block' : 'none';
   document.getElementById('view-projects').style.display = view === 'projects' ? 'block' : 'none';
+  document.getElementById('view-profile').style.display = view === 'profile' ? 'block' : 'none';
+  if (view === 'dashboard') { setTimeout(() => { initMap(); updateMap(); }, 200); }
+  if (view === 'profile') loadProfile();
 }
 
 // ── Export CSV ──
