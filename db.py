@@ -22,6 +22,7 @@ def init_db_safe() -> None:
     try:
         init_db()
         init_users_db()
+        init_signals_db()
     except Exception as e:
         print(f"[db] init_db_safe: DB no disponible todavía: {type(e).__name__}: {e}")
 
@@ -59,6 +60,12 @@ def init_db() -> None:
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS entry TEXT NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS raw JSONB NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS signals JSONB DEFAULT '[]';")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS signal_score INTEGER DEFAULT 0;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS jobs_count INTEGER DEFAULT 0;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS last_signal_at TIMESTAMPTZ NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS strategy TEXT NULL;")
         conn.commit()
 
 
@@ -87,6 +94,31 @@ def init_users_db() -> None:
         weight_company FLOAT DEFAULT 1.0,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+
+def init_signals_db() -> None:
+    """Crea la tabla de señales para el Radar de Proyectos."""
+    sql = """
+    CREATE TABLE IF NOT EXISTS opportunity_signals (
+        id SERIAL PRIMARY KEY,
+        opportunity_id INTEGER REFERENCES opportunities(id) ON DELETE CASCADE,
+        signal_type VARCHAR(50),
+        signal_source VARCHAR(100),
+        signal_data JSONB DEFAULT '{}',
+        score_impact INTEGER DEFAULT 0,
+        detected_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_opportunity_signals_opportunity_id
+        ON opportunity_signals(opportunity_id);
+
+    CREATE INDEX IF NOT EXISTS idx_opportunities_signal_score
+        ON opportunities(signal_score DESC);
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -164,7 +196,10 @@ def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
     limit = max(1, min(int(limit), 500))
 
     base = """
-    SELECT id, source, title, url, company, contractor, industry, region, phase, score, entry, raw, created_at, updated_at
+    SELECT id, source, title, url, company, contractor, industry, region, phase,
+           score, signal_score, jobs_count, signals, last_signal_at,
+           entry, raw, created_at, updated_at,
+           (score + COALESCE(signal_score, 0)) AS radar_score
     FROM opportunities
     """
 
@@ -182,7 +217,7 @@ def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
         """
         params["q"] = f"%{q}%"
 
-    base += " ORDER BY score DESC, updated_at DESC LIMIT %(limit)s;"
+    base += " ORDER BY radar_score DESC, updated_at DESC LIMIT %(limit)s;"
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -192,7 +227,9 @@ def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
 
 def get_opportunity_by_url(url: str) -> Optional[Dict[str, Any]]:
     sql = """
-    SELECT id, source, title, url, company, contractor, industry, region, phase, score, entry, raw, created_at, updated_at
+    SELECT id, source, title, url, company, contractor, industry, region, phase,
+           score, signal_score, jobs_count, signals, last_signal_at,
+           entry, raw, created_at, updated_at
     FROM opportunities
     WHERE url = %(url)s
     LIMIT 1;
@@ -267,3 +304,97 @@ def get_preferences(user_id: int) -> Optional[Dict[str, Any]]:
             cur.execute(sql, {"user_id": user_id})
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+# ── Signals & Radar de Proyectos ──────────────────────────────────────────────
+
+def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
+    """Guarda una señal de empleo en opportunity_signals y actualiza opportunities."""
+
+    sql_signal = """
+    INSERT INTO opportunity_signals
+      (opportunity_id, signal_type, signal_source, signal_data, score_impact, detected_at)
+    VALUES
+      (%(opportunity_id)s, %(signal_type)s, %(signal_source)s, %(signal_data)s, %(score_impact)s, %(detected_at)s);
+    """
+
+    sql_update = """
+    UPDATE opportunities SET
+      jobs_count     = %(jobs_count)s,
+      signal_score   = LEAST(COALESCE(signal_score, 0) + %(score_impact)s, 100),
+      last_signal_at = NOW(),
+      signals        = COALESCE(signals, '[]'::jsonb) || %(new_signal)s::jsonb
+    WHERE id = %(opportunity_id)s;
+    """
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql_signal, {
+                "opportunity_id": opportunity_id,
+                "signal_type": signal["signal_type"],
+                "signal_source": signal["signal_source"],
+                "signal_data": Json(signal["signal_data"]),
+                "score_impact": signal["score_impact"],
+                "detected_at": signal["detected_at"],
+            })
+            cur.execute(sql_update, {
+                "opportunity_id": opportunity_id,
+                "jobs_count": signal["jobs_count"],
+                "score_impact": signal["score_impact"],
+                "new_signal": Json({
+                    "type": "jobs",
+                    "jobs_count": signal["jobs_count"],
+                    "score_impact": signal["score_impact"],
+                    "detected_at": signal["detected_at"].isoformat(),
+                }),
+            })
+        conn.commit()
+
+
+def get_opportunities_by_company(company_name: str) -> List[Dict[str, Any]]:
+    """Retorna oportunidades que coincidan con una empresa."""
+    sql = """
+    SELECT id, title, company, score, signal_score, jobs_count, last_signal_at
+    FROM opportunities
+    WHERE company ILIKE %(company)s
+    ORDER BY signal_score DESC, score DESC;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"company": f"%{company_name}%"})
+            return cur.fetchall()
+
+
+def get_radar_opportunities(limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Retorna las oportunidades con más movimiento para el Radar de Proyectos.
+    Combina score base + signal_score para el ranking final.
+    """
+    sql = """
+    SELECT
+        id, title, company, region, industry, phase,
+        score, signal_score, jobs_count, signals,
+        last_signal_at, updated_at,
+        (score + COALESCE(signal_score, 0)) AS radar_score
+    FROM opportunities
+    ORDER BY radar_score DESC, last_signal_at DESC NULLS LAST
+    LIMIT %(limit)s;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"limit": limit})
+            return cur.fetchall()
+
+
+def get_signals_for_opportunity(opportunity_id: int) -> List[Dict[str, Any]]:
+    """Retorna el historial de señales de una oportunidad específica."""
+    sql = """
+    SELECT signal_type, signal_source, signal_data, score_impact, detected_at
+    FROM opportunity_signals
+    WHERE opportunity_id = %(opportunity_id)s
+    ORDER BY detected_at DESC;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"opportunity_id": opportunity_id})
+            return cur.fetchall()
