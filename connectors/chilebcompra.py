@@ -1,23 +1,18 @@
 # connectors/chilebcompra.py
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 import requests
 
 TZ = ZoneInfo("America/Santiago")
-
-# API pública de ChileCompra - no requiere autenticación
+TICKET = os.getenv("CHILEBCOMPRA_TICKET", "F8537A18-6766-4DEF-9E59-426B4FEE2844")
 BASE_URL = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
 
-# Códigos de rubros relevantes en ChileCompra
-RUBROS_MINERIA = ["15", "23", "24"]        # Minerales, combustibles, equipos industriales
-RUBROS_INFRA = ["30", "31", "32", "72"]    # Construcción, ingeniería
-RUBROS_ENERGIA = ["26", "39", "40", "41"]  # Energía, utilities
-
-KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "concentradora", "yacimiento", "salar"]
-KEYWORDS_INFRA = ["infraestructura", "carretera", "puente", "camino", "ruta", "vialidad", "construcción", "edificación"]
-KEYWORDS_ENERGIA = ["energía", "eléctric", "fotovoltai", "eólica", "subestación", "transmisión", "generación"]
-KEYWORDS_OIL = ["petróleo", "gas", "enap", "combustible", "hidrocarburo", "refinería", "gasoducto"]
+KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "concentradora", "yacimiento", "salar", "extracción"]
+KEYWORDS_INFRA = ["infraestructura", "carretera", "puente", "camino", "ruta", "vialidad", "construcción", "edificación", "obras civiles"]
+KEYWORDS_ENERGIA = ["energía", "eléctric", "fotovoltai", "eólica", "subestación", "transmisión", "generación", "solar"]
+KEYWORDS_OIL = ["petróleo", "gas natural", "enap", "combustible", "hidrocarburo", "refinería", "gasoducto"]
 
 
 def classify_industry(title: str, description: str = "") -> Optional[str]:
@@ -46,7 +41,7 @@ def score_licitacion(industry: Optional[str], monto: Optional[float], title: str
 
     inv = 0
     if monto:
-        if monto >= 500_000_000:   # sobre 500M CLP
+        if monto >= 500_000_000:
             inv = 20
         elif monto >= 100_000_000:
             inv = 15
@@ -65,56 +60,52 @@ def score_licitacion(industry: Optional[str], monto: Optional[float], title: str
     return max(0, min(100, base + inv + kw))
 
 
-def fetch_licitaciones_page(fecha_ini: str, fecha_fin: str, page: int = 1) -> Dict[str, Any]:
-    params = {
-        "fechaInicio": fecha_ini,
-        "fechaFin": fecha_fin,
-        "pagina": page,
-        "ticket": "guest",  # acceso público sin ticket
-    }
+def fetch_day(fecha: str) -> List[Dict[str, Any]]:
+    """Trae licitaciones de un día específico. Formato fecha: DDMMAAAA"""
+    params = {"fecha": fecha, "ticket": TICKET}
     try:
         r = requests.get(BASE_URL, params=params, timeout=30)
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        return data.get("Listado", [])
     except Exception as e:
-        print(f"[chilebcompra] error página {page}: {e}")
-        return {}
+        print(f"[chilebcompra] error día {fecha}: {e}")
+        return []
 
 
 def fetch_chilebcompra(days_back: int = 30, limit: int = 500) -> List[Dict[str, Any]]:
     now = datetime.now(TZ)
-    fecha_ini = (now - timedelta(days=days_back)).strftime("%d-%m-%Y")
-    fecha_fin = now.strftime("%d-%m-%Y")
-
-    print(f"[chilebcompra] buscando licitaciones {fecha_ini} → {fecha_fin}")
+    print(f"[chilebcompra] buscando últimos {days_back} días")
 
     out: List[Dict[str, Any]] = []
-    page = 1
 
-    while len(out) < limit:
-        data = fetch_licitaciones_page(fecha_ini, fecha_fin, page)
-
-        licitaciones = data.get("Listado", [])
-        if not licitaciones:
+    for i in range(days_back):
+        if len(out) >= limit:
             break
 
+        day = now - timedelta(days=i)
+        fecha = day.strftime("%d%m%Y")
+        licitaciones = fetch_day(fecha)
+
         for lic in licitaciones:
-            title = lic.get("Nombre") or lic.get("NombreLicitacion") or ""
+            title = lic.get("Nombre") or ""
             if not title:
                 continue
 
             description = lic.get("Descripcion") or ""
             industry = classify_industry(title, description)
 
-            # Solo incluir rubros relevantes
             if not industry:
                 continue
 
             codigo = lic.get("CodigoExterno") or lic.get("Codigo") or ""
             url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion={codigo}"
 
-            company = lic.get("Comprador", {}).get("NombreOrganismo") or lic.get("NombreOrganismo") or None
-            region = lic.get("Comprador", {}).get("Region") or None
+            company = None
+            region = None
+            if isinstance(lic.get("Comprador"), dict):
+                company = lic["Comprador"].get("NombreOrganismo")
+                region = lic["Comprador"].get("Region")
 
             monto = None
             try:
@@ -122,7 +113,7 @@ def fetch_chilebcompra(days_back: int = 30, limit: int = 500) -> List[Dict[str, 
             except Exception:
                 pass
 
-            estado = lic.get("Estado") or lic.get("CodigoEstado") or "Publicada"
+            estado = lic.get("Estado") or "Publicada"
             score = score_licitacion(industry, monto, title)
 
             out.append({
@@ -138,13 +129,6 @@ def fetch_chilebcompra(days_back: int = 30, limit: int = 500) -> List[Dict[str, 
                 "entry": codigo,
                 "raw": lic,
             })
-
-        total = data.get("Cantidad", 0)
-        fetched_so_far = page * len(licitaciones)
-        if fetched_so_far >= total:
-            break
-
-        page += 1
 
     print(f"[chilebcompra] encontradas {len(out)} licitaciones relevantes")
     return out[:limit]
