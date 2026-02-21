@@ -6,7 +6,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
 import requests
-from connectors.sea import fetch_sea
 from connectors.chilebcompra import fetch_chilebcompra
 
 TZ = ZoneInfo("America/Santiago")
