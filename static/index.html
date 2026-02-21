@@ -432,15 +432,32 @@
     if (!currentProject) return;
     const btn = document.getElementById('ai-btn');
     const result = document.getElementById('ai-result');
+
+    const apiKey = localStorage.getItem('anthropic_key');
+    if (!apiKey) {
+      result.className = 'ai-result';
+      result.innerHTML = `
+        <div style="margin-bottom:8px;font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace;">Ingresa tu API key de Anthropic:</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:'IBM Plex Mono',monospace;outline:none;" />
+          <button onclick="saveApiKey()" style="padding:8px 14px;background:var(--navy);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap;">Guardar</button>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;">La key se guarda solo en tu navegador.</div>
+      `;
+      return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = `<div class="spinner" style="margin:0;width:14px;height:14px;border-width:2px"></div> Analizando...`;
     result.className = 'ai-result loading';
     result.textContent = 'Claude está analizando el proyecto...';
 
     const o = currentProject;
+    const rawStr = o.raw ? JSON.stringify(o.raw).substring(0, 1000) : '';
+
     const prompt = `Eres un analista de inteligencia de negocios especializado en minería, infraestructura y energía en Chile.
 
-Analiza este proyecto/oportunidad y entrega un análisis breve y directo en español:
+Analiza este proyecto/oportunidad:
 
 Título: ${o.title}
 Fuente: ${o.source}
@@ -449,41 +466,45 @@ Industria: ${o.industry || 'No clasificado'}
 Región: ${o.region || 'No especificada'}
 Fase: ${o.phase || 'No especificada'}
 Score Stratmap: ${o.score}/100
-${o.raw ? `Datos adicionales: ${JSON.stringify(o.raw).substring(0, 800)}` : ''}
+Datos raw: ${rawStr}
 
-Responde con:
+Responde en español con:
 1. **¿Qué es este proyecto?** (2-3 líneas)
-2. **¿Por qué es relevante?** (oportunidades de negocio, proveedores, servicios)
-3. **Recomendación** (qué hacer con esta información)
+2. **Empresa y región inferida** (si no están especificadas, infíérelas desde los datos raw)
+3. **¿Por qué es relevante?** (oportunidades concretas para proveedores y servicios)
+4. **Recomendación** (qué hacer con esta información)
 
-Sé específico y concreto. Máximo 200 palabras.`;
+Sé específico y concreto. Máximo 250 palabras.`;
 
     try {
-      const res = await fetch(ANTHROPIC_API, {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': localStorage.getItem('anthropic_key') || '',
+          'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 500,
+          max_tokens: 600,
           messages: [{ role: 'user', content: prompt }]
         })
       });
 
       if (res.status === 401) {
-        // replaced
-        if (key) {
-          localStorage.setItem('anthropic_key', key);
-          btn.disabled = false;
-          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar con Claude`;
-          result.textContent = 'API key guardada. Haz click en "Analizar con Claude" de nuevo.';
-          result.className = 'ai-result loading';
-          return;
-        }
+        localStorage.removeItem('anthropic_key');
+        result.className = 'ai-result';
+        result.innerHTML = `
+          <div style="margin-bottom:8px;font-size:12px;color:var(--red);font-family:'IBM Plex Mono',monospace;">API key inválida. Ingresa una nueva:</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:'IBM Plex Mono',monospace;outline:none;" />
+            <button onclick="saveApiKey()" style="padding:8px 14px;background:var(--navy);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap;">Guardar</button>
+          </div>
+        `;
+        btn.disabled = false;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar con Claude`;
+        return;
       }
 
       const data = await res.json();
