@@ -5,8 +5,9 @@ import hashlib
 from typing import Any, Dict, List, Optional
 
 MOP_RSS_FEEDS = [
-    {"url": "https://www.mop.cl/Prensa/Lists/Noticias/rss.aspx", "source": "MOP Noticias"},
-    {"url": "https://www.concesiones.cl/noticias/Paginas/RSS.aspx", "source": "MOP Concesiones"},
+    {"url": "https://www.mop.gob.cl/feed/", "source": "MOP Noticias"},
+    {"url": "https://www.infraestructura.cl/feed/", "source": "Infraestructura Chile"},
+    {"url": "https://www.cchc.cl/feed/", "source": "CChC Infraestructura"},
 ]
 
 KEYWORDS_INFRA = ["carretera", "ruta", "puente", "camino", "autopista", "vialidad", "túnel", "embalse", "aeropuerto", "puerto", "concesión", "licitación", "construcción", "obra", "contrato", "adjudicación"]
