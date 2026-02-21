@@ -1,13 +1,17 @@
-# sea_ingest.py - actualizado para múltiples fuentes
 import os
+import sys
 import time
 import random
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
 import requests
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from connectors.sea import fetch_sea
 from connectors.chilebcompra import fetch_chilebcompra
+from connectors.rss import fetch_rss
 
 TZ = ZoneInfo("America/Santiago")
 BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
@@ -15,6 +19,8 @@ SEA_DAYS_BACK = int(os.getenv("SEA_DAYS_BACK", "365"))
 SEA_LIMIT = int(os.getenv("SEA_LIMIT", "2000"))
 CHILEBCOMPRA_DAYS_BACK = int(os.getenv("CHILEBCOMPRA_DAYS_BACK", "30"))
 CHILEBCOMPRA_LIMIT = int(os.getenv("CHILEBCOMPRA_LIMIT", "500"))
+RSS_DAYS_BACK = int(os.getenv("RSS_DAYS_BACK", "7"))
+RSS_LIMIT = int(os.getenv("RSS_LIMIT", "200"))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "100"))
 INGEST_TIMEOUT = int(os.getenv("INGEST_TIMEOUT", "120"))
 INGEST_RETRIES = int(os.getenv("INGEST_RETRIES", "6"))
@@ -44,7 +50,7 @@ def wait_for_health(session: requests.Session) -> bool:
         except Exception as e:
             print(f"[{now_clt()}] health check: {e}")
         time.sleep(HEALTH_POLL_SECONDS)
-    print(f"[{now_clt()}] health NOT OK after {WAIT_HEALTH_SECONDS}s -> continue anyway")
+    print(f"[{now_clt()}] health NOT OK -> continue anyway")
     return False
 
 
@@ -97,6 +103,12 @@ def run() -> None:
     cb_items = fetch_chilebcompra(days_back=CHILEBCOMPRA_DAYS_BACK, limit=CHILEBCOMPRA_LIMIT)
     print(f"[{now_clt()}] ChileCompra fetched: {len(cb_items)} items")
     ingest_items(session, cb_items, "ChileCompra")
+
+    # ── RSS ──
+    print(f"[{now_clt()}] Fetching RSS...")
+    rss_items = fetch_rss(days_back=RSS_DAYS_BACK, limit=RSS_LIMIT)
+    print(f"[{now_clt()}] RSS fetched: {len(rss_items)} items")
+    ingest_items(session, rss_items, "RSS")
 
     print(f"[{now_clt()}] Worker finished")
 
