@@ -10,8 +10,6 @@ from db import create_user, get_user_by_email, save_preferences, get_preferences
 from auth import hash_password, verify_password, create_access_token, decode_token
 
 
-# ── Startup ──────────────────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db_safe()
@@ -77,6 +75,18 @@ class PreferencesPayload(BaseModel):
     weight_company: float = 1.0
 
 
+# ── Setup (solo para crear el primer usuario) ─────────────────────────────────
+
+@app.post("/setup/first-user")
+def setup_first_user(payload: CreateUserPayload):
+    existing = get_user_by_email(payload.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Ya existe un usuario")
+    password_hash = hash_password(payload.password)
+    new_user = create_user(payload.email, password_hash, payload.name)
+    return {"ok": True, "user_id": new_user["id"], "email": new_user["email"]}
+
+
 # ── Endpoints públicos ────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -105,16 +115,6 @@ def ingest(payload: IngestPayload):
 
 # ── Endpoints privados ────────────────────────────────────────────────────────
 
-@app.post("/admin/users")
-def create_user_endpoint(payload: CreateUserPayload, user=Depends(get_current_user)):
-    existing = get_user_by_email(payload.email)
-    if existing:
-        raise HTTPException(status_code=400, detail="Email ya existe")
-    password_hash = hash_password(payload.password)
-    new_user = create_user(payload.email, password_hash, payload.name)
-    return {"ok": True, "user_id": new_user["id"], "email": new_user["email"]}
-
-
 @app.get("/opportunities")
 def opportunities(
     q: Optional[str] = Query(default=None),
@@ -137,12 +137,10 @@ def opportunities(
 def feed(user=Depends(get_current_user)):
     prefs = get_preferences(user["user_id"])
     rows = list_opportunities(q=None, limit=500)
-
     scored = []
     for row in rows:
         r = dict(row)
         boost = 0
-
         if prefs:
             if r.get("industry") and r["industry"] in prefs.get("preferred_industries", []):
                 boost += 30 * prefs.get("weight_industry", 1.0)
@@ -155,14 +153,12 @@ def feed(user=Depends(get_current_user)):
             for kw in prefs.get("keywords", []):
                 if kw.lower() in (r.get("title") or "").lower():
                     boost += 15
-
         r["feed_score"] = (r.get("score") or 0) + boost
         if r.get("created_at"):
             r["created_at"] = r["created_at"].isoformat()
         if r.get("updated_at"):
             r["updated_at"] = r["updated_at"].isoformat()
         scored.append(r)
-
     scored.sort(key=lambda x: x["feed_score"], reverse=True)
     return scored[:100]
 
