@@ -8,7 +8,7 @@ TZ = ZoneInfo("America/Santiago")
 
 # COCHILCO catastro de inversión minera - API pública
 CATASTRO_URL = "https://www.cochilco.cl/Mercado%20de%20Metales/Catastro%20de%20Inversiones.aspx"
-RSS_COCHILCO = "https://www.cochilco.cl/Lists/Noticias/rss.aspx"
+RSS_COCHILCO = "https://www.cochilco.cl/web/feed/"
 
 # Regiones mineras principales para scoring
 REGIONES_MINERAS = ["Antofagasta", "Atacama", "Tarapacá", "Coquimbo", "Arica y Parinacota"]
