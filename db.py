@@ -1,8 +1,10 @@
+# db.py
 import os
-from typing import Optional, Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Json
 
 
 def _db_url() -> str:
@@ -17,6 +19,9 @@ def get_conn():
 
 
 def init_db_safe() -> None:
+    """
+    Crea tabla si no existe. NO bota la app si DB está caída.
+    """
     try:
         init_db()
     except Exception as e:
@@ -48,16 +53,18 @@ def init_db() -> None:
     CREATE INDEX IF NOT EXISTS idx_opportunities_score ON opportunities (score DESC);
     CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities (company);
     CREATE INDEX IF NOT EXISTS idx_opportunities_industry ON opportunities (industry);
+    CREATE INDEX IF NOT EXISTS idx_opportunities_region ON opportunities (region);
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
         conn.commit()
 
-    # compat si venías con tabla antigua
+    # Por si venías de una tabla vieja
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS entry TEXT NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS raw JSONB NULL;")
         conn.commit()
 
 
@@ -73,6 +80,10 @@ def db_health() -> Tuple[bool, str]:
 
 
 def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
+    """
+    Inserta o actualiza por url (UNIQUE).
+    Retorna (inserted, updated)
+    """
     inserted = 0
     updated = 0
 
@@ -96,15 +107,8 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     RETURNING (xmax = 0) AS inserted;
     """
 
+    # Normaliza campos + raw (para evitar "cannot adapt type dict")
     for it in items:
-        raw = it.get("raw")
-        if isinstance(raw, (dict, list)):
-            it["raw"] = psycopg.types.json.Json(raw)
-        elif raw is None:
-            it["raw"] = None
-        else:
-            it["raw"] = psycopg.types.json.Json({"value": str(raw)})
-
         it.setdefault("company", None)
         it.setdefault("contractor", None)
         it.setdefault("industry", None)
@@ -112,6 +116,14 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
         it.setdefault("phase", None)
         it.setdefault("score", 0)
         it.setdefault("entry", None)
+
+        raw = it.get("raw")
+        if isinstance(raw, (dict, list)):
+            it["raw"] = Json(raw)
+        elif raw is None:
+            it["raw"] = None
+        else:
+            it["raw"] = Json({"value": str(raw)})
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -128,6 +140,9 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
 
 
 def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
+    """
+    Lista y filtra por q en title/url/company/contractor/industry/region.
+    """
     limit = max(1, min(int(limit), 500))
 
     base = """
@@ -141,6 +156,7 @@ def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
         base += """
         WHERE
           title ILIKE %(q)s OR
+          url ILIKE %(q)s OR
           company ILIKE %(q)s OR
           contractor ILIKE %(q)s OR
           industry ILIKE %(q)s OR
@@ -154,3 +170,20 @@ def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(base, params)
             return cur.fetchall()
+
+
+def get_opportunity_by_url(url: str) -> Optional[Dict[str, Any]]:
+    """
+    Busca exacto por URL (útil para probar upsert).
+    """
+    sql = """
+    SELECT id, source, title, url, company, contractor, industry, region, phase, score, entry, raw, created_at, updated_at
+    FROM opportunities
+    WHERE url = %(url)s
+    LIMIT 1;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"url": url})
+            row = cur.fetchone()
+            return row if row else None
