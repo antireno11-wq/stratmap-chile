@@ -14,6 +14,7 @@ from connectors.chilebcompra import fetch_chilebcompra
 from connectors.rss_mineria import fetch_rss_mineria
 from connectors.cochilco import fetch_cochilco
 from connectors.mop import fetch_mop
+from connectors.scraper import fetch_scraper
 
 TZ = ZoneInfo("America/Santiago")
 BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
@@ -108,6 +109,12 @@ def run() -> None:
     items = fetch_mop(limit=200)
     print(f"[{now_clt()}] MOP: {len(items)} items")
     ingest(session, items, "MOP")
+
+    # Scraper (BioBioChile, Emol, Cooperativa, CChC)
+    print(f"[{now_clt()}] Fetching Scraper...")
+    items = fetch_scraper(limit=200)
+    print(f"[{now_clt()}] Scraper: {len(items)} items")
+    ingest(session, items, "Scraper")
 
     # RSS Minería
     print(f"[{now_clt()}] Fetching RSS Minería...")
