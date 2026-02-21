@@ -1,8 +1,8 @@
-[phases.setup]
-nixPkgs = ["chromium", "chromium-unwrapped"]
+[variables]
+NIXPACKS_PYTHON_VERSION = "3.12"
 
 [phases.install]
 cmds = [
   "pip install -r requirements.txt",
-  "playwright install chromium"
+  "playwright install chromium --with-deps"
 ]
