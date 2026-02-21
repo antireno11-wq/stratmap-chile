@@ -7,46 +7,34 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg: #f7f8fa;
-    --text: #1a2340;
-    --muted: #8a96b0;
-    --border: #e2e6ef;
-    --navy: #1a2340;
-    --blue: #3b9fcc;
-    --green: #2a9d6f;
-    --yellow: #d97706;
-    --surface: #ffffff;
-    --red: #dc2626;
+    --bg: #f7f8fa; --text: #1a2340; --muted: #8a96b0; --border: #e2e6ef;
+    --navy: #1a2340; --blue: #3b9fcc; --green: #2a9d6f; --yellow: #d97706;
+    --surface: #ffffff; --red: #dc2626;
   }
-
   body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; min-height: 100vh; }
-
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes modalIn { from{opacity:0;transform:scale(0.96)} to{opacity:1;transform:scale(1)} }
 
-  #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
-
+  /* LOGIN */
+  #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
   .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 40px; width: 100%; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); animation: fadeIn 0.3s ease; }
-
   .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
   .login-logo img { height: 40px; width: 40px; object-fit: contain; }
   .login-logo-text h2 { font-size: 16px; font-weight: 600; color: var(--navy); }
   .login-logo-text span { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); }
-
   .login-box label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; margin-top: 16px; }
   .login-box input { width: 100%; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; padding: 10px 14px; outline: none; border-radius: 6px; transition: border-color 0.15s; }
   .login-box input:focus { border-color: var(--blue); }
-
   .login-btn { width: 100%; margin-top: 24px; padding: 11px; background: var(--navy); color: #fff; border: none; border-radius: 6px; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
   .login-btn:hover { background: #2a3560; }
   .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .login-error { margin-top: 12px; font-size: 12px; color: var(--red); font-family: 'IBM Plex Mono', monospace; text-align: center; }
 
+  /* APP */
   #app-screen { display: none; }
-
   header { background: var(--surface); padding: 16px 40px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .logo { display: flex; align-items: center; gap: 14px; }
   .logo img { height: 38px; width: 38px; object-fit: contain; }
@@ -59,7 +47,6 @@
   .logout-btn:hover { color: var(--red); border-color: var(--red); }
 
   main { padding: 28px 40px; }
-
   .toolbar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; }
   input[type="text"] { flex: 1; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; padding: 10px 16px; outline: none; border-radius: 6px; transition: border-color 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
   input[type="text"]:focus { border-color: var(--blue); }
@@ -68,13 +55,11 @@
 
   .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; min-width: 900px; }
-
   thead th { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); background: #f9fafc; cursor: pointer; white-space: nowrap; user-select: none; }
   thead th:hover { color: var(--navy); }
-
-  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
   tbody tr:last-child { border-bottom: none; }
-  tbody tr:hover { background: #f4f7fb; }
+  tbody tr:hover { background: #f0f4fb; }
   td { padding: 12px 16px; vertical-align: middle; }
 
   .score { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; width: 40px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
@@ -82,19 +67,16 @@
   .score-mid  { background: #fef3e2; color: var(--yellow); }
   .score-low  { background: #f0f2f7; color: var(--muted); }
 
-  .title { font-weight: 500; color: var(--navy); font-size: 13px; }
+  .title-cell { font-weight: 500; color: var(--navy); font-size: 13px; }
   .subtitle { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-  .source-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 2px 7px; border-radius: 3px; background: #f0f2f7; color: var(--muted); white-space: nowrap; }
+  .source-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
   .source-sea { background: #e8f4fd; color: var(--blue); }
   .source-chilebcompra { background: #fef3e2; color: var(--yellow); }
   .source-rss { background: #dcf5eb; color: var(--green); }
-
+  .source-other { background: #f0f2f7; color: var(--muted); }
   .phase { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--blue); background: #eaf5fb; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
-
   .date-cell { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
-
-  a.link { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(59,159,204,0.3); padding-bottom: 1px; transition: border-color 0.15s; }
+  a.link { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(59,159,204,0.3); padding-bottom: 1px; }
   a.link:hover { border-color: var(--blue); }
 
   .state { text-align: center; padding: 64px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
@@ -107,10 +89,41 @@
   .page-info { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
 
   footer { margin-top: 40px; padding: 20px 40px; border-top: 1px solid var(--border); font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(10,15,30,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(2px); }
+  .modal-overlay.hidden { display: none; }
+  .modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); animation: modalIn 0.2s ease; }
+  .modal-header { padding: 24px 28px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .modal-title { font-size: 17px; font-weight: 600; color: var(--navy); line-height: 1.4; flex: 1; }
+  .modal-close { background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; padding: 4px; line-height: 1; flex-shrink: 0; }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 20px 28px 28px; }
+
+  .modal-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .meta-item { background: var(--bg); border-radius: 6px; padding: 10px 14px; }
+  .meta-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .meta-value { font-size: 13px; font-weight: 500; color: var(--navy); }
+
+  .score-big { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 32px; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 700; }
+
+  .modal-section-title { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; margin-top: 20px; }
+
+  .ai-box { background: linear-gradient(135deg, #f0f7ff 0%, #f7f8fa 100%); border: 1px solid #d4e8f7; border-radius: 8px; padding: 16px 20px; }
+  .ai-btn { display: flex; align-items: center; gap: 8px; background: var(--navy); color: #fff; border: none; border-radius: 6px; padding: 10px 18px; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .ai-btn:hover { background: #2a3560; }
+  .ai-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .ai-btn svg { width: 16px; height: 16px; }
+  .ai-result { margin-top: 14px; font-size: 13px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+  .ai-result.loading { color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+
+  .modal-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(59,159,204,0.3); padding-bottom: 1px; }
+  .modal-link:hover { border-color: var(--blue); }
 </style>
 </head>
 <body>
 
+<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
     <div class="login-logo">
@@ -129,6 +142,7 @@
   </div>
 </div>
 
+<!-- APP -->
 <div id="app-screen">
   <header>
     <div class="logo">
@@ -149,7 +163,6 @@
       <input type="text" id="search" placeholder="Buscar proyecto, empresa, región..." />
       <span class="count" id="count"></span>
     </div>
-
     <div class="table-wrap">
       <table>
         <thead>
@@ -169,7 +182,6 @@
         </tbody>
       </table>
     </div>
-
     <div class="pagination">
       <button id="prev" onclick="changePage(-1)" disabled>← Anterior</button>
       <span class="page-info" id="page-info"></span>
@@ -183,11 +195,37 @@
   </footer>
 </div>
 
+<!-- MODAL -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title"></div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-meta" id="modal-meta"></div>
+
+      <div class="modal-section-title">Análisis con IA</div>
+      <div class="ai-box">
+        <button class="ai-btn" id="ai-btn" onclick="analyzeWithAI()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+          Analizar con Claude
+        </button>
+        <div class="ai-result" id="ai-result"></div>
+      </div>
+
+      <div id="modal-link-section"></div>
+    </div>
+  </div>
+</div>
+
 <script>
   const API = 'https://stratmap-chile-production.up.railway.app';
+  const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
   const PER_PAGE = 25;
   let all = [], filtered = [], page = 0, sortKey = 'created_at', sortAsc = false;
   let token = localStorage.getItem('stratmap_token');
+  let currentProject = null;
 
   if (token) showApp(); else showLogin();
 
@@ -211,8 +249,7 @@
     btn.disabled = true; btn.textContent = 'Ingresando...'; err.textContent = '';
     try {
       const res = await fetch(`${API}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
@@ -227,10 +264,8 @@
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('login-password')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') doLogin();
-    });
+  document.getElementById('login-password')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
   });
 
   function doLogout() {
@@ -252,8 +287,7 @@
       filter();
     } catch (e) {
       document.getElementById('status-text').textContent = 'sin conexión';
-      document.getElementById('tbody').innerHTML =
-        `<tr><td colspan="8"><div class="state">Error: ${e.message}</div></td></tr>`;
+      document.getElementById('tbody').innerHTML = `<tr><td colspan="8"><div class="state">Error: ${e.message}</div></td></tr>`;
     }
   }
 
@@ -278,51 +312,191 @@
   function formatDate(iso) {
     if (!iso) return '—';
     try {
-      const d = new Date(iso);
-      return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      return new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' });
     } catch { return '—'; }
   }
 
-  function sourceClass(source) {
-    const s = (source || '').toLowerCase();
-    if (s === 'sea') return 'source-sea';
-    if (s === 'chilebcompra') return 'source-chilebcompra';
-    return 'source-rss';
+  function sourceClass(s) {
+    const src = (s||'').toLowerCase();
+    if (src === 'sea') return 'source-sea';
+    if (src === 'chilebcompra') return 'source-chilebcompra';
+    if (src.includes('rss') || src.includes('diario') || src.includes('emol') || src.includes('biobio') || src.includes('tercera') || src.includes('radio')) return 'source-rss';
+    return 'source-other';
   }
 
   function render() {
     const total = filtered.length;
     const pages = Math.ceil(total / PER_PAGE) || 1;
     const slice = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
-
     document.getElementById('count').textContent = `${total} resultado${total !== 1 ? 's' : ''}`;
     document.getElementById('page-info').textContent = `${page + 1} / ${pages}`;
     document.getElementById('prev').disabled = page === 0;
     document.getElementById('next').disabled = page >= pages - 1;
 
     if (!slice.length) {
-      document.getElementById('tbody').innerHTML =
-        '<tr><td colspan="8"><div class="state">Sin resultados</div></td></tr>';
+      document.getElementById('tbody').innerHTML = '<tr><td colspan="8"><div class="state">Sin resultados</div></td></tr>';
       return;
     }
 
-    document.getElementById('tbody').innerHTML = slice.map(o => {
+    document.getElementById('tbody').innerHTML = slice.map((o, i) => {
       const s = Number(o.score) || 0;
       const sc = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
-      return `<tr>
+      return `<tr onclick="openModal(${page * PER_PAGE + i})">
         <td><div class="score ${sc}">${s}</div></td>
         <td>
-          <div class="title">${esc(o.title || '—')}</div>
+          <div class="title-cell">${esc(o.title || '—')}</div>
           ${o.industry ? `<div class="subtitle">${esc(o.industry)}</div>` : ''}
         </td>
-        <td><span class="source-badge ${sourceClass(o.source)}">${esc(o.source || '—')}</span></td>
+        <td><span class="source-badge ${sourceClass(o.source)}">${esc(o.source||'—')}</span></td>
         <td>${esc(o.company || '—')}</td>
         <td>${esc(o.region || '—')}</td>
         <td>${o.phase ? `<span class="phase">${esc(o.phase)}</span>` : '—'}</td>
         <td><span class="date-cell">${formatDate(o.created_at)}</span></td>
-        <td>${o.url ? `<a class="link" href="${esc(o.url)}" target="_blank" rel="noopener">ver →</a>` : '—'}</td>
+        <td><a class="link" href="${esc(o.url||'#')}" target="_blank" rel="noopener" onclick="event.stopPropagation()">ver →</a></td>
       </tr>`;
     }).join('');
+  }
+
+  function openModal(idx) {
+    const o = filtered[idx];
+    if (!o) return;
+    currentProject = o;
+
+    document.getElementById('modal-title').textContent = o.title || '—';
+
+    const s = Number(o.score) || 0;
+    const sc = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
+
+    document.getElementById('modal-meta').innerHTML = `
+      <div class="meta-item">
+        <div class="meta-label">Score</div>
+        <div class="meta-value"><span class="score-big ${sc}">${s}</span></div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Fuente</div>
+        <div class="meta-value"><span class="source-badge ${sourceClass(o.source)}">${esc(o.source||'—')}</span></div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Empresa / Organismo</div>
+        <div class="meta-value">${esc(o.company || '—')}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Industria</div>
+        <div class="meta-value">${esc(o.industry || '—')}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Región</div>
+        <div class="meta-value">${esc(o.region || '—')}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Fase</div>
+        <div class="meta-value">${esc(o.phase || '—')}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Fecha de ingreso</div>
+        <div class="meta-value">${formatDate(o.created_at)}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Última actualización</div>
+        <div class="meta-value">${formatDate(o.updated_at)}</div>
+      </div>
+    `;
+
+    document.getElementById('modal-link-section').innerHTML = o.url
+      ? `<div class="modal-section-title" style="margin-top:20px">Enlace</div><a class="modal-link" href="${esc(o.url)}" target="_blank" rel="noopener">Ver proyecto original →</a>`
+      : '';
+
+    document.getElementById('ai-result').textContent = '';
+    document.getElementById('ai-btn').disabled = false;
+    document.getElementById('ai-btn').textContent = '';
+    document.getElementById('ai-btn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar con Claude`;
+
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+  }
+
+  function closeModalDirect() {
+    document.getElementById('modal-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModalDirect();
+  });
+
+  async function analyzeWithAI() {
+    if (!currentProject) return;
+    const btn = document.getElementById('ai-btn');
+    const result = document.getElementById('ai-result');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spinner" style="margin:0;width:14px;height:14px;border-width:2px"></div> Analizando...`;
+    result.className = 'ai-result loading';
+    result.textContent = 'Claude está analizando el proyecto...';
+
+    const o = currentProject;
+    const prompt = `Eres un analista de inteligencia de negocios especializado en minería, infraestructura y energía en Chile.
+
+Analiza este proyecto/oportunidad y entrega un análisis breve y directo en español:
+
+Título: ${o.title}
+Fuente: ${o.source}
+Empresa/Organismo: ${o.company || 'No especificado'}
+Industria: ${o.industry || 'No clasificado'}
+Región: ${o.region || 'No especificada'}
+Fase: ${o.phase || 'No especificada'}
+Score Stratmap: ${o.score}/100
+${o.raw ? `Datos adicionales: ${JSON.stringify(o.raw).substring(0, 800)}` : ''}
+
+Responde con:
+1. **¿Qué es este proyecto?** (2-3 líneas)
+2. **¿Por qué es relevante?** (oportunidades de negocio, proveedores, servicios)
+3. **Recomendación** (qué hacer con esta información)
+
+Sé específico y concreto. Máximo 200 palabras.`;
+
+    try {
+      const res = await fetch(ANTHROPIC_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': localStorage.getItem('anthropic_key') || '',
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      if (res.status === 401) {
+        const key = prompt('Ingresa tu API key de Anthropic (console.anthropic.com):');
+        if (key) {
+          localStorage.setItem('anthropic_key', key);
+          btn.disabled = false;
+          btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar con Claude`;
+          result.textContent = 'API key guardada. Haz click en "Analizar con Claude" de nuevo.';
+          result.className = 'ai-result loading';
+          return;
+        }
+      }
+
+      const data = await res.json();
+      const text = data.content?.[0]?.text || 'No se pudo obtener análisis.';
+      result.className = 'ai-result';
+      result.textContent = text;
+    } catch (e) {
+      result.className = 'ai-result';
+      result.textContent = `Error: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar de nuevo`;
+    }
   }
 
   function sortBy(key) {
