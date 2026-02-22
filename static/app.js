@@ -15,16 +15,17 @@ function escapeHTML(str) {
 }
 
 const SOURCE_COLORS = {
-  "SEA":           ["#1d4ed8","#eff6ff"],
-  "ChileCompra":   ["#15803d","#f0fdf4"],
-  "COCHILCO":      ["#7c3aed","#f5f3ff"],
-  "MOP":           ["#c2410c","#fff7ed"],
-  "Portal Minero": ["#0369a1","#f0f9ff"],
+  "SEA":               ["#1d4ed8","#eff6ff"],
+  "ChileCompra":       ["#15803d","#f0fdf4"],
+  "COCHILCO":          ["#7c3aed","#f5f3ff"],
+  "MOP":               ["#c2410c","#fff7ed"],
+  "Portal Minero":     ["#0369a1","#f0f9ff"],
   "Diario Financiero": ["#92400e","#fef3c7"],
-  "BioBioChile":   ["#dc2626","#fef2f2"],
-  "Revista EI":    ["#0f766e","#f0fdfa"],
+  "BioBioChile":       ["#dc2626","#fef2f2"],
+  "Revista EI":        ["#0f766e","#f0fdfa"],
   "Radio U. de Chile": ["#db2777","#fdf2f8"],
-  "Minería Chilena": ["#1d4ed8","#eff6ff"],
+  "Minería Chilena":   ["#1d4ed8","#eff6ff"],
+  "COCHILCO Noticias": ["#7c3aed","#f5f3ff"],
 };
 
 function sourceChip(source) {
@@ -81,7 +82,6 @@ async function fetchJSON(url) {
   return res.json();
 }
 
-// Filtros activos
 let activeFilters = { industry: new Set(), region: new Set(), source: new Set() };
 let allItems = [];
 
@@ -99,8 +99,8 @@ function buildFilters(items) {
       .sort((a,b)=>b[1]-a[1]).slice(0,8)
       .map(([val,count]) => `
         <div class="filter-item">
-          <input type="checkbox" id="f-${key}-${val}" data-key="${key}" data-val="${val}" />
-          <label for="f-${key}-${val}">${escapeHTML(val)}</label>
+          <input type="checkbox" id="f-${key}-${escapeHTML(val)}" data-key="${key}" data-val="${escapeHTML(val)}" />
+          <label for="f-${key}-${escapeHTML(val)}">${escapeHTML(val)}</label>
           <span class="fc">${count}</span>
         </div>`).join("");
     container.querySelectorAll("input[type=checkbox]").forEach(cb => {
@@ -140,17 +140,15 @@ function renderFiltered() {
     ? news.map(newsRow).join("")
     : `<tr><td colspan="5" class="muted-row">Sin noticias</td></tr>`;
 
-  // Stats
   el("stat-projects").textContent = projects.length;
   el("stat-news").textContent = news.length;
-  const withSignals = projects.filter(i => (i.signal_score||0) > 0).length;
-  el("stat-signals").textContent = withSignals;
+  el("stat-signals").textContent = projects.filter(i => (i.signal_score||0) > 0).length;
   const scores = filtered.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
   el("stat-avg").textContent = scores.length
     ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : "—";
 
-  el("upd-projects").textContent = `Actualizado ahora`;
-  el("upd-news").textContent = `Actualizado ahora`;
+  el("upd-projects").textContent = "Actualizado ahora";
+  el("upd-news").textContent = "Actualizado ahora";
   el("status").textContent = `${projects.length} proyectos · ${news.length} noticias`;
 }
 
