@@ -46,7 +46,23 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"2-digit"});
 }
 
+// Mapa global para evitar problemas con caracteres especiales en onclick
+const drawerMap = {};
+let drawerIdx = 0;
+
+function drawerKey(type, value) {
+  const key = `dk_${drawerIdx++}`;
+  drawerMap[key] = { type, value };
+  return key;
+}
+
 // ── Drawer ────────────────────────────────────────────────────────────────────
+
+window.openDrawerByKey = function(key) {
+  const entry = drawerMap[key];
+  if (!entry) return;
+  openDrawer(entry.type, entry.value);
+};
 
 function openDrawer(type, value) {
   const items = type === "company"
@@ -66,10 +82,11 @@ function openDrawer(type, value) {
   const phases = {};
   projects.forEach(i => { const k = i.phase||"Sin fase"; phases[k]=(phases[k]||0)+1; });
 
+  const total = Math.max(projects.length, 1);
   const distRows = Object.entries(dist).sort((a,b)=>b[1]-a[1]).slice(0,6)
     .map(([k,v]) => `<div class="drawer-dist-row">
       <span>${escapeHTML(k)}</span>
-      <div class="drawer-bar-wrap"><div class="drawer-bar" style="width:${Math.round(v/Math.max(projects.length,1)*100)}%"></div></div>
+      <div class="drawer-bar-wrap"><div class="drawer-bar" style="width:${Math.round(v/total*100)}%"></div></div>
       <span class="drawer-dist-n">${v}</span>
     </div>`).join("");
 
@@ -127,12 +144,17 @@ function projectRow(item) {
   const signals = item.signal_score > 0
     ? `<span class="signal-badge">⚡ +${item.signal_score}</span>` : "";
   const phase = item.phase ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
-  const company = item.company
-    ? `<span class="clickable-link" onclick="openDrawer('company',${JSON.stringify(item.company)})">${escapeHTML(item.company)}</span>`
+
+  const companyKey = item.company ? drawerKey("company", item.company) : null;
+  const regionKey = item.region ? drawerKey("region", item.region) : null;
+
+  const company = companyKey
+    ? `<span class="clickable-link" onclick="openDrawerByKey('${companyKey}')">${escapeHTML(item.company)}</span>`
     : "—";
-  const region = item.region
-    ? `<span class="clickable-link" onclick="openDrawer('region',${JSON.stringify(item.region)})">${escapeHTML(item.region)}</span>`
+  const region = regionKey
+    ? `<span class="clickable-link" onclick="openDrawerByKey('${regionKey}')">${escapeHTML(item.region)}</span>`
     : "—";
+
   return `<tr>
     <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>
     <td><span class="proj-title">${escapeHTML(item.title||"")}</span>
@@ -265,11 +287,9 @@ document.addEventListener("DOMContentLoaded", () => {
       item.classList.add("active");
     });
   });
-  // Scroll a proyectos
   if (sidebarItems[1]) sidebarItems[1].addEventListener("click", () => {
     el("tbody-projects")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
   });
-  // Scroll a noticias
   if (sidebarItems[2]) sidebarItems[2].addEventListener("click", () => {
     el("tbody-news")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
   });
