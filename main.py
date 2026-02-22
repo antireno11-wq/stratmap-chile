@@ -75,7 +75,7 @@ class PreferencesPayload(BaseModel):
     weight_company: float = 1.0
 
 
-# ── Setup (solo para crear el primer usuario) ─────────────────────────────────
+# ── Setup ─────────────────────────────────────────────────────────────────────
 
 @app.post("/setup/first-user")
 def setup_first_user(payload: CreateUserPayload):
@@ -113,13 +113,12 @@ def ingest(payload: IngestPayload):
     return {"ok": True, "inserted": inserted, "updated": updated, "total": inserted + updated}
 
 
-# ── Endpoints privados ────────────────────────────────────────────────────────
+# ── Opportunities — público por ahora ─────────────────────────────────────────
 
 @app.get("/opportunities")
 def opportunities(
     q: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=2000),
-    user=Depends(get_current_user),
 ):
     rows = list_opportunities(q=q, limit=limit)
     result = []
@@ -129,9 +128,13 @@ def opportunities(
             r["created_at"] = r["created_at"].isoformat()
         if r.get("updated_at"):
             r["updated_at"] = r["updated_at"].isoformat()
+        if r.get("last_signal_at"):
+            r["last_signal_at"] = r["last_signal_at"].isoformat()
         result.append(r)
-    return result
+    return {"items": result, "count": len(result)}
 
+
+# ── Endpoints privados ────────────────────────────────────────────────────────
 
 @app.get("/feed")
 def feed(user=Depends(get_current_user)):
