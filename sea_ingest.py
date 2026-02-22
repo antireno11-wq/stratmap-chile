@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import random
+import subprocess
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
@@ -36,6 +37,29 @@ HEADERS = {"User-Agent": "StratmapWorker/0.2", "Accept": "application/json"}
 
 def now_clt() -> str:
     return datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S CLT")
+
+
+def install_playwright_browsers() -> None:
+    """Instala Chromium si no está disponible."""
+    chromium_path = os.path.expanduser(
+        "~/.cache/ms-playwright/chromium_headless_shell-1208/"
+        "chrome-headless-shell-linux64/chrome-headless-shell"
+    )
+    if not os.path.exists(chromium_path):
+        print(f"[{now_clt()}] Instalando Chromium para Playwright...")
+        try:
+            result = subprocess.run(
+                ["playwright", "install", "chromium"],
+                capture_output=True, text=True, timeout=180
+            )
+            if result.returncode == 0:
+                print(f"[{now_clt()}] Chromium instalado correctamente")
+            else:
+                print(f"[{now_clt()}] Error instalando Chromium: {result.stderr[:200]}")
+        except Exception as e:
+            print(f"[{now_clt()}] Error instalando Chromium: {e}")
+    else:
+        print(f"[{now_clt()}] Chromium ya disponible")
 
 
 def wait_for_health(session: requests.Session) -> bool:
@@ -85,10 +109,7 @@ def ingest(session: requests.Session, items: List[Dict[str, Any]], source: str) 
 
 
 def run_jobs_signals() -> None:
-    """
-    Corre el scraper de empleos y actualiza el signal_score
-    de las oportunidades que coincidan con cada empresa.
-    """
+    """Corre el scraper de empleos y actualiza signal_score en opportunities."""
     print(f"[{now_clt()}] Fetching Jobs Signals...")
     signals = fetch_jobs_signals()
     print(f"[{now_clt()}] Jobs: {len(signals)} empresas con actividad detectada")
@@ -96,7 +117,6 @@ def run_jobs_signals() -> None:
     total_updated = 0
     for signal in signals:
         company_name = signal["company"]
-        # Buscar oportunidades que coincidan con esta empresa
         opportunities = db.get_opportunities_by_company(company_name)
 
         if not opportunities:
@@ -116,6 +136,10 @@ def run_jobs_signals() -> None:
 
 def run() -> None:
     print(f"[{now_clt()}] Worker start -> {BASE_URL}")
+
+    # Instalar Chromium si es necesario
+    install_playwright_browsers()
+
     session = requests.Session()
     wait_for_health(session)
 
@@ -143,7 +167,7 @@ def run() -> None:
     print(f"[{now_clt()}] MOP: {len(items)} items")
     ingest(session, items, "MOP")
 
-    # Scraper (BioBioChile, Emol, Cooperativa, CChC)
+    # Scraper
     print(f"[{now_clt()}] Fetching Scraper...")
     items = fetch_scraper(limit=200)
     print(f"[{now_clt()}] Scraper: {len(items)} items")
@@ -155,7 +179,7 @@ def run() -> None:
     print(f"[{now_clt()}] RSS: {len(items)} items")
     ingest(session, items, "RSS")
 
-    # Jobs Signals — actualiza signal_score según empleos detectados
+    # Jobs Signals
     run_jobs_signals()
 
     print(f"[{now_clt()}] Worker finished")
