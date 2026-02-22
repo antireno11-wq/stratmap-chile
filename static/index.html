@@ -1,537 +1,127 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stratmap Chile</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #f0f2f5;
-  --surface: #ffffff;
-  --navy: #1a2340;
-  --navy2: #232d4b;
-  --blue: #2563eb;
-  --blue-light: #dbeafe;
-  --green: #16a34a;
-  --green-light: #dcfce7;
-  --yellow: #d97706;
-  --yellow-light: #fef3c7;
-  --red: #dc2626;
-  --red-light: #fee2e2;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --text: #111827;
-  --sidebar-w: 220px;
-}
-body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; min-height: 100vh; }
-
-/* ── LOGIN ── */
-#login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--navy); }
-.login-box { background: var(--surface); border-radius: 12px; padding: 48px 40px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
-.login-logo img { height: 44px; width: 44px; object-fit: contain; }
-.login-logo-text h2 { font-size: 20px; font-weight: 700; color: var(--navy); }
-.login-logo-text span { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
-.login-box label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; margin-top: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
-.login-box input { width: 100%; border: 1.5px solid var(--border); background: #f9fafb; color: var(--text); font-size: 14px; padding: 11px 14px; outline: none; border-radius: 8px; transition: border-color 0.15s; }
-.login-box input:focus { border-color: var(--blue); background: #fff; }
-.login-btn { width: 100%; margin-top: 28px; padding: 13px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-.login-btn:hover { background: #1d4ed8; }
-.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.login-error { margin-top: 12px; font-size: 12px; color: var(--red); text-align: center; }
-
-/* ── APP LAYOUT ── */
-#app-screen { display: none; min-height: 100vh; }
-
-/* Topbar */
-.topbar { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: var(--navy); display: flex; align-items: center; justify-content: space-between; padding: 0 24px 0 0; z-index: 50; }
-.topbar-left { display: flex; align-items: center; gap: 0; width: var(--sidebar-w); padding: 0 20px; }
-.topbar-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.topbar-logo img { height: 32px; width: 32px; object-fit: contain; }
-.topbar-logo span { font-size: 16px; font-weight: 700; color: #fff; }
-.topbar-right { display: flex; align-items: center; gap: 16px; }
-.topbar-user { font-size: 13px; color: rgba(255,255,255,0.7); }
-.topbar-logout { font-size: 12px; color: rgba(255,255,255,0.5); background: none; border: 1px solid rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 5px; cursor: pointer; transition: all 0.15s; }
-.topbar-logout:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
-.topbar-search { flex: 1; max-width: 400px; margin: 0 24px; }
-.topbar-search input { width: 100%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 6px; outline: none; }
-.topbar-search input::placeholder { color: rgba(255,255,255,0.4); }
-.topbar-search input:focus { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
-
-/* Sidebar */
-.sidebar { position: fixed; top: 56px; left: 0; bottom: 0; width: var(--sidebar-w); background: var(--navy2); overflow-y: auto; z-index: 40; padding: 16px 0; }
-.sidebar-section { padding: 8px 16px 4px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-top: 8px; }
-.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; }
-.sidebar-item:hover { color: #fff; background: rgba(255,255,255,0.06); }
-.sidebar-item.active { color: #fff; background: rgba(37,99,235,0.2); border-left-color: var(--blue); }
-.sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
-
-/* Filtros sidebar */
-.filter-group { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); }
-.filter-title { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
-.filter-option { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
-.filter-option input[type=checkbox] { accent-color: var(--blue); width: 13px; height: 13px; }
-.filter-option label { font-size: 12px; color: rgba(255,255,255,0.65); cursor: pointer; flex: 1; }
-.filter-option .count-pill { font-size: 10px; color: rgba(255,255,255,0.3); font-family: 'IBM Plex Mono', monospace; }
-.filter-clear { font-size: 11px; color: var(--blue); cursor: pointer; margin-top: 6px; display: inline-block; }
-.filter-clear:hover { text-decoration: underline; }
-
-/* Main content */
-.main-content { margin-left: var(--sidebar-w); margin-top: 56px; padding: 24px; min-height: calc(100vh - 56px); }
-
-/* Active filters bar */
-.active-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
-.active-filters-label { font-size: 12px; color: var(--muted); }
-.filter-tag { display: inline-flex; align-items: center; gap: 5px; background: var(--blue-light); color: var(--blue); font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: 500; }
-.filter-tag button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
-
-/* KPI Cards */
-.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-.kpi-card { background: var(--surface); border-radius: 10px; padding: 20px; border: 1px solid var(--border); }
-.kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
-.kpi-value { font-size: 28px; font-weight: 700; color: var(--navy); line-height: 1; }
-.kpi-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
-.kpi-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-top: 6px; font-weight: 500; }
-.kpi-badge.up { background: var(--green-light); color: var(--green); }
-.kpi-badge.neutral { background: var(--blue-light); color: var(--blue); }
-
-/* Charts row */
-.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-.chart-card { background: var(--surface); border-radius: 10px; padding: 20px; border: 1px solid var(--border); }
-.chart-title { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 16px; }
-.chart-wrap { height: 180px; position: relative; }
-
-/* Rankings */
-.rankings-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-.ranking-card { background: var(--surface); border-radius: 10px; padding: 20px; border: 1px solid var(--border); }
-.ranking-title { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 14px; }
-.ranking-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.ranking-item:last-child { border-bottom: none; }
-.ranking-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); width: 20px; }
-.ranking-name { flex: 1; font-size: 13px; font-weight: 500; }
-.ranking-count { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); }
-.ranking-bar-wrap { width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.ranking-bar { height: 100%; background: var(--blue); border-radius: 3px; transition: width 0.5s; }
-
-/* Table */
-.table-card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
-.table-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.table-title { font-size: 14px; font-weight: 600; color: var(--navy); }
-.table-actions { display: flex; gap: 8px; }
-.btn-sm { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; transition: all 0.15s; font-weight: 500; }
-.btn-sm:hover { background: var(--bg); }
-.btn-sm.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
-.btn-sm.primary:hover { background: #1d4ed8; }
-
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 800px; }
-thead th { font-size: 11px; font-weight: 600; color: var(--muted); padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); background: #f9fafb; cursor: pointer; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px; user-select: none; }
-thead th:hover { color: var(--navy); }
-tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: #f0f7ff; }
-td { padding: 12px 16px; vertical-align: middle; }
-
-.score { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; width: 38px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
-.score-high { background: var(--green-light); color: var(--green); }
-.score-mid { background: var(--yellow-light); color: var(--yellow); }
-.score-low { background: #f3f4f6; color: var(--muted); }
-
-.proj-title { font-weight: 500; font-size: 13px; color: var(--navy); max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.proj-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-.source-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 12px; white-space: nowrap; }
-.source-sea { background: var(--blue-light); color: var(--blue); }
-.source-chilebcompra { background: var(--yellow-light); color: var(--yellow); }
-.source-rss { background: var(--green-light); color: var(--green); }
-.source-other { background: #f3f4f6; color: var(--muted); }
-
-.phase-badge { font-size: 11px; color: var(--blue); background: var(--blue-light); padding: 2px 8px; border-radius: 12px; white-space: nowrap; }
-.date-cell { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
-a.link { font-size: 12px; color: var(--blue); text-decoration: none; }
-a.link:hover { text-decoration: underline; }
-
-.state { text-align: center; padding: 48px; color: var(--muted); font-size: 13px; }
-
-/* Pagination */
-.pagination { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-top: 1px solid var(--border); }
-.pagination-info { font-size: 12px; color: var(--muted); }
-.pagination-btns { display: flex; gap: 6px; }
-.pagination-btns button { font-size: 12px; padding: 5px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 5px; cursor: pointer; }
-.pagination-btns button:hover:not(:disabled) { background: var(--blue); color: #fff; border-color: var(--blue); }
-.pagination-btns button:disabled { opacity: 0.35; cursor: not-allowed; }
-
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-@keyframes modalIn { from{opacity:0;transform:scale(0.96)} to{opacity:1;transform:scale(1)} }
-.spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
-
-/* MODAL */
-.modal-overlay { position: fixed; inset: 0; background: rgba(10,15,30,0.55); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
-.modal-overlay.hidden { display: none; }
-.modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,0.2); animation: modalIn 0.2s ease; }
-.modal-header { padding: 24px 28px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.modal-title { font-size: 17px; font-weight: 700; color: var(--navy); line-height: 1.4; flex: 1; }
-.modal-close { background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; line-height: 1; flex-shrink: 0; }
-.modal-body { padding: 20px 28px 28px; }
-.modal-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-.meta-item { background: var(--bg); border-radius: 8px; padding: 12px 14px; }
-.meta-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 4px; }
-.meta-value { font-size: 13px; font-weight: 500; color: var(--navy); }
-.score-big { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 30px; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 700; }
-.modal-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; margin-top: 20px; }
-.ai-box { background: linear-gradient(135deg, #eff6ff 0%, #f8faff 100%); border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px 20px; }
-.ai-btn { display: flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; border: none; border-radius: 7px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-.ai-btn:hover { background: #1d4ed8; }
-.ai-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.ai-result { margin-top: 14px; font-size: 13px; line-height: 1.8; color: var(--text); white-space: pre-wrap; }
-.ai-result.loading { color: var(--muted); font-size: 12px; }
-.modal-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--blue); text-decoration: none; }
-.modal-link:hover { text-decoration: underline; }
-
-
-
-/* PROFILE */
-.profile-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
-.profile-card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); padding: 24px; }
-.profile-avatar { width: 72px; height: 72px; border-radius: 50%; background: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff; font-weight: 700; margin-bottom: 16px; }
-.profile-name { font-size: 18px; font-weight: 700; color: var(--navy); }
-.profile-email { font-size: 13px; color: var(--muted); margin-top: 4px; }
-.profile-plan { display: inline-block; margin-top: 12px; background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
-.profile-stat { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
-.profile-stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-.profile-stat-value { font-size: 24px; font-weight: 700; color: var(--navy); margin-top: 4px; }
-
-.prefs-section { margin-bottom: 24px; }
-.prefs-title { font-size: 14px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
-.prefs-desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
-.tags-input-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; min-height: 44px; background: #f9fafb; cursor: text; }
-.tags-input-wrap:focus-within { border-color: var(--blue); background: #fff; }
-.tag-item { display: inline-flex; align-items: center; gap: 5px; background: var(--blue-light); color: var(--blue); font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
-.tag-item button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
-.tag-input { border: none; outline: none; font-size: 13px; background: transparent; min-width: 120px; font-family: inherit; }
-.checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.checkbox-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 7px; cursor: pointer; transition: all 0.15s; }
-.checkbox-item:hover { border-color: var(--blue); background: var(--blue-light); }
-.checkbox-item.checked { border-color: var(--blue); background: var(--blue-light); }
-.checkbox-item input { accent-color: var(--blue); }
-.checkbox-item label { font-size: 13px; cursor: pointer; }
-.save-btn { background: var(--blue); color: #fff; border: none; padding: 11px 28px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-.save-btn:hover { background: #1d4ed8; }
-.save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.save-msg { font-size: 13px; color: var(--green); margin-left: 12px; }
-.range-wrap { display: flex; align-items: center; gap: 12px; }
-.range-wrap input[type=range] { flex: 1; accent-color: var(--blue); }
-.range-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--navy); min-width: 30px; }
-
-/* MAP */
-.map-card { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 24px; }
-.map-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.map-title { font-size: 14px; font-weight: 600; color: var(--navy); }
-#project-map { height: 420px; width: 100%; z-index: 1; }
-.leaflet-popup-content { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; min-width: 200px; }
-.popup-title { font-weight: 600; color: var(--navy); margin-bottom: 6px; line-height: 1.4; }
-.popup-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-.popup-score { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-bottom: 8px; }
-.popup-btn { display: inline-block; background: var(--blue); color: #fff; border: none; padding: 5px 12px; border-radius: 5px; font-size: 12px; cursor: pointer; font-family: inherit; }
-
-@media (max-width: 768px) {
-  .kpi-grid { grid-template-columns: 1fr 1fr; }
-  .charts-row, .rankings-row { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .main-content { margin-left: 0; }
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stratmap Chile</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    .count-pill {
+      background: #f1f5f9;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+    }
+    .section-divider {
+      margin: 28px 0;
+      border: none;
+      border-top: 1px solid #e2e8f0;
+    }
+    .score-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .source-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+    .phase-badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: #eff6ff;
+      color: #2563eb;
+      border: 1px solid #bfdbfe;
+      font-weight: 500;
+    }
+    .proj-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 400px;
+    }
+    .proj-sub {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+    .td-title { max-width: 400px; }
+    .signal-dot { font-size: 11px; }
+    .news-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #334155;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 560px;
+    }
+  </style>
 </head>
 <body>
-
-<!-- LOGIN -->
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo">
-      <img src="/Gemini_Generated_Image_5e1ouq5e1ouq5e1o.png" alt="Stratmap" />
-      <div class="login-logo-text">
-        <h2>Stratmap Chile</h2>
-        <span>/ inteligencia industrial</span>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div>
+        <div class="title">Stratmap</div>
+        <div class="subtitle">Inteligencia Minera Chile</div>
       </div>
     </div>
-    <label>Email</label>
-    <input type="email" id="login-email" placeholder="tu@email.com" />
-    <label>Contraseña</label>
-    <input type="password" id="login-password" placeholder="••••••••" />
-    <button class="login-btn" id="login-btn" onclick="doLogin()">Ingresar</button>
-    <div class="login-error" id="login-error"></div>
-  </div>
-</div>
-
-<!-- APP -->
-<div id="app-screen">
-  <!-- Topbar -->
-  <div class="topbar">
-    <div class="topbar-left">
-      <a class="topbar-logo" href="#">
-        <img src="/Gemini_Generated_Image_5e1ouq5e1ouq5e1o.png" alt="Stratmap" />
-        <span>Stratmap</span>
-      </a>
+    <div class="right">
+      <a class="btn" href="/docs" target="_blank">API Docs</a>
+      <button class="btn primary" id="btnRefresh">Actualizar</button>
     </div>
-    <div class="topbar-search">
-      <input type="text" id="search" placeholder="Buscar proyecto, empresa, región..." />
-    </div>
-    <div class="topbar-right">
-      <span class="topbar-user" id="topbar-user"></span>
-      <button class="topbar-logout" onclick="doLogout()">Salir</button>
-    </div>
-  </div>
-
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-section">Vistas</div>
-    <div class="sidebar-item active" onclick="setView('dashboard')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      Dashboard
-    </div>
-    <div class="sidebar-item" onclick="setView('projects')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Proyectos
-    </div>
-    <div class="sidebar-item" onclick="setView('profile')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      Mi Perfil
-    </div>
-
-    <div class="sidebar-section" style="margin-top:16px">Filtros</div>
-
-    <!-- Industria -->
-    <div class="filter-group">
-      <div class="filter-title">Industria</div>
-      <div id="filter-industry"></div>
-    </div>
-
-    <!-- Región -->
-    <div class="filter-group">
-      <div class="filter-title">Región</div>
-      <div id="filter-region"></div>
-    </div>
-
-    <!-- Fuente -->
-    <div class="filter-group">
-      <div class="filter-title">Fuente</div>
-      <div id="filter-source"></div>
-    </div>
-
-    <!-- Mandante -->
-    <div class="filter-group">
-      <div class="filter-title">Mandante / Empresa</div>
-      <div id="filter-company"></div>
-    </div>
-
-    <div style="padding:12px 16px;">
-      <span class="filter-clear" onclick="clearFilters()">✕ Limpiar filtros</span>
-    </div>
-  </div>
-
-  <!-- Main -->
-  <div class="main-content">
-    <div id="active-filters-bar" class="active-filters" style="display:none"></div>
-
-    <!-- Dashboard view -->
-    <div id="view-dashboard">
-<!-- Map -->
-      <div class="map-card">
-        <div class="map-header">
-          <div class="map-title">Mapa de Proyectos</div>
-          <div style="font-size:12px;color:var(--muted)" id="map-count"></div>
-        </div>
-        <div id="project-map"></div>
+  </header>
+  <main class="wrap">
+    <section class="card">
+      <div class="row">
+        <input id="q" class="input" placeholder="Buscar (título, empresa, región, industria…)" />
+        <select id="limit" class="input">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+        <button class="btn" id="btnSearch">Buscar</button>
       </div>
+      <div class="status" id="status"></div>
+    </section>
 
-            <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">Total Proyectos</div>
-          <div class="kpi-value" id="kpi-total">—</div>
-          <div class="kpi-sub" id="kpi-filtered-label"></div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Minería</div>
-          <div class="kpi-value" id="kpi-mining">—</div>
-          <span class="kpi-badge neutral" id="kpi-mining-pct"></span>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Infraestructura</div>
-          <div class="kpi-value" id="kpi-infra">—</div>
-          <span class="kpi-badge neutral" id="kpi-infra-pct"></span>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Score Promedio</div>
-          <div class="kpi-value" id="kpi-score">—</div>
-          <div class="kpi-sub">sobre 100</div>
-        </div>
+    <!-- Proyectos -->
+    <section class="card">
+      <div class="section-header">
+        <span class="section-title">🏗 Proyectos</span>
+        <span class="count-pill" id="projects-count">—</span>
       </div>
-
-      <div class="charts-row">
-        <div class="chart-card">
-          <div class="chart-title">Proyectos por Industria</div>
-          <div class="chart-wrap"><canvas id="chart-industry"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">Proyectos por Fuente</div>
-          <div class="chart-wrap"><canvas id="chart-source"></canvas></div>
-        </div>
-      </div>
-
-      <div class="rankings-row">
-        <div class="ranking-card">
-          <div class="ranking-title">Top Regiones</div>
-          <div id="ranking-regions"></div>
-        </div>
-        <div class="ranking-card">
-          <div class="ranking-title">Top Mandantes</div>
-          <div id="ranking-companies"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Projects table -->
-    <div class="table-card" id="view-projects" style="display:none">
-      <div class="table-header">
-        <div class="table-title">Proyectos <span id="table-count" style="font-weight:400;color:var(--muted);font-size:13px;"></span></div>
-        <div class="table-actions">
-          <button class="btn-sm" onclick="exportCSV()">↓ Exportar CSV</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th onclick="sortBy('score')">Score</th>
-              <th>Proyecto</th>
-              <th onclick="sortBy('source')">Fuente</th>
-              <th onclick="sortBy('company')">Mandante</th>
-              <th onclick="sortBy('region')">Región</th>
-              <th>Fase</th>
-              <th onclick="sortBy('created_at')">Fecha</th>
-              <th>Link</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-      <div class="pagination">
-        <div class="pagination-info" id="pagination-info"></div>
-        <div class="pagination-btns">
-          <button id="prev" onclick="changePage(-1)" disabled>← Anterior</button>
-          <button id="next" onclick="changePage(1)" disabled>Siguiente →</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Profile view -->
-    <div id="view-profile" style="display:none">
-      <div style="margin-bottom:20px">
-        <div style="font-size:20px;font-weight:700;color:var(--navy)">Mi Perfil</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:4px">Configura tus preferencias para personalizar tu experiencia</div>
-      </div>
-      <div class="profile-grid">
-        <!-- Left: user info -->
-        <div>
-          <div class="profile-card">
-            <div class="profile-avatar" id="profile-avatar">?</div>
-            <div class="profile-name" id="profile-name">—</div>
-            <div class="profile-email" id="profile-email">—</div>
-            <div class="profile-plan">Plan Básico</div>
-            <div class="profile-stat">
-              <div class="profile-stat-label">Proyectos monitoreados</div>
-              <div class="profile-stat-value" id="profile-total">—</div>
-            </div>
-            <div class="profile-stat" style="margin-top:16px">
-              <div class="profile-stat-label">Score promedio</div>
-              <div class="profile-stat-value" id="profile-avg-score">—</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: preferences -->
-        <div class="profile-card">
-          <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:20px">Preferencias</div>
-
-          <!-- Industries -->
-          <div class="prefs-section">
-            <div class="prefs-title">Industrias de interés</div>
-            <div class="prefs-desc">Selecciona los rubros que quieres monitorear</div>
-            <div class="checkbox-grid" id="pref-industries">
-              <div class="checkbox-item" id="ci-Minería" onclick="toggleIndustry('Minería')"><input type="checkbox" id="chk-ind-Minería" /><label for="chk-ind-Minería">Minería</label></div>
-              <div class="checkbox-item" id="ci-Infraestructura" onclick="toggleIndustry('Infraestructura')"><input type="checkbox" id="chk-ind-Infraestructura" /><label for="chk-ind-Infraestructura">Infraestructura</label></div>
-              <div class="checkbox-item" id="ci-Energía" onclick="toggleIndustry('Energía')"><input type="checkbox" id="chk-ind-Energía" /><label for="chk-ind-Energía">Energía</label></div>
-              <div class="checkbox-item" id="ci-Oil &amp; Gas" onclick="toggleIndustry('Oil & Gas')"><input type="checkbox" id="chk-ind-Oil-Gas" /><label for="chk-ind-Oil-Gas">Oil &amp; Gas</label></div>
-              <div class="checkbox-item" id="ci-Agroindustria" onclick="toggleIndustry('Agroindustria')"><input type="checkbox" id="chk-ind-Agroindustria" /><label for="chk-ind-Agroindustria">Agroindustria</label></div>
-              <div class="checkbox-item" id="ci-Portuario" onclick="toggleIndustry('Portuario')"><input type="checkbox" id="chk-ind-Portuario" /><label for="chk-ind-Portuario">Portuario</label></div>
-            </div>
-          </div>
-
-          <!-- Regions -->
-          <div class="prefs-section">
-            <div class="prefs-title">Regiones de interés</div>
-            <div class="prefs-desc">Selecciona las regiones que quieres seguir</div>
-            <div class="checkbox-grid" id="pref-regions">
-              <div class="checkbox-item" id="cr-Antofagasta" onclick="toggleRegion('Antofagasta')"><input type="checkbox" id="chk-reg-Antofagasta" /><label for="chk-reg-Antofagasta">Antofagasta</label></div>
-              <div class="checkbox-item" id="cr-Atacama" onclick="toggleRegion('Atacama')"><input type="checkbox" id="chk-reg-Atacama" /><label for="chk-reg-Atacama">Atacama</label></div>
-              <div class="checkbox-item" id="cr-Tarapacá" onclick="toggleRegion('Tarapacá')"><input type="checkbox" id="chk-reg-Tarapacá" /><label for="chk-reg-Tarapacá">Tarapacá</label></div>
-              <div class="checkbox-item" id="cr-Coquimbo" onclick="toggleRegion('Coquimbo')"><input type="checkbox" id="chk-reg-Coquimbo" /><label for="chk-reg-Coquimbo">Coquimbo</label></div>
-              <div class="checkbox-item" id="cr-Valparaíso" onclick="toggleRegion('Valparaíso')"><input type="checkbox" id="chk-reg-Valparaíso" /><label for="chk-reg-Valparaíso">Valparaíso</label></div>
-              <div class="checkbox-item" id="cr-Región-Metropolitana" onclick="toggleRegion('Región Metropolitana')"><input type="checkbox" id="chk-reg-Región-Metropolitana" /><label for="chk-reg-Región-Metropolitana">Región Metropolitana</label></div>
-              <div class="checkbox-item" id="cr-Biobío" onclick="toggleRegion('Biobío')"><input type="checkbox" id="chk-reg-Biobío" /><label for="chk-reg-Biobío">Biobío</label></div>
-              <div class="checkbox-item" id="cr-La-Araucanía" onclick="toggleRegion('La Araucanía')"><input type="checkbox" id="chk-reg-La-Araucanía" /><label for="chk-reg-La-Araucanía">La Araucanía</label></div>
-              <div class="checkbox-item" id="cr-Los-Lagos" onclick="toggleRegion('Los Lagos')"><input type="checkbox" id="chk-reg-Los-Lagos" /><label for="chk-reg-Los-Lagos">Los Lagos</label></div>
-              <div class="checkbox-item" id="cr-Magallanes" onclick="toggleRegion('Magallanes')"><input type="checkbox" id="chk-reg-Magallanes" /><label for="chk-reg-Magallanes">Magallanes</label></div>
-              <div class="checkbox-item" id="cr-Arica-y-Parinacota" onclick="toggleRegion('Arica y Parinacota')"><input type="checkbox" id="chk-reg-Arica-y-Parinacota" /><label for="chk-reg-Arica-y-Parinacota">Arica y Parinacota</label></div>
-              <div class="checkbox-item" id="cr-Aysén" onclick="toggleRegion('Aysén')"><input type="checkbox" id="chk-reg-Aysén" /><label for="chk-reg-Aysén">Aysén</label></div>
-            </div>
-          </div>
-
-          <!-- Keywords -->
-          <div class="prefs-section">
-            <div class="prefs-title">Palabras clave</div>
-            <div class="prefs-desc">Agrega términos específicos de tu negocio (ej: explosivos, ventilación, topografía)</div>
-            <div class="tags-input-wrap" onclick="document.getElementById('kw-input').focus()">
-              <div id="kw-tags"></div>
-              <input type="text" id="kw-input" class="tag-input" placeholder="Escribe y presiona Enter..." />
-            </div>
-          </div>
-
-          <!-- Min score -->
-          <div class="prefs-section">
-            <div class="prefs-title">Score mínimo</div>
-            <div class="prefs-desc">Solo mostrar proyectos con score mayor a este valor</div>
-            <div class="range-wrap">
-              <input type="range" min="0" max="90" step="5" value="0" id="pref-min-score" oninput="document.getElementById('min-score-val').textContent=this.value" />
-              <span class="range-val" id="min-score-val">0</span>
-            </div>
-          </div>
-
-          <div style="display:flex;align-items:center;margin-top:8px">
-            <button class="save-btn" id="save-prefs-btn" onclick="savePreferences()">Guardar preferencias</button>
-            <span class="save-msg" id="save-msg" style="display:none">✓ Guardado</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dashboard table preview -->
-    <div class="table-card" id="dash-table" style="margin-top:16px">
-      <div class="table-header">
-        <div class="table-title">Proyectos Recientes</div>
-        <div class="table-actions">
-          <button class="btn-sm primary" onclick="setView('projects')">Ver todos →</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
+      <div class="tableWrap">
+        <table class="table">
           <thead>
             <tr>
               <th>Score</th>
@@ -544,752 +134,37 @@ a.link:hover { text-decoration: underline; }
               <th>Link</th>
             </tr>
           </thead>
-          <tbody id="dash-tbody"></tbody>
+          <tbody id="tbody-projects">
+            <tr><td colspan="8" class="muted">Cargando...</td></tr>
+          </tbody>
         </table>
       </div>
-    </div>
-  </div>
-</div>
+    </section>
 
-<!-- MODAL -->
-<div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal(event)">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-title"></div>
-      <button class="modal-close" onclick="closeModalDirect()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-meta" id="modal-meta"></div>
-      <div class="modal-section-title">Análisis con IA</div>
-      <div class="ai-box">
-        <button class="ai-btn" id="ai-btn" onclick="analyzeWithAI()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
-          Analizar con Claude
-        </button>
-        <div class="ai-result" id="ai-result"></div>
+    <!-- Noticias -->
+    <section class="card">
+      <div class="section-header">
+        <span class="section-title">📰 Noticias</span>
+        <span class="count-pill" id="news-count">—</span>
       </div>
-      <div id="modal-link-section"></div>
-    </div>
-  </div>
-</div>
-
-<script>
-const API = 'https://stratmap-chile-production.up.railway.app';
-const PER_PAGE = 25;
-let all = [], filtered = [], page = 0, sortKey = 'created_at', sortAsc = false;
-let token = localStorage.getItem('stratmap_token');
-let currentProject = null;
-let activeFilters = { industry: [], region: [], source: [], company: [] };
-let charts = {};
-let currentView = 'dashboard';
-
-if (token) showApp(); else showLogin();
-
-function showLogin() {
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('app-screen').style.display = 'none';
-}
-
-function showApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'block';
-  load();
-}
-
-async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  const btn = document.getElementById('login-btn');
-  const err = document.getElementById('login-error');
-  if (!email || !password) { err.textContent = 'Completa todos los campos'; return; }
-  btn.disabled = true; btn.textContent = 'Ingresando...'; err.textContent = '';
-  try {
-    const res = await fetch(`${API}/auth/login`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Error al ingresar');
-    token = data.token;
-    localStorage.setItem('stratmap_token', token);
-    showApp();
-  } catch (e) {
-    err.textContent = e.message;
-  } finally {
-    btn.disabled = false; btn.textContent = 'Ingresar';
-  }
-}
-
-document.getElementById('login-password')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter') doLogin();
-});
-
-function doLogout() {
-  localStorage.removeItem('stratmap_token');
-  token = null; showLogin();
-}
-
-async function load() {
-  try {
-    const res = await fetch(`${API}/opportunities?limit=2000`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.status === 401) { doLogout(); return; }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    all = Array.isArray(data) ? data : (data.items || []);
-    buildFilters();
-    applyFilters();
-    loadProfile();
-    setTimeout(() => { initMap(); updateMap(); }, 300);
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-// ── Filters ──
-function buildFilters() {
-  const counts = (field) => {
-    const map = {};
-    all.forEach(o => { const v = o[field]; if (v) map[v] = (map[v]||0)+1; });
-    return Object.entries(map).sort((a,b) => b[1]-a[1]);
-  };
-
-  renderFilterGroup('filter-industry', counts('industry'), 'industry');
-  renderFilterGroup('filter-region', counts('region'), 'region');
-  renderFilterGroup('filter-source', counts('source'), 'source');
-  renderFilterGroup('filter-company', counts('company').slice(0,10), 'company');
-}
-
-function renderFilterGroup(containerId, entries, field) {
-  const el = document.getElementById(containerId);
-  el.innerHTML = entries.map(([val, cnt]) => `
-    <div class="filter-option">
-      <input type="checkbox" id="f-${field}-${esc(val)}" value="${esc(val)}" onchange="toggleFilter('${field}', '${esc(val)}')" />
-      <label for="f-${field}-${esc(val)}">${esc(val)}</label>
-      <span class="count-pill">${cnt}</span>
-    </div>
-  `).join('');
-}
-
-function toggleFilter(field, value) {
-  const arr = activeFilters[field];
-  const idx = arr.indexOf(value);
-  if (idx === -1) arr.push(value);
-  else arr.splice(idx, 1);
-  applyFilters();
-  renderActiveFilterTags();
-}
-
-function clearFilters() {
-  activeFilters = { industry: [], region: [], source: [], company: [] };
-  document.querySelectorAll('.sidebar input[type=checkbox]').forEach(cb => cb.checked = false);
-  applyFilters();
-  renderActiveFilterTags();
-}
-
-function renderActiveFilterTags() {
-  const bar = document.getElementById('active-filters-bar');
-  const tags = [];
-  Object.entries(activeFilters).forEach(([field, vals]) => {
-    vals.forEach(v => tags.push({ field, v }));
-  });
-  if (!tags.length) { bar.style.display = 'none'; return; }
-  bar.style.display = 'flex';
-  bar.innerHTML = '<span class="active-filters-label">Filtros activos:</span>' +
-    tags.map(({field, v}) => `<span class="filter-tag">${v} <button onclick="removeFilter('${field}','${v}')">×</button></span>`).join('');
-}
-
-function removeFilter(field, value) {
-  const arr = activeFilters[field];
-  const idx = arr.indexOf(value);
-  if (idx !== -1) arr.splice(idx, 1);
-  const cb = document.getElementById(`f-${field}-${value}`);
-  if (cb) cb.checked = false;
-  applyFilters();
-  renderActiveFilterTags();
-}
-
-function applyFilters() {
-  const q = document.getElementById('search').value.toLowerCase();
-  filtered = all.filter(o => {
-    if (q && !['title','company','region','source','industry'].some(f => (o[f]||'').toLowerCase().includes(q))) return false;
-    if (activeFilters.industry.length && !activeFilters.industry.includes(o.industry)) return false;
-    if (activeFilters.region.length && !activeFilters.region.includes(o.region)) return false;
-    if (activeFilters.source.length && !activeFilters.source.includes(o.source)) return false;
-    if (activeFilters.company.length && !activeFilters.company.includes(o.company)) return false;
-    return true;
-  });
-  filtered.sort((a, b) => {
-    let av = sortKey === 'score' ? (Number(a[sortKey])||0) : (a[sortKey]||'');
-    let bv = sortKey === 'score' ? (Number(b[sortKey])||0) : (b[sortKey]||'');
-    return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-  });
-  page = 0;
-  updateKPIs();
-  updateCharts();
-  updateRankings();
-  renderTable();
-  renderDashTable();
-  if (currentView === 'dashboard') updateMap();
-}
-
-// ── KPIs ──
-function updateKPIs() {
-  const total = filtered.length;
-  const mining = filtered.filter(o => o.industry === 'Minería').length;
-  const infra = filtered.filter(o => o.industry === 'Infraestructura').length;
-  const avgScore = total ? Math.round(filtered.reduce((s,o) => s+(Number(o.score)||0), 0) / total) : 0;
-  document.getElementById('kpi-total').textContent = total;
-  document.getElementById('kpi-mining').textContent = mining;
-  document.getElementById('kpi-mining-pct').textContent = total ? `${Math.round(mining/total*100)}%` : '—';
-  document.getElementById('kpi-infra').textContent = infra;
-  document.getElementById('kpi-infra-pct').textContent = total ? `${Math.round(infra/total*100)}%` : '—';
-  document.getElementById('kpi-score').textContent = avgScore;
-  document.getElementById('kpi-filtered-label').textContent = total < all.length ? `de ${all.length} totales` : 'proyectos totales';
-}
-
-// ── Charts ──
-function updateCharts() {
-  // Industry chart
-  const industryCounts = {};
-  filtered.forEach(o => { if (o.industry) industryCounts[o.industry] = (industryCounts[o.industry]||0)+1; });
-  const industryLabels = Object.keys(industryCounts);
-  const industryData = industryLabels.map(k => industryCounts[k]);
-  const industryColors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2'];
-
-  if (charts.industry) charts.industry.destroy();
-  const ctx1 = document.getElementById('chart-industry').getContext('2d');
-  charts.industry = new Chart(ctx1, {
-    type: 'doughnut',
-    data: { labels: industryLabels, datasets: [{ data: industryData, backgroundColor: industryColors, borderWidth: 2, borderColor: '#fff' }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } } } }
-  });
-
-  // Source chart
-  const sourceCounts = {};
-  filtered.forEach(o => { if (o.source) sourceCounts[o.source] = (sourceCounts[o.source]||0)+1; });
-  const sourceLabels = Object.keys(sourceCounts);
-  const sourceData = sourceLabels.map(k => sourceCounts[k]);
-
-  if (charts.source) charts.source.destroy();
-  const ctx2 = document.getElementById('chart-source').getContext('2d');
-  charts.source = new Chart(ctx2, {
-    type: 'bar',
-    data: { labels: sourceLabels, datasets: [{ data: sourceData, backgroundColor: '#2563eb', borderRadius: 4 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }
-    }
-  });
-}
-
-// ── Rankings ──
-function updateRankings() {
-  const rankBy = (field, container) => {
-    const map = {};
-    filtered.forEach(o => { if (o[field]) map[o[field]] = (map[o[field]]||0)+1; });
-    const sorted = Object.entries(map).sort((a,b) => b[1]-a[1]).slice(0,7);
-    const max = sorted[0]?.[1] || 1;
-    document.getElementById(container).innerHTML = sorted.map(([name, cnt], i) => `
-      <div class="ranking-item">
-        <span class="ranking-num">${i+1}</span>
-        <span class="ranking-name">${esc(name)}</span>
-        <div class="ranking-bar-wrap"><div class="ranking-bar" style="width:${Math.round(cnt/max*100)}%"></div></div>
-        <span class="ranking-count">${cnt}</span>
+      <div class="tableWrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Titular</th>
+              <th>Fuente</th>
+              <th>Industria</th>
+              <th>Fecha</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-news">
+            <tr><td colspan="5" class="muted">Cargando...</td></tr>
+          </tbody>
+        </table>
       </div>
-    `).join('') || '<div style="color:var(--muted);font-size:12px;padding:8px 0">Sin datos</div>';
-  };
-  rankBy('region', 'ranking-regions');
-  rankBy('company', 'ranking-companies');
-}
-
-// ── Table ──
-function renderTable() {
-  const total = filtered.length;
-  const pages = Math.ceil(total / PER_PAGE) || 1;
-  const slice = filtered.slice(page * PER_PAGE, (page+1) * PER_PAGE);
-  document.getElementById('table-count').textContent = `(${total})`;
-  document.getElementById('pagination-info').textContent = `Mostrando ${page*PER_PAGE+1}–${Math.min((page+1)*PER_PAGE, total)} de ${total}`;
-  document.getElementById('prev').disabled = page === 0;
-  document.getElementById('next').disabled = page >= pages-1;
-  if (!slice.length) {
-    document.getElementById('tbody').innerHTML = '<tr><td colspan="8"><div class="state">Sin resultados</div></td></tr>';
-    return;
-  }
-  document.getElementById('tbody').innerHTML = slice.map((o, i) => rowHtml(o, page*PER_PAGE+i)).join('');
-}
-
-function renderDashTable() {
-  const slice = filtered.slice(0, 8);
-  document.getElementById('dash-tbody').innerHTML = slice.map((o, i) => rowHtml(o, i, true)).join('') ||
-    '<tr><td colspan="8"><div class="state">Sin proyectos</div></td></tr>';
-}
-
-function rowHtml(o, idx, isDash) {
-  const s = Number(o.score)||0;
-  const sc = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
-  const src = (o.source||'').toLowerCase();
-  const srcClass = src === 'sea' ? 'source-sea' : src === 'chilebcompra' ? 'source-chilebcompra' : 'source-rss';
-  return `<tr onclick="openModal(${idx}, ${isDash?'true':'false'})">
-    <td><div class="score ${sc}">${s}</div></td>
-    <td>
-      <div class="proj-title">${esc(o.title||'—')}</div>
-      ${o.industry ? `<div class="proj-sub">${esc(o.industry)}</div>` : ''}
-    </td>
-    <td><span class="source-badge ${srcClass}">${esc(o.source||'—')}</span></td>
-    <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.company||'—')}</td>
-    <td>${esc(o.region||'—')}</td>
-    <td>${o.phase ? `<span class="phase-badge">${esc(o.phase)}</span>` : '—'}</td>
-    <td><span class="date-cell">${formatDate(o.created_at)}</span></td>
-    <td><a class="link" href="${esc(o.url||'#')}" target="_blank" rel="noopener" onclick="event.stopPropagation()">ver →</a></td>
-  </tr>`;
-}
-
-// ── Modal ──
-function openModal(idx, isDash) {
-  const o = isDash ? filtered[idx] : filtered[idx];
-  if (!o) return;
-  currentProject = o;
-  const s = Number(o.score)||0;
-  const sc = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
-  document.getElementById('modal-title').textContent = o.title||'—';
-  document.getElementById('modal-meta').innerHTML = `
-    <div class="meta-item"><div class="meta-label">Score</div><div class="meta-value"><span class="score-big ${sc}">${s}</span></div></div>
-    <div class="meta-item"><div class="meta-label">Fuente</div><div class="meta-value">${esc(o.source||'—')}</div></div>
-    <div class="meta-item"><div class="meta-label">Mandante / Empresa</div><div class="meta-value">${esc(o.company||'—')}</div></div>
-    <div class="meta-item"><div class="meta-label">Industria</div><div class="meta-value">${esc(o.industry||'—')}</div></div>
-    <div class="meta-item"><div class="meta-label">Región</div><div class="meta-value">${esc(o.region||'—')}</div></div>
-    <div class="meta-item"><div class="meta-label">Fase</div><div class="meta-value">${esc(o.phase||'—')}</div></div>
-    <div class="meta-item"><div class="meta-label">Fecha ingreso</div><div class="meta-value">${formatDate(o.created_at)}</div></div>
-    <div class="meta-item"><div class="meta-label">Última actualización</div><div class="meta-value">${formatDate(o.updated_at)}</div></div>
-  `;
-  document.getElementById('modal-link-section').innerHTML = o.url
-    ? `<div class="modal-section-title" style="margin-top:20px">Enlace</div><a class="modal-link" href="${esc(o.url)}" target="_blank" rel="noopener">Ver proyecto original →</a>`
-    : '';
-  document.getElementById('ai-result').textContent = '';
-  document.getElementById('ai-result').className = 'ai-result';
-  document.getElementById('ai-btn').disabled = false;
-  document.getElementById('ai-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar con Claude`;
-  document.getElementById('modal-overlay').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeModal(e) { if (e.target.id === 'modal-overlay') closeModalDirect(); }
-function closeModalDirect() { document.getElementById('modal-overlay').classList.add('hidden'); document.body.style.overflow = ''; }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDirect(); });
-
-// ── AI Analysis ──
-async function analyzeWithAI() {
-  if (!currentProject) return;
-  const btn = document.getElementById('ai-btn');
-  const result = document.getElementById('ai-result');
-  const apiKey = localStorage.getItem('anthropic_key');
-
-  if (!apiKey) {
-    result.className = 'ai-result';
-    result.innerHTML = `
-      <div style="margin-bottom:8px;font-size:12px;color:var(--muted);">Ingresa tu API key de Anthropic:</div>
-      <div style="display:flex;gap:8px;">
-        <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;" />
-        <button onclick="saveApiKey()" style="padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Guardar</button>
-      </div>
-    `;
-    return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = `<div class="spinner" style="margin:0;width:14px;height:14px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.3)"></div> Analizando...`;
-  result.className = 'ai-result loading';
-  result.textContent = 'Claude está analizando el proyecto...';
-
-  const o = currentProject;
-  const rawStr = o.raw ? JSON.stringify(o.raw).substring(0, 1000) : '';
-  const promptText = `Eres un analista de inteligencia de negocios especializado en minería, infraestructura y energía en Chile.
-
-Analiza este proyecto:
-Título: ${o.title}
-Fuente: ${o.source}
-Empresa/Organismo: ${o.company || 'No especificado'}
-Industria: ${o.industry || 'No clasificado'}
-Región: ${o.region || 'No especificada'}
-Fase: ${o.phase || 'No especificada'}
-Score: ${o.score}/100
-Datos raw: ${rawStr}
-
-Responde en español con:
-1. **¿Qué es este proyecto?** (2-3 líneas)
-2. **Empresa y región** (si no están, infíérelas desde raw)
-3. **¿Por qué es relevante?** (oportunidades para proveedores)
-4. **Recomendación comercial** (qué hacer con esta info)
-
-Máximo 250 palabras. Sé concreto.`;
-
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 600, messages: [{ role: 'user', content: promptText }] })
-    });
-
-    if (res.status === 401) {
-      localStorage.removeItem('anthropic_key');
-      result.innerHTML = `<div style="color:var(--red);font-size:12px;margin-bottom:8px;">API key inválida.</div>
-        <div style="display:flex;gap:8px;"><input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;" />
-        <button onclick="saveApiKey()" style="padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer;">Guardar</button></div>`;
-      btn.disabled = false;
-      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar con Claude`;
-      return;
-    }
-
-    const data = await res.json();
-    result.className = 'ai-result';
-    result.textContent = data.content?.[0]?.text || 'Sin respuesta.';
-  } catch (e) {
-    result.className = 'ai-result';
-    result.textContent = `Error: ${e.message}`;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg> Analizar de nuevo`;
-  }
-}
-
-function saveApiKey() {
-  const key = document.getElementById('api-key-input')?.value?.trim();
-  if (!key) return;
-  localStorage.setItem('anthropic_key', key);
-  document.getElementById('ai-result').className = 'ai-result loading';
-  document.getElementById('ai-result').textContent = 'API key guardada. Haz click en "Analizar con Claude".';
-}
-
-// ── View switching ──
-function setView(view) {
-  currentView = view;
-  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.sidebar-item').forEach(el => {
-    const t = el.textContent.trim().toLowerCase();
-    if (view === 'dashboard' && t.includes('dashboard')) el.classList.add('active');
-    if (view === 'projects' && t.includes('proyecto')) el.classList.add('active');
-    if (view === 'profile' && t.includes('perfil')) el.classList.add('active');
-  });
-  document.getElementById('view-dashboard').style.display = view === 'dashboard' ? 'block' : 'none';
-  document.getElementById('dash-table').style.display = view === 'dashboard' ? 'block' : 'none';
-  document.getElementById('view-projects').style.display = view === 'projects' ? 'block' : 'none';
-  document.getElementById('view-profile').style.display = view === 'profile' ? 'block' : 'none';
-  if (view === 'dashboard') { setTimeout(() => { initMap(); updateMap(); }, 200); }
-  if (view === 'profile') loadProfile();
-}
-
-// ── Export CSV ──
-function exportCSV() {
-  const headers = ['Score','Título','Fuente','Mandante','Industria','Región','Fase','Fecha','URL'];
-  const rows = filtered.map(o => [
-    o.score, `"${(o.title||'').replace(/"/g,'""')}"`, o.source, `"${(o.company||'').replace(/"/g,'""')}"`,
-    o.industry, o.region, o.phase, formatDate(o.created_at), o.url
-  ]);
-  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `stratmap-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-}
-
-// ── Helpers ──
-function sortBy(key) {
-  sortAsc = sortKey === key ? !sortAsc : false;
-  sortKey = key;
-  applyFilters();
-}
-
-function changePage(d) {
-  page += d;
-  renderTable();
-  scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' }); }
-  catch { return '—'; }
-}
-
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-
-// ── Map ──
-const REGION_COORDS = {
-  'Tarapacá': [-20.2, -69.3],
-  'Antofagasta': [-23.6, -70.4],
-  'Atacama': [-27.3, -70.3],
-  'Coquimbo': [-29.9, -71.2],
-  'Valparaíso': [-33.0, -71.5],
-  "O'Higgins": [-34.5, -71.0],
-  'Maule': [-35.4, -71.6],
-  'Biobío': [-37.5, -72.0],
-  'La Araucanía': [-38.9, -72.6],
-  'Los Lagos': [-41.5, -72.9],
-  'Aysén': [-45.6, -72.1],
-  'Magallanes': [-53.1, -70.9],
-  'Región Metropolitana': [-33.4, -70.6],
-  'Los Ríos': [-39.8, -73.2],
-  'Arica y Parinacota': [-18.5, -69.5],
-  'Ñuble': [-36.6, -71.9],
-};
-
-const INDUSTRY_COLORS = {
-  'Minería': '#2563eb',
-  'Infraestructura': '#16a34a',
-  'Energía': '#d97706',
-  'Oil & Gas': '#7c3aed',
-  'Agroindustria': '#0891b2',
-  'Portuario': '#dc2626',
-};
-
-let map = null;
-let mapMarkers = [];
-
-function initMap() {
-  if (map) return;
-  map = L.map('project-map', { zoomControl: true }).setView([-33.4, -70.6], 5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap',
-    maxZoom: 18
-  }).addTo(map);
-}
-
-function getCoords(o) {
-  // Try raw ArcGIS geometry
-  const raw = o.raw || {};
-  if (raw.geometry) {
-    const g = raw.geometry;
-    if (g.x && g.y) return [g.y, g.x];
-    if (g.lat && g.lon) return [g.lat, g.lon];
-  }
-  // Try raw fields
-  if (raw.LATITUD && raw.LONGITUD) return [parseFloat(raw.LATITUD), parseFloat(raw.LONGITUD)];
-  if (raw.Y_COORD && raw.X_COORD) return [parseFloat(raw.Y_COORD), parseFloat(raw.X_COORD)];
-  // Fallback to region centroid with small random offset
-  const region = o.region;
-  if (region && REGION_COORDS[region]) {
-    const [lat, lon] = REGION_COORDS[region];
-    return [lat + (Math.random()-0.5)*0.8, lon + (Math.random()-0.5)*0.8];
-  }
-  return null;
-}
-
-function updateMap() {
-  if (!map) initMap();
-  // Clear old markers
-  mapMarkers.forEach(m => map.removeLayer(m));
-  mapMarkers = [];
-
-  let placed = 0;
-  filtered.forEach((o, idx) => {
-    const coords = getCoords(o);
-    if (!coords) return;
-    const s = Number(o.score)||0;
-    const color = INDUSTRY_COLORS[o.industry] || '#6b7280';
-    const radius = Math.max(6, Math.min(16, 6 + (s/100)*10));
-
-    const marker = L.circleMarker(coords, {
-      radius,
-      fillColor: color,
-      color: '#fff',
-      weight: 1.5,
-      opacity: 1,
-      fillOpacity: 0.85
-    });
-
-    const sc = s >= 70 ? 'background:#dcfce7;color:#16a34a' : s >= 40 ? 'background:#fef3c7;color:#d97706' : 'background:#f3f4f6;color:#6b7280';
-    marker.bindPopup(`
-      <div class="popup-title">${esc(o.title||'')}</div>
-      <span class="popup-score" style="${sc}">${s}/100</span>
-      <div class="popup-meta">🏢 ${esc(o.company||'—')}</div>
-      <div class="popup-meta">📍 ${esc(o.region||'—')} &nbsp;·&nbsp; ${esc(o.industry||'—')}</div>
-      <div class="popup-meta">⚡ ${esc(o.phase||'—')}</div>
-      <br><button class="popup-btn" onclick="openModalFromMap(${idx})">Ver detalle</button>
-    `, { maxWidth: 260 });
-
-    marker.addTo(map);
-    mapMarkers.push(marker);
-    placed++;
-  });
-
-  document.getElementById('map-count').textContent = `${placed} proyectos en mapa`;
-  if (mapMarkers.length > 0) {
-    try {
-      const group = L.featureGroup(mapMarkers);
-      map.fitBounds(group.getBounds().pad(0.1));
-    } catch(e) {}
-  }
-}
-
-function openModalFromMap(idx) {
-  openModal(idx, false);
-}
-
-
-// ── Profile ──
-let userPrefs = { preferred_industries: [], preferred_regions: [], keywords: [], min_investment_usd: 0 };
-let userInfo = {};
-
-async function loadProfile() {
-  // Get user info from token
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    userInfo = { email: payload.email };
-    document.getElementById('profile-email').textContent = payload.email;
-    document.getElementById('profile-avatar').textContent = payload.email[0].toUpperCase();
-    document.getElementById('topbar-user').textContent = payload.email;
-  } catch(e) {}
-
-  // Load preferences
-  try {
-    const res = await fetch(`${API}/me/preferences`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const prefs = await res.json();
-      userPrefs = prefs;
-      applyPrefsToUI(prefs);
-    }
-  } catch(e) {}
-
-  // Stats
-  document.getElementById('profile-total').textContent = all.length;
-  const avg = all.length ? Math.round(all.reduce((s,o) => s+(Number(o.score)||0), 0) / all.length) : 0;
-  document.getElementById('profile-avg-score').textContent = avg + '/100';
-}
-
-function applyPrefsToUI(prefs) {
-  // Industries
-  (prefs.preferred_industries || []).forEach(ind => {
-    const el = document.getElementById(`ci-${ind}`);
-    const chk = document.getElementById(`chk-ind-${ind}`);
-    if (el) el.classList.add('checked');
-    if (chk) chk.checked = true;
-  });
-  // Regions
-  (prefs.preferred_regions || []).forEach(reg => {
-    const key = reg.replace(/ /g,'-');
-    const el = document.getElementById(`cr-${key}`);
-    const chk = document.getElementById(`chk-reg-${key}`);
-    if (el) el.classList.add('checked');
-    if (chk) chk.checked = true;
-  });
-  // Keywords
-  (prefs.keywords || []).forEach(kw => addKeywordTag(kw));
-  // Min score
-  const minScore = prefs.min_investment_usd || 0;
-  document.getElementById('pref-min-score').value = minScore;
-  document.getElementById('min-score-val').textContent = minScore;
-}
-
-function toggleIndustry(val) {
-  const el = document.getElementById(`ci-${val}`);
-  const chk = document.getElementById(`chk-ind-${val}`);
-  const arr = userPrefs.preferred_industries || [];
-  const idx = arr.indexOf(val);
-  if (idx === -1) { arr.push(val); el.classList.add('checked'); if(chk) chk.checked=true; }
-  else { arr.splice(idx,1); el.classList.remove('checked'); if(chk) chk.checked=false; }
-  userPrefs.preferred_industries = arr;
-}
-
-function toggleRegion(val) {
-  const key = val.replace(/ /g,'-');
-  const el = document.getElementById(`cr-${key}`);
-  const chk = document.getElementById(`chk-reg-${key}`);
-  const arr = userPrefs.preferred_regions || [];
-  const idx = arr.indexOf(val);
-  if (idx === -1) { arr.push(val); el.classList.add('checked'); if(chk) chk.checked=true; }
-  else { arr.splice(idx,1); el.classList.remove('checked'); if(chk) chk.checked=false; }
-  userPrefs.preferred_regions = arr;
-}
-
-function addKeywordTag(kw) {
-  if (!kw.trim()) return;
-  const container = document.getElementById('kw-tags');
-  const span = document.createElement('span');
-  span.className = 'tag-item';
-  span.innerHTML = `${esc(kw)} <button onclick="removeKeyword(this,'${esc(kw)}')">×</button>`;
-  container.appendChild(span);
-}
-
-function removeKeyword(btn, kw) {
-  btn.parentElement.remove();
-  userPrefs.keywords = (userPrefs.keywords||[]).filter(k => k !== kw);
-}
-
-document.getElementById('kw-input')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault();
-    const val = e.target.value.trim().replace(/,$/, '');
-    if (val) {
-      addKeywordTag(val);
-      if (!userPrefs.keywords) userPrefs.keywords = [];
-      userPrefs.keywords.push(val);
-      e.target.value = '';
-    }
-  }
-});
-
-async function savePreferences() {
-  const btn = document.getElementById('save-prefs-btn');
-  const msg = document.getElementById('save-msg');
-  btn.disabled = true;
-  btn.textContent = 'Guardando...';
-
-  // Collect keywords from UI
-  const tags = document.querySelectorAll('#kw-tags .tag-item');
-  userPrefs.keywords = Array.from(tags).map(t => t.textContent.replace('×','').trim());
-  userPrefs.min_investment_usd = parseInt(document.getElementById('pref-min-score').value) || 0;
-
-  try {
-    const res = await fetch(`${API}/me/preferences`, {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        preferred_industries: userPrefs.preferred_industries || [],
-        preferred_regions: userPrefs.preferred_regions || [],
-        preferred_phases: [],
-        preferred_companies: [],
-        keywords: userPrefs.keywords || [],
-        min_investment_usd: userPrefs.min_investment_usd || 0,
-        weight_region: 1.0,
-        weight_industry: 1.0,
-        weight_investment: 1.0,
-        weight_phase: 1.0,
-        weight_company: 1.0
-      })
-    });
-    if (res.ok) {
-      msg.style.display = 'inline';
-      setTimeout(() => msg.style.display = 'none', 3000);
-    }
-  } catch(e) {
-    console.error(e);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Guardar preferencias';
-  }
-}
-
-let searchTimer;
-document.getElementById('search')?.addEventListener('input', () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(applyFilters, 250);
-});
-
-setInterval(() => { if (token) load(); }, 300000);
-</script>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
 </body>
 </html>
