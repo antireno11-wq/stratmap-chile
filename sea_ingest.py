@@ -49,8 +49,8 @@ def install_playwright_browsers() -> None:
         print(f"[{now_clt()}] Instalando Chromium para Playwright...")
         try:
             result = subprocess.run(
-                ["playwright", "install", "chromium"],
-                capture_output=True, text=True, timeout=180
+                ["playwright", "install", "chromium", "--with-deps"],
+                capture_output=True, text=True, timeout=300
             )
             if result.returncode == 0:
                 print(f"[{now_clt()}] Chromium instalado correctamente")
