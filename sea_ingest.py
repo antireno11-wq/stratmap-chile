@@ -145,42 +145,63 @@ def run() -> None:
 
     # SEA
     print(f"[{now_clt()}] Fetching SEA...")
-    items = fetch_sea(days_back=SEA_DAYS_BACK, limit=SEA_LIMIT)
-    print(f"[{now_clt()}] SEA: {len(items)} items")
-    ingest(session, items, "SEA")
+    try:
+        items = fetch_sea(days_back=SEA_DAYS_BACK, limit=SEA_LIMIT)
+        print(f"[{now_clt()}] SEA: {len(items)} items")
+        ingest(session, items, "SEA")
+    except Exception as e:
+        print(f"[{now_clt()}] SEA error: {e.__class__.__name__} — skipping")
 
     # ChileCompra
     print(f"[{now_clt()}] Fetching ChileCompra...")
-    items = fetch_chilebcompra(days_back=CHILEBCOMPRA_DAYS_BACK, limit=CHILEBCOMPRA_LIMIT)
-    print(f"[{now_clt()}] ChileCompra: {len(items)} items")
-    ingest(session, items, "ChileCompra")
+    try:
+        items = fetch_chilebcompra(days_back=CHILEBCOMPRA_DAYS_BACK, limit=CHILEBCOMPRA_LIMIT)
+        print(f"[{now_clt()}] ChileCompra: {len(items)} items")
+        ingest(session, items, "ChileCompra")
+    except Exception as e:
+        print(f"[{now_clt()}] ChileCompra error: {e.__class__.__name__} — skipping")
 
     # COCHILCO
     print(f"[{now_clt()}] Fetching COCHILCO...")
-    items = fetch_cochilco(limit=300)
-    print(f"[{now_clt()}] COCHILCO: {len(items)} items")
-    ingest(session, items, "COCHILCO")
+    try:
+        items = fetch_cochilco(limit=300)
+        print(f"[{now_clt()}] COCHILCO: {len(items)} items")
+        ingest(session, items, "COCHILCO")
+    except Exception as e:
+        print(f"[{now_clt()}] COCHILCO error: {e.__class__.__name__} — skipping")
 
     # MOP
     print(f"[{now_clt()}] Fetching MOP...")
-    items = fetch_mop(limit=200)
-    print(f"[{now_clt()}] MOP: {len(items)} items")
-    ingest(session, items, "MOP")
+    try:
+        items = fetch_mop(limit=200)
+        print(f"[{now_clt()}] MOP: {len(items)} items")
+        ingest(session, items, "MOP")
+    except Exception as e:
+        print(f"[{now_clt()}] MOP error: {e.__class__.__name__} — skipping")
 
     # Scraper
     print(f"[{now_clt()}] Fetching Scraper...")
-    items = fetch_scraper(limit=200)
-    print(f"[{now_clt()}] Scraper: {len(items)} items")
-    ingest(session, items, "Scraper")
+    try:
+        items = fetch_scraper(limit=200)
+        print(f"[{now_clt()}] Scraper: {len(items)} items")
+        ingest(session, items, "Scraper")
+    except Exception as e:
+        print(f"[{now_clt()}] Scraper error: {e.__class__.__name__} — skipping")
 
     # RSS Minería
     print(f"[{now_clt()}] Fetching RSS Minería...")
-    items = fetch_rss_mineria(limit=300)
-    print(f"[{now_clt()}] RSS: {len(items)} items")
-    ingest(session, items, "RSS")
+    try:
+        items = fetch_rss_mineria(limit=300)
+        print(f"[{now_clt()}] RSS: {len(items)} items")
+        ingest(session, items, "RSS")
+    except Exception as e:
+        print(f"[{now_clt()}] RSS error: {e.__class__.__name__} — skipping")
 
     # Jobs Signals
-    run_jobs_signals()
+    try:
+        run_jobs_signals()
+    except Exception as e:
+        print(f"[{now_clt()}] Jobs error: {e.__class__.__name__} — skipping")
 
     print(f"[{now_clt()}] Worker finished")
 
