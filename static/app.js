@@ -56,6 +56,90 @@ function drawerKey(type, value) {
   return key;
 }
 
+// ── Contactos ─────────────────────────────────────────────────────────────────
+
+async function fetchContacts(company) {
+  try {
+    const r = await fetch(`/contacts?company=${encodeURIComponent(company)}`, {headers:{Accept:"application/json"}});
+    const data = await r.json();
+    return data.items || [];
+  } catch(e) {
+    return [];
+  }
+}
+
+async function deleteContact(contactId, company) {
+  if (!confirm("¿Eliminar este contacto?")) return;
+  try {
+    await fetch(`/contacts/${contactId}`, {method:"DELETE"});
+    // Recargar sección contactos
+    const contacts = await fetchContacts(company);
+    el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+  } catch(e) {
+    alert("Error al eliminar contacto");
+  }
+}
+
+async function submitNewContact(company) {
+  const name  = el("nc-name").value.trim();
+  const role  = el("nc-role").value.trim();
+  const email = el("nc-email").value.trim();
+  const phone = el("nc-phone").value.trim();
+  const linkedin = el("nc-linkedin").value.trim();
+  if (!name) { alert("El nombre es obligatorio"); return; }
+  try {
+    await fetch("/contacts", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({name, company, role:role||null, email:email||null, phone:phone||null, linkedin_url:linkedin||null})
+    });
+    const contacts = await fetchContacts(company);
+    el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+  } catch(e) {
+    alert("Error al guardar contacto");
+  }
+}
+
+function renderContactsList(contacts, company) {
+  const encodedCompany = escapeHTML(company);
+  const list = contacts.length ? contacts.map(c => `
+    <div class="contact-card">
+      <div class="contact-info">
+        <div class="contact-name">${escapeHTML(c.name)}</div>
+        <div class="contact-role">${escapeHTML(c.role||"")}</div>
+        <div class="contact-meta">
+          ${c.email ? `<a href="mailto:${escapeHTML(c.email)}" class="contact-link">✉ ${escapeHTML(c.email)}</a>` : ""}
+          ${c.phone ? `<span class="contact-link">📞 ${escapeHTML(c.phone)}</span>` : ""}
+          ${c.linkedin_url ? `<a href="${escapeHTML(c.linkedin_url)}" target="_blank" class="contact-link linkedin">in LinkedIn</a>` : ""}
+        </div>
+      </div>
+      <button class="contact-delete" onclick="deleteContact(${c.id}, '${encodedCompany}')">✕</button>
+    </div>
+  `).join("") : `<p class="drawer-empty">Sin contactos registrados</p>`;
+
+  return `
+    ${list}
+    <div class="contact-form" id="contact-form" style="display:none">
+      <div class="cf-row">
+        <input id="nc-name" placeholder="Nombre *" class="cf-input" />
+        <input id="nc-role" placeholder="Cargo" class="cf-input" />
+      </div>
+      <div class="cf-row">
+        <input id="nc-email" placeholder="Email" class="cf-input" type="email" />
+        <input id="nc-phone" placeholder="Teléfono" class="cf-input" />
+      </div>
+      <input id="nc-linkedin" placeholder="URL LinkedIn" class="cf-input" style="width:100%;margin-bottom:8px" />
+      <div class="cf-actions">
+        <button class="cf-btn-cancel" onclick="el('contact-form').style.display='none'">Cancelar</button>
+        <button class="cf-btn-save" onclick="submitNewContact('${encodedCompany}')">Guardar</button>
+      </div>
+    </div>
+    <button class="btn-add-contact" onclick="el('contact-form').style.display=el('contact-form').style.display==='none'?'block':'none'">
+      + Agregar contacto
+    </button>
+  `;
+}
+
 // ── Drawer ────────────────────────────────────────────────────────────────────
 
 window.openDrawerByKey = function(key) {
@@ -64,7 +148,7 @@ window.openDrawerByKey = function(key) {
   openDrawer(entry.type, entry.value);
 };
 
-function openDrawer(type, value) {
+async function openDrawer(type, value) {
   const items = type === "company"
     ? allItems.filter(i => (i.company||"") === value)
     : allItems.filter(i => (i.region||"") === value);
@@ -114,21 +198,36 @@ function openDrawer(type, value) {
       <div class="drawer-stat"><div class="drawer-stat-val">${withSignals}</div><div class="drawer-stat-lbl">Con señales ⚡</div></div>
       <div class="drawer-stat"><div class="drawer-stat-val">${news.length}</div><div class="drawer-stat-lbl">Noticias</div></div>
     </div>
+
     <div class="drawer-section-title">${type === "company" ? "Por industria" : "Por mandante"}</div>
     <div class="drawer-dist">${distRows || "<p class='drawer-empty'>Sin datos</p>"}</div>
+
     <div class="drawer-section-title">Fases</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${phaseRows || "—"}</div>
+
     <div class="drawer-section-title">Proyectos recientes</div>
-    <div class="tableWrap">
+    <div class="tableWrap" style="margin-bottom:20px">
       <table>
         <thead><tr><th>Score</th><th>Proyecto</th><th>Fecha</th><th>Link</th></tr></thead>
         <tbody>${projRows || "<tr><td colspan='4' class='muted-row'>Sin proyectos</td></tr>"}</tbody>
       </table>
     </div>
+
+    ${type === "company" ? `
+    <div class="drawer-section-title">Contactos</div>
+    <div id="drawer-contacts"><p class="drawer-empty">Cargando...</p></div>
+    ` : ""}
   `;
 
   el("drawer").classList.add("open");
   el("drawer-overlay").classList.add("open");
+
+  // Cargar contactos async solo para mandantes
+  if (type === "company") {
+    const contacts = await fetchContacts(value);
+    const dcEl = el("drawer-contacts");
+    if (dcEl) dcEl.innerHTML = renderContactsList(contacts, value);
+  }
 }
 
 function closeDrawer() {
@@ -146,7 +245,7 @@ function projectRow(item) {
   const phase = item.phase ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
 
   const companyKey = item.company ? drawerKey("company", item.company) : null;
-  const regionKey = item.region ? drawerKey("region", item.region) : null;
+  const regionKey  = item.region  ? drawerKey("region",  item.region)  : null;
 
   const company = companyKey
     ? `<span class="clickable-link" onclick="openDrawerByKey('${companyKey}')">${escapeHTML(item.company)}</span>`
