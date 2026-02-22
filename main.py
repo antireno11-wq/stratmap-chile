@@ -252,7 +252,22 @@ def get_my_preferences(user=Depends(get_current_user)):
 def update_preferences(payload: PreferencesPayload, user=Depends(get_current_user)):
     save_preferences(user["user_id"], payload.model_dump())
     return {"ok": True}
-
+  
+@app.get("/admin/cleanup-test")
+def cleanup_test():
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM opportunities 
+                WHERE title ILIKE '%test%'
+                   OR title ILIKE '%ping%'
+                   OR title ILIKE '%manual%'
+                   OR company ILIKE '%testco%'
+                RETURNING id
+            """)
+            deleted = cur.rowcount
+        conn.commit()
+    return {"ok": True, "deleted": deleted}
 
 # ── Static UI (debe ir al final) ──────────────────────────────────────────────
 
