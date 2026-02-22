@@ -18,53 +18,73 @@ KEYWORDS = [
     "gas natural", "petróleo", "gasoducto",
 ]
 
-# Patrones con word boundaries para evitar falsos positivos
-# "mina" sola NO matchea "clomipramina", "puente" solo NO matchea cualquier cosa
+
+# Patrones robustos con lookahead/lookbehind para manejar tildes y unicode
+# (?<![a-záéíóúüñ]) = no precedido por letra
+# (?![a-záéíóúüñ])  = no seguido por letra
+def _w(word):
+    """Envuelve una palabra con boundaries que funcionan con tildes."""
+    return r"(?<![a-záéíóúüñA-ZÁÉÍÓÚÜÑ])" + word + r"(?![a-záéíóúüñA-ZÁÉÍÓÚÜÑ])"
+
+
 INDUSTRY_PATTERNS = [
-    # Minería
-    (r"\bminería\b",           "Minería"),
-    (r"\bminero\b",            "Minería"),
-    (r"\bminera\b",            "Minería"),
-    (r"\bmina\b",              "Minería"),
-    (r"\bcobre\b",             "Minería"),
-    (r"\blitio\b",             "Minería"),
-    (r"\bmolibdeno\b",         "Minería"),
-    (r"\bconcentradora\b",     "Minería"),
-    (r"\brelave\b",            "Minería"),
-    (r"\bfaena minera\b",      "Minería"),
-    (r"\byacimiento\b",        "Minería"),
-    (r"\bperforación\b",       "Minería"),
-    (r"\btronadura\b",         "Minería"),
-    (r"\bshovel\b",            "Minería"),
-    (r"\bescoria\b",           "Minería"),
+    # Minería — cuidado con falsos positivos (vitamina, albumina, protamina, etc.)
+    (_w("minería"),         "Minería"),
+    (_w("minero"),          "Minería"),
+    (_w("minera"),          "Minería"),
+    (_w("mina"),            "Minería"),
+    (_w("cobre"),           "Minería"),
+    (_w("litio"),           "Minería"),
+    (_w("molibdeno"),       "Minería"),
+    (_w("concentradora"),   "Minería"),
+    (_w("relave"),          "Minería"),
+    (r"faena minera",       "Minería"),
+    (_w("yacimiento"),      "Minería"),
+    (_w("perforación"),     "Minería"),
+    (_w("tronadura"),       "Minería"),
+    (_w("shovel"),          "Minería"),
     # Energía
-    (r"\bsolar\b",             "Energía"),
-    (r"\beólica\b",            "Energía"),
-    (r"\bsubestación\b",       "Energía"),
-    (r"\btransmisión eléctrica\b", "Energía"),
-    (r"\bfotovoltaico\b",      "Energía"),
-    (r"\bpanel solar\b",       "Energía"),
-    (r"\blínea de transmisión\b", "Energía"),
-    # Infraestructura
-    (r"\bcarretera\b",         "Infraestructura"),
-    (r"\bautopista\b",         "Infraestructura"),
-    (r"\bvialidad\b",          "Infraestructura"),
-    (r"\bembalse\b",           "Infraestructura"),
-    (r"\btúnel\b",             "Infraestructura"),
-    (r"\bpuente vial\b",       "Infraestructura"),
-    (r"\bpuente caminero\b",   "Infraestructura"),
-    (r"\bobra vial\b",         "Infraestructura"),
+    (r"panel(?:es)? solar", "Energía"),
+    (r"energía solar",      "Energía"),
+    (r"energía eólica",     "Energía"),
+    (_w("fotovoltaico"),    "Energía"),
+    (_w("subestación"),     "Energía"),
+    (r"transmisión eléctrica", "Energía"),
+    (r"línea de transmisión",  "Energía"),
+    # Infraestructura — más específico para evitar "Puente Alto" (comuna)
+    (_w("carretera"),       "Infraestructura"),
+    (_w("autopista"),       "Infraestructura"),
+    (r"dirección de vialidad.*construcc", "Infraestructura"),
+    (_w("embalse"),         "Infraestructura"),
+    (_w("túnel"),           "Infraestructura"),
+    (r"puente (?:vial|caminero|nuevo|vehicular)", "Infraestructura"),
+    (r"obra vial",          "Infraestructura"),
     # Oil & Gas
-    (r"\bpetróleo\b",          "Oil & Gas"),
-    (r"\bgas natural\b",       "Oil & Gas"),
-    (r"\bgasoducto\b",         "Oil & Gas"),
+    (_w("petróleo"),        "Oil & Gas"),
+    (r"gas natural",        "Oil & Gas"),
+    (_w("gasoducto"),       "Oil & Gas"),
 ]
 
-# Compilar patrones una vez
+# Blacklist — títulos que nunca deben entrar aunque matcheen un keyword
+TITLE_BLACKLIST = re.compile(
+    r"(medicamento|fármaco|vitamina|albumina|protamina|metformina|rifaximina|"
+    r"clomipramina|sitagliptin|linagliptin|piridostigmin|colestiramina|"
+    r"amikacina|prealbumina|inmunoglobulina|arginina|glutamina|lactante|"
+    r"show artístic|concierto|orquesta|sinfónic|evento verano|semana \w+ina|"
+    r"luminaria|área verde|mejoramiento urban|aseo integral|vigilancia presencial|"
+    r"servicio audiovisual|arriendo camión|arriendo rodillo|sub-base granular|"
+    r"emulsión asfáltica|catastro de aguas)",
+    re.IGNORECASE
+)
+
+# Compilar patrones
 _COMPILED = [(re.compile(p, re.IGNORECASE), ind) for p, ind in INDUSTRY_PATTERNS]
 
 
 def classify(title, desc=""):
+    # Primero revisar blacklist
+    if TITLE_BLACKLIST.search(title + " " + desc):
+        return None
     blob = title + " " + desc
     for pattern, ind in _COMPILED:
         if pattern.search(blob):
