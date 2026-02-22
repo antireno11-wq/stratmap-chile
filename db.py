@@ -23,6 +23,7 @@ def init_db_safe() -> None:
         init_db()
         init_users_db()
         init_signals_db()
+        init_contacts_db()
     except Exception as e:
         print(f"[db] init_db_safe: DB no disponible todavía: {type(e).__name__}: {e}")
 
@@ -118,6 +119,30 @@ def init_signals_db() -> None:
 
     CREATE INDEX IF NOT EXISTS idx_opportunities_signal_score
         ON opportunities(signal_score DESC);
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+
+def init_contacts_db() -> None:
+    sql = """
+    CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        company TEXT NOT NULL,
+        role TEXT NULL,
+        email TEXT NULL,
+        phone TEXT NULL,
+        linkedin_url TEXT NULL,
+        notes TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (company);
+    CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts (name);
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -307,7 +332,6 @@ def get_preferences(user_id: int) -> Optional[Dict[str, Any]]:
 
 # ── Signals & Radar de Proyectos ──────────────────────────────────────────────
 
-# Mapeo de nombres del scraper → nombres reales en la BD
 COMPANY_ALIASES: Dict[str, List[str]] = {
     "BHP":                  ["BHP"],
     "Codelco":              ["CODELCO", "Codelco", "Radomiro Tomic", "Chuquicamata",
@@ -328,7 +352,6 @@ def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
     VALUES
       (%(opportunity_id)s, %(signal_type)s, %(signal_source)s, %(signal_data)s, %(score_impact)s, %(detected_at)s);
     """
-
     sql_update = """
     UPDATE opportunities SET
       jobs_count     = %(jobs_count)s,
@@ -337,7 +360,6 @@ def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
       signals        = COALESCE(signals, '[]'::jsonb) || %(new_signal)s::jsonb
     WHERE id = %(opportunity_id)s;
     """
-
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql_signal, {
@@ -363,11 +385,9 @@ def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
 
 
 def get_opportunities_by_company(company_name: str) -> List[Dict[str, Any]]:
-    """Retorna oportunidades que coincidan con una empresa, usando aliases."""
     search_terms = COMPANY_ALIASES.get(company_name, [company_name])
     conditions = " OR ".join([f"company ILIKE %(term_{i})s" for i in range(len(search_terms))])
     params = {f"term_{i}": f"%{term}%" for i, term in enumerate(search_terms)}
-
     sql = f"""
     SELECT id, title, company, score, signal_score, jobs_count, last_signal_at
     FROM opportunities
@@ -382,11 +402,10 @@ def get_opportunities_by_company(company_name: str) -> List[Dict[str, Any]]:
 
 def get_radar_opportunities(limit: int = 20) -> List[Dict[str, Any]]:
     sql = """
-    SELECT
-        id, title, company, region, industry, phase,
-        score, signal_score, jobs_count, signals,
-        last_signal_at, updated_at,
-        (score + COALESCE(signal_score, 0)) AS radar_score
+    SELECT id, title, company, region, industry, phase,
+           score, signal_score, jobs_count, signals,
+           last_signal_at, updated_at,
+           (score + COALESCE(signal_score, 0)) AS radar_score
     FROM opportunities
     ORDER BY radar_score DESC, last_signal_at DESC NULLS LAST
     LIMIT %(limit)s;
@@ -408,3 +427,87 @@ def get_signals_for_opportunity(opportunity_id: int) -> List[Dict[str, Any]]:
         with conn.cursor() as cur:
             cur.execute(sql, {"opportunity_id": opportunity_id})
             return cur.fetchall()
+
+
+# ── Contactos ─────────────────────────────────────────────────────────────────
+
+def create_contact(contact: Dict[str, Any]) -> Dict[str, Any]:
+    sql = """
+    INSERT INTO contacts (name, company, role, email, phone, linkedin_url, notes)
+    VALUES (%(name)s, %(company)s, %(role)s, %(email)s, %(phone)s, %(linkedin_url)s, %(notes)s)
+    RETURNING *;
+    """
+    contact.setdefault("role", None)
+    contact.setdefault("email", None)
+    contact.setdefault("phone", None)
+    contact.setdefault("linkedin_url", None)
+    contact.setdefault("notes", None)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, contact)
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def update_contact(contact_id: int, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    fields = ["name","company","role","email","phone","linkedin_url","notes"]
+    updates = ", ".join([f"{f} = %({f})s" for f in fields if f in data])
+    if not updates:
+        return None
+    sql = f"UPDATE contacts SET {updates}, updated_at = NOW() WHERE id = %(id)s RETURNING *;"
+    data["id"] = contact_id
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, data)
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row) if row else None
+
+
+def delete_contact(contact_id: int) -> bool:
+    sql = "DELETE FROM contacts WHERE id = %(id)s RETURNING id;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"id": contact_id})
+            row = cur.fetchone()
+        conn.commit()
+    return row is not None
+
+
+def get_contacts_by_company(company: str) -> List[Dict[str, Any]]:
+    sql = """
+    SELECT * FROM contacts
+    WHERE company ILIKE %(company)s
+    ORDER BY name ASC;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"company": f"%{company}%"})
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_contacts(q: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    base = "SELECT * FROM contacts"
+    params: Dict[str, Any] = {"limit": limit}
+    if q:
+        base += " WHERE name ILIKE %(q)s OR company ILIKE %(q)s OR role ILIKE %(q)s"
+        params["q"] = f"%{q}%"
+    base += " ORDER BY company ASC, name ASC LIMIT %(limit)s;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(base, params)
+            return [dict(r) for r in cur.fetchall()]
+
+
+def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
+    inserted = 0
+    errors = 0
+    for c in contacts:
+        try:
+            create_contact(c)
+            inserted += 1
+        except Exception as e:
+            print(f"[contacts] error importando {c.get('name')}: {e}")
+            errors += 1
+    return inserted, errors
