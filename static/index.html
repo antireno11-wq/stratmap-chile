@@ -245,3 +245,26 @@
   <script src="/app.js"></script>
 </body>
 </html>
+<!-- PATCH: agregar antes del </style> en index.html -->
+<style>
+  /* Contactos en drawer */
+  .contact-card { display:flex; align-items:flex-start; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+  .contact-card:last-of-type { border-bottom:none; }
+  .contact-name { font-size:13px; font-weight:600; color:var(--text); }
+  .contact-role { font-size:11px; color:var(--muted); margin:2px 0 4px; }
+  .contact-meta { display:flex; flex-wrap:wrap; gap:8px; }
+  .contact-link { font-size:11px; color:var(--blue); text-decoration:none; }
+  .contact-link:hover { text-decoration:underline; }
+  .contact-link.linkedin { background:#0077b5; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600; }
+  .contact-delete { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:0 4px; flex-shrink:0; }
+  .contact-delete:hover { color:#dc2626; }
+  .btn-add-contact { margin-top:12px; width:100%; padding:9px; background:var(--blue-light); color:var(--blue); border:1px dashed #93c5fd; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-add-contact:hover { background:#dbeafe; }
+  .contact-form { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-top:10px; }
+  .cf-row { display:flex; gap:8px; margin-bottom:8px; }
+  .cf-input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:7px; font-size:13px; outline:none; }
+  .cf-input:focus { border-color:var(--blue); }
+  .cf-actions { display:flex; justify-content:flex-end; gap:8px; }
+  .cf-btn-cancel { padding:7px 14px; background:var(--card); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
+  .cf-btn-save { padding:7px 14px; background:var(--blue); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
+</style>
