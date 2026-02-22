@@ -46,20 +46,108 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"2-digit"});
 }
 
+// ── Drawer ────────────────────────────────────────────────────────────────────
+
+function openDrawer(type, value) {
+  const items = type === "company"
+    ? allItems.filter(i => (i.company||"") === value)
+    : allItems.filter(i => (i.region||"") === value);
+
+  const projects = items.filter(i => !isNews(i));
+  const news = items.filter(i => isNews(i));
+  const scores = projects.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
+  const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
+  const withSignals = projects.filter(i => (i.signal_score||0) > 0).length;
+
+  // Distribución por industria o región
+  const distKey = type === "company" ? "industry" : "company";
+  const dist = {};
+  projects.forEach(i => {
+    const k = i[distKey] || "Sin datos";
+    dist[k] = (dist[k]||0)+1;
+  });
+
+  // Fases
+  const phases = {};
+  projects.forEach(i => { const k = i.phase||"Sin fase"; phases[k]=(phases[k]||0)+1; });
+
+  const distRows = Object.entries(dist).sort((a,b)=>b[1]-a[1]).slice(0,6)
+    .map(([k,v]) => `<div class="drawer-dist-row">
+      <span>${escapeHTML(k)}</span>
+      <div class="drawer-bar-wrap"><div class="drawer-bar" style="width:${Math.round(v/projects.length*100)}%"></div></div>
+      <span class="drawer-dist-n">${v}</span>
+    </div>`).join("");
+
+  const phaseRows = Object.entries(phases).sort((a,b)=>b[1]-a[1])
+    .map(([k,v]) => `<span class="phase-chip">${escapeHTML(k)} <strong>${v}</strong></span>`).join(" ");
+
+  const projRows = projects.slice(0,20).map(i => {
+    const score = i.radar_score ?? i.score ?? 0;
+    const [c,bg] = scoreColor(score);
+    return `<tr>
+      <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
+      <td><span class="proj-title" style="max-width:260px">${escapeHTML(i.title||"")}</span>
+          <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
+      <td>${fmtDate(i.updated_at)}</td>
+      <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+    </tr>`;
+  }).join("");
+
+  el("drawer-title").textContent = value;
+  el("drawer-subtitle").textContent = type === "company" ? "Mandante" : "Región";
+  el("drawer-body").innerHTML = `
+    <div class="drawer-stats">
+      <div class="drawer-stat"><div class="drawer-stat-val">${projects.length}</div><div class="drawer-stat-lbl">Proyectos</div></div>
+      <div class="drawer-stat"><div class="drawer-stat-val">${avgScore}</div><div class="drawer-stat-lbl">Score prom.</div></div>
+      <div class="drawer-stat"><div class="drawer-stat-val">${withSignals}</div><div class="drawer-stat-lbl">Con señales ⚡</div></div>
+      <div class="drawer-stat"><div class="drawer-stat-val">${news.length}</div><div class="drawer-stat-lbl">Noticias</div></div>
+    </div>
+
+    <div class="drawer-section-title">${type === "company" ? "Por industria" : "Por mandante"}</div>
+    <div class="drawer-dist">${distRows || "<p class='drawer-empty'>Sin datos</p>"}</div>
+
+    <div class="drawer-section-title">Fases</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${phaseRows || "—"}</div>
+
+    <div class="drawer-section-title">Proyectos recientes</div>
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th>Score</th><th>Proyecto</th><th>Fecha</th><th>Link</th></tr></thead>
+        <tbody>${projRows || "<tr><td colspan='4' class='muted-row'>Sin proyectos</td></tr>"}</tbody>
+      </table>
+    </div>
+  `;
+
+  el("drawer").classList.add("open");
+  el("drawer-overlay").classList.add("open");
+}
+
+function closeDrawer() {
+  el("drawer").classList.remove("open");
+  el("drawer-overlay").classList.remove("open");
+}
+
+// ── Rows ──────────────────────────────────────────────────────────────────────
+
 function projectRow(item) {
   const score = item.radar_score ?? item.score ?? 0;
   const [c,bg] = scoreColor(score);
   const signals = item.signal_score > 0
     ? `<span class="signal-badge">⚡ +${item.signal_score}</span>` : "";
-  const phase = item.phase
-    ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
+  const phase = item.phase ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
+  const company = item.company
+    ? `<span class="clickable-link" onclick="openDrawer('company','${escapeHTML(item.company).replaceAll("'","&#39;")}')">${escapeHTML(item.company)}</span>`
+    : "—";
+  const region = item.region
+    ? `<span class="clickable-link" onclick="openDrawer('region','${escapeHTML(item.region).replaceAll("'","&#39;")}')">${escapeHTML(item.region)}</span>`
+    : "—";
   return `<tr>
     <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>
     <td><span class="proj-title">${escapeHTML(item.title||"")}</span>
         <span class="proj-industry">${escapeHTML(item.industry||"")}</span></td>
     <td>${sourceChip(item.source||"")}</td>
-    <td>${escapeHTML(item.company||"—")}</td>
-    <td>${escapeHTML(item.region||"—")}</td>
+    <td>${company}</td>
+    <td>${region}</td>
     <td>${phase}</td>
     <td>${fmtDate(item.updated_at)}</td>
     <td><a class="row-link" href="${item.url||"#"}" target="_blank" rel="noreferrer">ver →</a></td>
@@ -75,6 +163,8 @@ function newsRow(item) {
     <td><a class="row-link" href="${item.url||"#"}" target="_blank" rel="noreferrer">ver →</a></td>
   </tr>`;
 }
+
+// ── Data & Filters ────────────────────────────────────────────────────────────
 
 async function fetchJSON(url) {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -99,7 +189,7 @@ function buildFilters(items) {
       .sort((a,b)=>b[1]-a[1]).slice(0,8)
       .map(([val,count]) => `
         <div class="filter-item">
-          <input type="checkbox" id="f-${key}-${escapeHTML(val)}" data-key="${key}" data-val="${escapeHTML(val)}" />
+          <input type="checkbox" id="f-${key}-${escapeHTML(val)}" data-key="${key}" data-val="${val}" />
           <label for="f-${key}-${escapeHTML(val)}">${escapeHTML(val)}</label>
           <span class="fc">${count}</span>
         </div>`).join("");
@@ -172,5 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
   el("btnRefresh").addEventListener("click", load);
   el("q").addEventListener("keydown", e => { if (e.key === "Enter") load(); });
   el("limit").addEventListener("change", load);
+  el("drawer-close").addEventListener("click", closeDrawer);
+  el("drawer-overlay").addEventListener("click", closeDrawer);
   load();
 });
