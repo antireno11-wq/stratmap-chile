@@ -1,4 +1,5 @@
 # connectors/chilebcompra.py
+import re
 import requests
 import os
 from datetime import datetime, timedelta
@@ -12,27 +13,61 @@ DEFAULT_TICKET = "F8537A18-6766-4DEF-9E59-426B4FEE2844"
 KEYWORDS = [
     "minería", "mina", "cobre", "litio", "molibdeno",
     "energía solar", "energía eólica", "subestación", "transmisión eléctrica",
-    "carretera", "puente", "túnel", "vialidad", "embalse",
+    "carretera", "vialidad", "embalse", "túnel",
     "planta industrial", "faena", "concentradora", "relave",
     "gas natural", "petróleo", "gasoducto",
 ]
 
-INDUSTRIES = {
-    "minería": "Minería", "mina ": "Minería", "cobre": "Minería",
-    "litio": "Minería", "molibdeno": "Minería", "concentradora": "Minería",
-    "relave": "Minería", "faena": "Minería", "yacimiento": "Minería",
-    "solar": "Energía", "eólica": "Energía", "subestación": "Energía",
-    "transmisión": "Energía", "fotovoltai": "Energía",
-    "carretera": "Infraestructura", "puente": "Infraestructura",
-    "vialidad": "Infraestructura", "embalse": "Infraestructura", "túnel": "Infraestructura",
-    "petróleo": "Oil & Gas", "gas natural": "Oil & Gas", "gasoducto": "Oil & Gas",
-}
+# Patrones con word boundaries para evitar falsos positivos
+# "mina" sola NO matchea "clomipramina", "puente" solo NO matchea cualquier cosa
+INDUSTRY_PATTERNS = [
+    # Minería
+    (r"\bminería\b",           "Minería"),
+    (r"\bminero\b",            "Minería"),
+    (r"\bminera\b",            "Minería"),
+    (r"\bmina\b",              "Minería"),
+    (r"\bcobre\b",             "Minería"),
+    (r"\blitio\b",             "Minería"),
+    (r"\bmolibdeno\b",         "Minería"),
+    (r"\bconcentradora\b",     "Minería"),
+    (r"\brelave\b",            "Minería"),
+    (r"\bfaena minera\b",      "Minería"),
+    (r"\byacimiento\b",        "Minería"),
+    (r"\bperforación\b",       "Minería"),
+    (r"\btronadura\b",         "Minería"),
+    (r"\bshovel\b",            "Minería"),
+    (r"\bescoria\b",           "Minería"),
+    # Energía
+    (r"\bsolar\b",             "Energía"),
+    (r"\beólica\b",            "Energía"),
+    (r"\bsubestación\b",       "Energía"),
+    (r"\btransmisión eléctrica\b", "Energía"),
+    (r"\bfotovoltaico\b",      "Energía"),
+    (r"\bpanel solar\b",       "Energía"),
+    (r"\blínea de transmisión\b", "Energía"),
+    # Infraestructura
+    (r"\bcarretera\b",         "Infraestructura"),
+    (r"\bautopista\b",         "Infraestructura"),
+    (r"\bvialidad\b",          "Infraestructura"),
+    (r"\bembalse\b",           "Infraestructura"),
+    (r"\btúnel\b",             "Infraestructura"),
+    (r"\bpuente vial\b",       "Infraestructura"),
+    (r"\bpuente caminero\b",   "Infraestructura"),
+    (r"\bobra vial\b",         "Infraestructura"),
+    # Oil & Gas
+    (r"\bpetróleo\b",          "Oil & Gas"),
+    (r"\bgas natural\b",       "Oil & Gas"),
+    (r"\bgasoducto\b",         "Oil & Gas"),
+]
+
+# Compilar patrones una vez
+_COMPILED = [(re.compile(p, re.IGNORECASE), ind) for p, ind in INDUSTRY_PATTERNS]
 
 
 def classify(title, desc=""):
-    blob = (title + " " + desc).lower()
-    for kw, ind in INDUSTRIES.items():
-        if kw in blob:
+    blob = title + " " + desc
+    for pattern, ind in _COMPILED:
+        if pattern.search(blob):
             return ind
     return None
 
