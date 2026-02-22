@@ -59,22 +59,17 @@ function openDrawer(type, value) {
   const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
   const withSignals = projects.filter(i => (i.signal_score||0) > 0).length;
 
-  // Distribución por industria o región
   const distKey = type === "company" ? "industry" : "company";
   const dist = {};
-  projects.forEach(i => {
-    const k = i[distKey] || "Sin datos";
-    dist[k] = (dist[k]||0)+1;
-  });
+  projects.forEach(i => { const k = i[distKey]||"Sin datos"; dist[k]=(dist[k]||0)+1; });
 
-  // Fases
   const phases = {};
   projects.forEach(i => { const k = i.phase||"Sin fase"; phases[k]=(phases[k]||0)+1; });
 
   const distRows = Object.entries(dist).sort((a,b)=>b[1]-a[1]).slice(0,6)
     .map(([k,v]) => `<div class="drawer-dist-row">
       <span>${escapeHTML(k)}</span>
-      <div class="drawer-bar-wrap"><div class="drawer-bar" style="width:${Math.round(v/projects.length*100)}%"></div></div>
+      <div class="drawer-bar-wrap"><div class="drawer-bar" style="width:${Math.round(v/Math.max(projects.length,1)*100)}%"></div></div>
       <span class="drawer-dist-n">${v}</span>
     </div>`).join("");
 
@@ -86,7 +81,7 @@ function openDrawer(type, value) {
     const [c,bg] = scoreColor(score);
     return `<tr>
       <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
-      <td><span class="proj-title" style="max-width:260px">${escapeHTML(i.title||"")}</span>
+      <td><span class="proj-title" style="max-width:240px">${escapeHTML(i.title||"")}</span>
           <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
       <td>${fmtDate(i.updated_at)}</td>
       <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
@@ -102,13 +97,10 @@ function openDrawer(type, value) {
       <div class="drawer-stat"><div class="drawer-stat-val">${withSignals}</div><div class="drawer-stat-lbl">Con señales ⚡</div></div>
       <div class="drawer-stat"><div class="drawer-stat-val">${news.length}</div><div class="drawer-stat-lbl">Noticias</div></div>
     </div>
-
     <div class="drawer-section-title">${type === "company" ? "Por industria" : "Por mandante"}</div>
     <div class="drawer-dist">${distRows || "<p class='drawer-empty'>Sin datos</p>"}</div>
-
     <div class="drawer-section-title">Fases</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${phaseRows || "—"}</div>
-
     <div class="drawer-section-title">Proyectos recientes</div>
     <div class="tableWrap">
       <table>
@@ -136,10 +128,10 @@ function projectRow(item) {
     ? `<span class="signal-badge">⚡ +${item.signal_score}</span>` : "";
   const phase = item.phase ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
   const company = item.company
-    ? `<span class="clickable-link" onclick="openDrawer('company','${escapeHTML(item.company).replaceAll("'","&#39;")}')">${escapeHTML(item.company)}</span>`
+    ? `<span class="clickable-link" onclick="openDrawer('company',${JSON.stringify(item.company)})">${escapeHTML(item.company)}</span>`
     : "—";
   const region = item.region
-    ? `<span class="clickable-link" onclick="openDrawer('region','${escapeHTML(item.region).replaceAll("'","&#39;")}')">${escapeHTML(item.region)}</span>`
+    ? `<span class="clickable-link" onclick="openDrawer('region',${JSON.stringify(item.region)})">${escapeHTML(item.region)}</span>`
     : "—";
   return `<tr>
     <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>
@@ -164,7 +156,7 @@ function newsRow(item) {
   </tr>`;
 }
 
-// ── Data & Filters ────────────────────────────────────────────────────────────
+// ── Filters ───────────────────────────────────────────────────────────────────
 
 async function fetchJSON(url) {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -264,5 +256,23 @@ document.addEventListener("DOMContentLoaded", () => {
   el("limit").addEventListener("change", load);
   el("drawer-close").addEventListener("click", closeDrawer);
   el("drawer-overlay").addEventListener("click", closeDrawer);
+
+  // Sidebar navigation
+  const sidebarItems = document.querySelectorAll(".sidebar-item");
+  sidebarItems.forEach(item => {
+    item.addEventListener("click", () => {
+      sidebarItems.forEach(i => i.classList.remove("active"));
+      item.classList.add("active");
+    });
+  });
+  // Scroll a proyectos
+  if (sidebarItems[1]) sidebarItems[1].addEventListener("click", () => {
+    el("tbody-projects")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
+  });
+  // Scroll a noticias
+  if (sidebarItems[2]) sidebarItems[2].addEventListener("click", () => {
+    el("tbody-news")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
+  });
+
   load();
 });
