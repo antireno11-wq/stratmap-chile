@@ -137,11 +137,11 @@ def run_jobs_signals() -> None:
 def run() -> None:
     print(f"[{now_clt()}] Worker start -> {BASE_URL}")
 
-    # Instalar Chromium si es necesario
-    install_playwright_browsers()
-
     session = requests.Session()
     wait_for_health(session)
+
+    # Instalar Chromium después del health check para no bloquear el startup
+    install_playwright_browsers()
 
     # SEA
     print(f"[{now_clt()}] Fetching SEA...")
