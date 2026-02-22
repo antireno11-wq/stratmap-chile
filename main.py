@@ -13,3 +13,6 @@ def cleanup_test():
             deleted = cur.rowcount
         conn.commit()
     return {"ok": True, "deleted": deleted}
+
+# ── Static UI (debe ir al final) ──────────────────────────────────────────────
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
