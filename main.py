@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+import db
 from db import (db_health, init_db_safe, list_opportunities, upsert_opportunities,
                 create_user, get_user_by_email, save_preferences, get_preferences,
                 create_contact, update_contact, delete_contact,
@@ -143,7 +144,26 @@ def opportunities(
     return {"items": result, "count": len(result)}
 
 
-# ── Contactos — públicos por ahora ────────────────────────────────────────────
+# ── Admin ─────────────────────────────────────────────────────────────────────
+
+@app.get("/admin/cleanup-test")
+def cleanup_test():
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM opportunities 
+                WHERE title ILIKE '%test%'
+                   OR title ILIKE '%ping%'
+                   OR title ILIKE '%manual%'
+                   OR company ILIKE '%testco%'
+                RETURNING id
+            """)
+            deleted = cur.rowcount
+        conn.commit()
+    return {"ok": True, "deleted": deleted}
+
+
+# ── Contactos ─────────────────────────────────────────────────────────────────
 
 @app.get("/contacts")
 def get_contacts(
@@ -165,8 +185,7 @@ def get_contacts(
 
 @app.post("/contacts")
 def add_contact(payload: ContactIn):
-    contact = payload.model_dump()
-    row = create_contact(contact)
+    row = create_contact(payload.model_dump())
     for f in ["created_at","updated_at"]:
         if row.get(f): row[f] = row[f].isoformat()
     return row
@@ -190,14 +209,12 @@ def remove_contact(contact_id: int):
 
 @app.post("/contacts/import")
 def import_contacts(payload: List[ContactIn]):
-    """Importa múltiples contactos en bulk."""
     contacts = [c.model_dump() for c in payload]
     inserted, errors = bulk_import_contacts(contacts)
     return {"ok": True, "inserted": inserted, "errors": errors}
 
 @app.get("/contacts/export")
 def export_contacts():
-    """Exporta todos los contactos como CSV."""
     rows = list_contacts(limit=10000)
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=["id","name","company","role","email","phone","linkedin_url","notes","created_at"])
@@ -252,22 +269,7 @@ def get_my_preferences(user=Depends(get_current_user)):
 def update_preferences(payload: PreferencesPayload, user=Depends(get_current_user)):
     save_preferences(user["user_id"], payload.model_dump())
     return {"ok": True}
-  
-@app.get("/admin/cleanup-test")
-def cleanup_test():
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                DELETE FROM opportunities 
-                WHERE title ILIKE '%test%'
-                   OR title ILIKE '%ping%'
-                   OR title ILIKE '%manual%'
-                   OR company ILIKE '%testco%'
-                RETURNING id
-            """)
-            deleted = cur.rowcount
-        conn.commit()
-    return {"ok": True, "deleted": deleted}
+
 
 # ── Static UI (debe ir al final) ──────────────────────────────────────────────
 
