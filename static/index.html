@@ -6,165 +6,196 @@
   <title>Stratmap Chile</title>
   <link rel="stylesheet" href="/static/styles.css" />
   <style>
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
+    :root {
+      --sidebar: 220px;
+      --blue: #1a56db;
+      --blue-light: #eff6ff;
+      --orange: #e05a1e;
+      --green: #16a34a;
+      --yellow: #ca8a04;
+      --gray: #64748b;
+      --border: #e2e8f0;
+      --bg: #f8fafc;
+      --card: #fff;
+      --text: #0f172a;
+      --muted: #94a3b8;
     }
-    .section-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: #0f172a;
-      letter-spacing: -0.01em;
-    }
-    .count-pill {
-      background: #f1f5f9;
-      color: #64748b;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 99px;
-    }
-    .section-divider {
-      margin: 28px 0;
-      border: none;
-      border-top: 1px solid #e2e8f0;
-    }
-    .score-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      font-size: 13px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-    }
-    .source-badge {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 5px;
-      white-space: nowrap;
-    }
-    .phase-badge {
-      display: inline-block;
-      font-size: 11px;
-      padding: 2px 7px;
-      border-radius: 5px;
-      background: #eff6ff;
-      color: #2563eb;
-      border: 1px solid #bfdbfe;
-      font-weight: 500;
-    }
-    .proj-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #0f172a;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 400px;
-    }
-    .proj-sub {
-      font-size: 11px;
-      color: #94a3b8;
-      margin-top: 1px;
-    }
-    .td-title { max-width: 400px; }
-    .signal-dot { font-size: 11px; }
-    .news-title {
-      font-size: 13px;
-      font-weight: 500;
-      color: #334155;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 560px;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+    .sidebar { width: var(--sidebar); background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 20px 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
+    .sidebar-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
+    .sidebar-name { font-weight: 700; font-size: 15px; color: #fff; }
+    .sidebar-tagline { font-size: 10px; color: #64748b; margin-top: 1px; }
+    .sidebar-section { padding: 18px 12px 6px; font-size: 10px; font-weight: 700; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: #94a3b8; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s, color 0.1s; }
+    .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
+    .sidebar-item.active { background: #1e3a5f; color: #fff; border-left-color: var(--blue); }
+    .sidebar-item .icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+    .sidebar-count { margin-left: auto; background: #1e293b; color: #64748b; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 99px; }
+    .sidebar-item.active .sidebar-count { background: #1d4ed8; color: #bfdbfe; }
+    .filter-group { padding: 0 12px 12px; }
+    .filter-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
+    .filter-item input[type=checkbox] { accent-color: var(--blue); width: 13px; height: 13px; }
+    .filter-item label { font-size: 12px; color: #94a3b8; cursor: pointer; flex: 1; }
+    .filter-item .fc { font-size: 11px; color: #475569; margin-left: auto; }
+    .filter-divider { border: none; border-top: 1px solid #1e293b; margin: 6px 0; }
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 50; }
+    .topbar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .topbar-search { flex: 1; max-width: 360px; display: flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; gap: 8px; }
+    .topbar-search input { border: none; background: transparent; outline: none; font-size: 13px; color: var(--text); width: 100%; padding: 8px 0; }
+    .topbar-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+    .topbar-select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--card); color: var(--text); cursor: pointer; }
+    .btn-primary { padding: 8px 16px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-outline { padding: 7px 14px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .status-bar { font-size: 12px; color: var(--muted); }
+    .content { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 28px; font-weight: 800; color: var(--text); margin: 4px 0 2px; line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--muted); }
+    .stat-card.blue { border-top: 3px solid var(--blue); }
+    .stat-card.green { border-top: 3px solid var(--green); }
+    .stat-card.orange { border-top: 3px solid var(--orange); }
+    .stat-card.yellow { border-top: 3px solid var(--yellow); }
+    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .section-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .section-icon { font-size: 16px; }
+    .section-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .section-badge { background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+    .section-updated { margin-left: auto; font-size: 11px; color: var(--muted); }
+    .tableWrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: #f8fafc; }
+    td { font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    .proj-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; display: block; }
+    .proj-industry { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; display: block; text-decoration: none; }
+    .news-title:hover { text-decoration: underline; }
+    .score-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 3px 8px; font-size: 12px; font-weight: 700; border-radius: 6px; }
+    .source-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+    .phase-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .signal-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; margin-left: 4px; }
+    a.row-link { color: var(--blue); font-size: 13px; text-decoration: none; font-weight: 500; }
+    a.row-link:hover { text-decoration: underline; }
+    .muted-row { color: var(--muted); text-align: center; padding: 28px 0; font-size: 13px; }
   </style>
 </head>
 <body>
-  <header class="top">
-    <div class="brand">
-      <div class="logo">S</div>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">S</div>
       <div>
-        <div class="title">Stratmap</div>
-        <div class="subtitle">Inteligencia Minera Chile</div>
+        <div class="sidebar-name">Stratmap</div>
+        <div class="sidebar-tagline">Inteligencia Minera Chile</div>
       </div>
     </div>
-    <div class="right">
-      <a class="btn" href="/docs" target="_blank">API Docs</a>
-      <button class="btn primary" id="btnRefresh">Actualizar</button>
-    </div>
-  </header>
-  <main class="wrap">
-    <section class="card">
-      <div class="row">
-        <input id="q" class="input" placeholder="Buscar (título, empresa, región, industria…)" />
-        <select id="limit" class="input">
-          <option value="25">25</option>
-          <option value="50" selected>50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
+    <div class="sidebar-section">Vistas</div>
+    <div class="sidebar-item active"><span class="icon">⚡</span> Radar de Proyectos</div>
+    <div class="sidebar-item"><span class="icon">🏗</span> Proyectos <span class="sidebar-count" id="sc-projects">—</span></div>
+    <div class="sidebar-item"><span class="icon">📰</span> Noticias <span class="sidebar-count" id="sc-news">—</span></div>
+    <hr class="filter-divider" />
+    <div class="sidebar-section">Industria</div>
+    <div class="filter-group" id="filter-industry"></div>
+    <div class="sidebar-section">Región</div>
+    <div class="filter-group" id="filter-region"></div>
+    <div class="sidebar-section">Fuente</div>
+    <div class="filter-group" id="filter-source"></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Dashboard</span>
+      <div class="topbar-search">
+        <span>🔍</span>
+        <input id="q" placeholder="Buscar proyectos, empresas, regiones…" />
+      </div>
+      <div class="topbar-actions">
+        <select id="limit" class="topbar-select">
+          <option value="50" selected>50 resultados</option>
+          <option value="100">100 resultados</option>
+          <option value="200">200 resultados</option>
         </select>
-        <button class="btn" id="btnSearch">Buscar</button>
+        <a class="btn-outline" href="/docs" target="_blank">API</a>
+        <button class="btn-primary" id="btnRefresh">↺ Actualizar</button>
       </div>
-      <div class="status" id="status"></div>
-    </section>
+    </div>
 
-    <!-- Proyectos -->
-    <section class="card">
-      <div class="section-header">
-        <span class="section-title">🏗 Proyectos</span>
-        <span class="count-pill" id="projects-count">—</span>
-      </div>
-      <div class="tableWrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Score</th>
-              <th>Proyecto</th>
-              <th>Fuente</th>
-              <th>Mandante</th>
-              <th>Región</th>
-              <th>Fase</th>
-              <th>Fecha</th>
-              <th>Link</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-projects">
-            <tr><td colspan="8" class="muted">Cargando...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <div class="content">
+      <div class="status-bar" id="status">Cargando…</div>
 
-    <!-- Noticias -->
-    <section class="card">
-      <div class="section-header">
-        <span class="section-title">📰 Noticias</span>
-        <span class="count-pill" id="news-count">—</span>
+      <div class="stats-row">
+        <div class="stat-card blue">
+          <div class="stat-label">Proyectos activos</div>
+          <div class="stat-value" id="stat-projects">—</div>
+          <div class="stat-sub">en base de datos</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">Con señales ⚡</div>
+          <div class="stat-value" id="stat-signals">—</div>
+          <div class="stat-sub">actividad detectada</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-label">Noticias</div>
+          <div class="stat-value" id="stat-news">—</div>
+          <div class="stat-sub">indexadas</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-label">Score promedio</div>
+          <div class="stat-value" id="stat-avg">—</div>
+          <div class="stat-sub">radar score</div>
+        </div>
       </div>
-      <div class="tableWrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Titular</th>
-              <th>Fuente</th>
-              <th>Industria</th>
-              <th>Fecha</th>
-              <th>Link</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-news">
-            <tr><td colspan="5" class="muted">Cargando...</td></tr>
-          </tbody>
-        </table>
+
+      <div class="section-card">
+        <div class="section-head">
+          <span class="section-icon">🏗</span>
+          <span class="section-title">Proyectos Recientes</span>
+          <span class="section-badge" id="badge-projects">—</span>
+          <span class="section-updated" id="upd-projects"></span>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Score</th><th>Proyecto</th><th>Fuente</th><th>Mandante</th><th>Región</th><th>Fase</th><th>Fecha</th><th>Link</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-projects">
+              <tr><td colspan="8" class="muted-row">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </section>
-  </main>
+
+      <div class="section-card">
+        <div class="section-head">
+          <span class="section-icon">📰</span>
+          <span class="section-title">Noticias del Sector</span>
+          <span class="section-badge" id="badge-news">—</span>
+          <span class="section-updated" id="upd-news"></span>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Titular</th><th>Fuente</th><th>Industria</th><th>Fecha</th><th>Link</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-news">
+              <tr><td colspan="5" class="muted-row">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
