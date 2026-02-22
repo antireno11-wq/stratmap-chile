@@ -20,6 +20,8 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+    /* Sidebar */
     .sidebar { width: var(--sidebar); background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
     .sidebar-brand { padding: 20px 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
     .sidebar-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
@@ -38,6 +40,8 @@
     .filter-item label { font-size: 12px; color: #94a3b8; cursor: pointer; flex: 1; }
     .filter-item .fc { font-size: 11px; color: #475569; margin-left: auto; }
     .filter-divider { border: none; border-top: 1px solid #1e293b; margin: 6px 0; }
+
+    /* Main */
     .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
     .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 50; }
     .topbar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
@@ -50,6 +54,8 @@
     .btn-outline { padding: 7px 14px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
     .status-bar { font-size: 12px; color: var(--muted); }
     .content { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* Stats */
     .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
     .stat-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -59,12 +65,16 @@
     .stat-card.green { border-top: 3px solid var(--green); }
     .stat-card.orange { border-top: 3px solid var(--orange); }
     .stat-card.yellow { border-top: 3px solid var(--yellow); }
+
+    /* Section cards */
     .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     .section-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
     .section-icon { font-size: 16px; }
     .section-title { font-size: 14px; font-weight: 700; color: var(--text); }
     .section-badge { background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
     .section-updated { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+    /* Table */
     .tableWrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: #f8fafc; }
@@ -82,6 +92,32 @@
     a.row-link { color: var(--blue); font-size: 13px; text-decoration: none; font-weight: 500; }
     a.row-link:hover { text-decoration: underline; }
     .muted-row { color: var(--muted); text-align: center; padding: 28px 0; font-size: 13px; }
+    .clickable-link { color: var(--blue); cursor: pointer; font-size: 13px; }
+    .clickable-link:hover { text-decoration: underline; }
+
+    /* Drawer */
+    .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200; }
+    .drawer-overlay.open { display: block; }
+    .drawer { position: fixed; top: 0; right: -520px; width: 520px; height: 100vh; background: var(--card); z-index: 201; box-shadow: -4px 0 24px rgba(0,0,0,0.12); transition: right 0.25s ease; display: flex; flex-direction: column; }
+    .drawer.open { right: 0; }
+    .drawer-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
+    .drawer-title { font-size: 18px; font-weight: 800; color: var(--text); }
+    .drawer-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .drawer-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); padding: 0; line-height: 1; }
+    .drawer-close:hover { color: var(--text); }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+    .drawer-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
+    .drawer-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+    .drawer-stat-val { font-size: 22px; font-weight: 800; color: var(--text); }
+    .drawer-stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .drawer-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
+    .drawer-dist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+    .drawer-dist-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .drawer-dist-row span:first-child { min-width: 120px; color: var(--text); }
+    .drawer-bar-wrap { flex: 1; background: var(--bg); border-radius: 99px; height: 6px; overflow: hidden; }
+    .drawer-bar { height: 100%; background: var(--blue); border-radius: 99px; }
+    .drawer-dist-n { font-size: 11px; color: var(--muted); min-width: 24px; text-align: right; }
+    .drawer-empty { font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -115,9 +151,10 @@
       </div>
       <div class="topbar-actions">
         <select id="limit" class="topbar-select">
-          <option value="50" selected>50 resultados</option>
+          <option value="50">50 resultados</option>
           <option value="100">100 resultados</option>
-          <option value="200">200 resultados</option>
+          <option value="200" selected>200 resultados</option>
+          <option value="500">500 resultados</option>
         </select>
         <a class="btn-outline" href="/docs" target="_blank">API</a>
         <button class="btn-primary" id="btnRefresh">↺ Actualizar</button>
@@ -160,9 +197,7 @@
         <div class="tableWrap">
           <table>
             <thead>
-              <tr>
-                <th>Score</th><th>Proyecto</th><th>Fuente</th><th>Mandante</th><th>Región</th><th>Fase</th><th>Fecha</th><th>Link</th>
-              </tr>
+              <tr><th>Score</th><th>Proyecto</th><th>Fuente</th><th>Mandante</th><th>Región</th><th>Fase</th><th>Fecha</th><th>Link</th></tr>
             </thead>
             <tbody id="tbody-projects">
               <tr><td colspan="8" class="muted-row">Cargando...</td></tr>
@@ -181,9 +216,7 @@
         <div class="tableWrap">
           <table>
             <thead>
-              <tr>
-                <th>Titular</th><th>Fuente</th><th>Industria</th><th>Fecha</th><th>Link</th>
-              </tr>
+              <tr><th>Titular</th><th>Fuente</th><th>Industria</th><th>Fecha</th><th>Link</th></tr>
             </thead>
             <tbody id="tbody-news">
               <tr><td colspan="5" class="muted-row">Cargando...</td></tr>
@@ -192,6 +225,21 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Drawer overlay -->
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+
+  <!-- Drawer panel -->
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="drawer-title">—</div>
+        <div class="drawer-subtitle" id="drawer-subtitle">—</div>
+      </div>
+      <button class="drawer-close" id="drawer-close">✕</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
   </div>
 
   <script src="/app.js"></script>
