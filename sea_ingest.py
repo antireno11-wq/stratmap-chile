@@ -173,7 +173,7 @@ def run() -> None:
     # MOP
     print(f"[{now_clt()}] Fetching MOP...")
     try:
-        items = fetch_mop(limit=200)
+        items = fetch_mop(limit=500)
         print(f"[{now_clt()}] MOP: {len(items)} items")
         ingest(session, items, "MOP")
     except Exception as e:
