@@ -11,7 +11,9 @@ import db
 from db import (db_health, init_db_safe, list_opportunities, upsert_opportunities,
                 create_user, get_user_by_email, save_preferences, get_preferences,
                 create_contact, update_contact, delete_contact,
-                get_contacts_by_company, list_contacts, bulk_import_contacts)
+                get_contacts_by_company, list_contacts, bulk_import_contacts,
+                get_pipeline, upsert_pipeline, add_pipeline_note,
+                get_pipeline_notes, list_pipeline, PIPELINE_STATUSES)
 from auth import hash_password, verify_password, create_access_token, decode_token
 
 
@@ -93,6 +95,14 @@ class ContactUpdate(BaseModel):
     linkedin_url: Optional[str] = None
     notes: Optional[str] = None
 
+class PipelineUpdate(BaseModel):
+    status: str
+    assignee: Optional[str] = None
+
+class NoteIn(BaseModel):
+    note: str
+    author: Optional[str] = None
+
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -142,6 +152,57 @@ def opportunities(
             if r.get(f): r[f] = r[f].isoformat()
         result.append(r)
     return {"items": result, "count": len(result)}
+
+
+# ── Pipeline ──────────────────────────────────────────────────────────────────
+
+@app.get("/pipeline")
+def get_pipeline_list(status: Optional[str] = Query(default=None)):
+    rows = list_pipeline(status=status)
+    result = []
+    for row in rows:
+        r = dict(row)
+        if r.get("updated_at"): r["updated_at"] = r["updated_at"].isoformat()
+        result.append(r)
+    return {"items": result, "count": len(result), "statuses": PIPELINE_STATUSES}
+
+@app.get("/pipeline/statuses")
+def get_statuses():
+    return {"statuses": PIPELINE_STATUSES}
+
+@app.put("/opportunities/{opportunity_id}/pipeline")
+def update_pipeline(opportunity_id: int, payload: PipelineUpdate):
+    if payload.status not in PIPELINE_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Estado inválido. Opciones: {PIPELINE_STATUSES}")
+    row = upsert_pipeline(opportunity_id, payload.status, payload.assignee)
+    if row.get("updated_at"): row["updated_at"] = row["updated_at"].isoformat()
+    if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
+    return row
+
+@app.get("/opportunities/{opportunity_id}/pipeline")
+def get_opp_pipeline(opportunity_id: int):
+    row = get_pipeline(opportunity_id)
+    if not row:
+        return {"opportunity_id": opportunity_id, "status": None, "assignee": None}
+    if row.get("updated_at"): row["updated_at"] = row["updated_at"].isoformat()
+    if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
+    return row
+
+@app.post("/opportunities/{opportunity_id}/notes")
+def add_note(opportunity_id: int, payload: NoteIn):
+    row = add_pipeline_note(opportunity_id, payload.note, payload.author)
+    if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
+    return row
+
+@app.get("/opportunities/{opportunity_id}/notes")
+def get_notes(opportunity_id: int):
+    rows = get_pipeline_notes(opportunity_id)
+    result = []
+    for row in rows:
+        r = dict(row)
+        if r.get("created_at"): r["created_at"] = r["created_at"].isoformat()
+        result.append(r)
+    return {"items": result}
 
 
 # ── Contactos ─────────────────────────────────────────────────────────────────
