@@ -330,7 +330,7 @@ def get_preferences(user_id: int) -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
-# ── Signals & Radar de Proyectos ──────────────────────────────────────────────
+# ── Signals ───────────────────────────────────────────────────────────────────
 
 COMPANY_ALIASES: Dict[str, List[str]] = {
     "BHP":                  ["BHP"],
@@ -476,14 +476,20 @@ def delete_contact(contact_id: int) -> bool:
 
 
 def get_contacts_by_company(company: str) -> List[Dict[str, Any]]:
+    """
+    Busca en ambas direcciones:
+    - contactos cuya empresa contenga el nombre del mandante (ej: "Codelco" en "Codelco Chile")
+    - contactos cuyo nombre de empresa esté contenido en el mandante (ej: "Codelco" dentro de "Codelco Chile, División Radomiro Tomic")
+    """
     sql = """
     SELECT * FROM contacts
-    WHERE company ILIKE %(company)s
+    WHERE company ILIKE %(like)s
+       OR %(company)s ILIKE '%%' || company || '%%'
     ORDER BY name ASC;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"company": f"%{company}%"})
+            cur.execute(sql, {"company": company, "like": f"%{company}%"})
             return [dict(r) for r in cur.fetchall()]
 
 
