@@ -102,7 +102,6 @@ def init_users_db() -> None:
 
 
 def init_signals_db() -> None:
-    """Crea la tabla de señales para el Radar de Proyectos."""
     sql = """
     CREATE TABLE IF NOT EXISTS opportunity_signals (
         id SERIAL PRIMARY KEY,
@@ -308,9 +307,21 @@ def get_preferences(user_id: int) -> Optional[Dict[str, Any]]:
 
 # ── Signals & Radar de Proyectos ──────────────────────────────────────────────
 
-def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
-    """Guarda una señal de empleo en opportunity_signals y actualiza opportunities."""
+# Mapeo de nombres del scraper → nombres reales en la BD
+COMPANY_ALIASES: Dict[str, List[str]] = {
+    "BHP":                  ["BHP"],
+    "Codelco":              ["CODELCO", "Codelco", "Radomiro Tomic", "Chuquicamata",
+                             "El Teniente", "División Andina", "División Salvador"],
+    "SQM":                  ["SQM", "Sociedad Química"],
+    "Anglo American":       ["Anglo American", "Anglo"],
+    "Teck":                 ["Teck", "Caserones"],
+    "Antofagasta Minerals": ["AMSA", "Antofagasta Minerals", "Antofagasta"],
+    "Glencore":             ["Glencore", "Punta del Cobre"],
+    "Freeport-McMoRan":     ["Freeport", "FCX", "Lumina", "LUMINA COPPER"],
+}
 
+
+def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
     sql_signal = """
     INSERT INTO opportunity_signals
       (opportunity_id, signal_type, signal_source, signal_data, score_impact, detected_at)
@@ -352,24 +363,24 @@ def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
 
 
 def get_opportunities_by_company(company_name: str) -> List[Dict[str, Any]]:
-    """Retorna oportunidades que coincidan con una empresa."""
-    sql = """
+    """Retorna oportunidades que coincidan con una empresa, usando aliases."""
+    search_terms = COMPANY_ALIASES.get(company_name, [company_name])
+    conditions = " OR ".join([f"company ILIKE %(term_{i})s" for i in range(len(search_terms))])
+    params = {f"term_{i}": f"%{term}%" for i, term in enumerate(search_terms)}
+
+    sql = f"""
     SELECT id, title, company, score, signal_score, jobs_count, last_signal_at
     FROM opportunities
-    WHERE company ILIKE %(company)s
+    WHERE {conditions}
     ORDER BY signal_score DESC, score DESC;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"company": f"%{company_name}%"})
+            cur.execute(sql, params)
             return cur.fetchall()
 
 
 def get_radar_opportunities(limit: int = 20) -> List[Dict[str, Any]]:
-    """
-    Retorna las oportunidades con más movimiento para el Radar de Proyectos.
-    Combina score base + signal_score para el ranking final.
-    """
     sql = """
     SELECT
         id, title, company, region, industry, phase,
@@ -387,7 +398,6 @@ def get_radar_opportunities(limit: int = 20) -> List[Dict[str, Any]]:
 
 
 def get_signals_for_opportunity(opportunity_id: int) -> List[Dict[str, Any]]:
-    """Retorna el historial de señales de una oportunidad específica."""
     sql = """
     SELECT signal_type, signal_source, signal_data, score_impact, detected_at
     FROM opportunity_signals
