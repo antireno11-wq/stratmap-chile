@@ -378,29 +378,25 @@ def fix_chilebcompra():
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                # Primero ver qué campos hay disponibles
+                # Ver todos los keys del raw para encontrar el campo correcto
                 cur.execute("""
-                    SELECT raw->>'NombreUnidad' as unidad,
-                           raw->>'NombreOrganismo' as organismo,
-                           raw->>'Nombre' as nombre
+                    SELECT jsonb_object_keys(raw) as key
                     FROM opportunities
-                    WHERE source = 'Chile Compra'
-                    LIMIT 3;
+                    WHERE source = 'Chile Compra' AND raw IS NOT NULL
+                    LIMIT 1;
                 """)
-                samples = cur.fetchall()
-                # Actualizar company con NombreUnidad (responsable directo)
+                keys = [r['key'] for r in cur.fetchall()]
+                # Ver valores de los primeros campos de una fila
                 cur.execute("""
-                    UPDATE opportunities
-                    SET company = COALESCE(
-                        NULLIF(raw->>'NombreUnidad', ''),
-                        NULLIF(raw->>'NombreOrganismo', ''),
-                        company
-                    )
-                    WHERE source = 'Chile Compra';
+                    SELECT raw
+                    FROM opportunities
+                    WHERE source = 'Chile Compra' AND raw IS NOT NULL
+                    LIMIT 1;
                 """)
-                updated = cur.rowcount
+                sample_row = cur.fetchone()
+                updated = 0
             conn.commit()
-        return {"ok": True, "updated": updated, "samples": [dict(s) for s in samples]}
+        return {"keys": keys, "sample": dict(sample_row) if sample_row else {}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
