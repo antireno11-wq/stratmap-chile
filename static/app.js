@@ -1,7 +1,8 @@
 const NEWS_SOURCES = new Set([
   "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
-  "Revista EI","Radio U. de Chile","RSS"
+  "Revista EI","Radio U. de Chile","RSS",
+  "MLP Proveedores","Lithium Chile"
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
