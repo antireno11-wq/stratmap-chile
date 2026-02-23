@@ -102,9 +102,10 @@ window.openOppDrawer = async function(oppId) {
   el("drawer-overlay").classList.add("open");
 
   // Cargar pipeline y notas en paralelo
-  const [pipelineRes, notesRes] = await Promise.all([
+  const [pipelineRes, notesRes, aiFitRes] = await Promise.all([
     fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
     fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
+    fetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
   ]);
 
   const score = item.radar_score ?? item.score ?? 0;
@@ -353,6 +354,35 @@ function closeDrawer() {
 
 // ── Rows ──────────────────────────────────────────────────────────────────────
 
+// AI fits cache
+const aiFitsCache = {};
+
+async function loadAiFits() {
+  try {
+    const res = await fetch('/ai/fits?min_score=1&limit=500');
+    const data = await res.json();
+    (data.items || []).forEach(item => {
+      aiFitsCache[item.id] = {
+        fit_score: item.fit_score,
+        fit_reason: item.fit_reason,
+        service_applicable: item.service_applicable,
+        contact_suggestion: item.contact_suggestion
+      };
+    });
+  } catch(e) {}
+}
+
+function aiFitBadge(oppId) {
+  const fit = aiFitsCache[oppId];
+  if (!fit || !fit.fit_score) return '<span style="font-size:10px;color:#d1d5db">—</span>';
+  let color, bg;
+  if (fit.fit_score >= 70) { color='#15803d'; bg='#f0fdf4'; }
+  else if (fit.fit_score >= 50) { color='#92400e'; bg='#fef3c7'; }
+  else if (fit.fit_score >= 30) { color='#c2410c'; bg='#fff7ed'; }
+  else { color='#475569'; bg='#f1f5f9'; }
+  return `<span title="${escapeHTML(fit.fit_reason||'')}" style="display:inline-flex;align-items:center;padding:2px 8px;font-size:11px;font-weight:800;border-radius:6px;color:${color};background:${bg};cursor:help">${fit.fit_score}</span>`;
+}
+
 function projectRow(item) {
   const score = item.radar_score ?? item.score ?? 0;
   const [c,bg] = scoreColor(score);
@@ -479,6 +509,7 @@ async function load() {
   el("status").textContent = "Cargando…";
   try {
     const data = await fetchJSON(url);
+    loadAiFits();
     allItems = applyPrefsScoring(data.items || []).sort((a,b) => (b.radar_score||0) - (a.radar_score||0));
     buildFilters(allItems);
     renderFiltered();
