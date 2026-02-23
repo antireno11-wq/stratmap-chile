@@ -472,7 +472,7 @@ async function load() {
   el("status").textContent = "Cargando…";
   try {
     const data = await fetchJSON(url);
-    allItems = data.items || [];
+    allItems = applyPrefsScoring(data.items || []).sort((a,b) => (b.radar_score||0) - (a.radar_score||0));
     buildFilters(allItems);
     renderFiltered();
   } catch(e) {
@@ -503,3 +503,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
   load();
 });
+
+// ── Aplicar preferencias de localStorage al scoring ───────────────────────────
+
+function getPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem("stratmap_prefs") || "{}");
+  } catch(e) { return {}; }
+}
+
+function applyPrefsScoring(items) {
+  const prefs = getPrefs();
+  if (!prefs || Object.keys(prefs).length === 0) return items;
+
+  return items.map(item => {
+    let boost = 0;
+    const title = (item.title || "").toLowerCase();
+
+    if (prefs.preferred_industries?.includes(item.industry))
+      boost += 30 * (prefs.weight_industry || 1);
+    if (prefs.preferred_regions?.includes(item.region))
+      boost += 25 * (prefs.weight_region || 1);
+    if (prefs.preferred_companies?.includes(item.company))
+      boost += 25 * (prefs.weight_company || 1);
+    if (prefs.preferred_phases?.includes(item.phase))
+      boost += 20 * (prefs.weight_phase || 1);
+    if (prefs.preferred_sources?.includes(item.source))
+      boost += 15;
+    (prefs.keywords || []).forEach(kw => {
+      if (title.includes(kw.toLowerCase())) boost += 15;
+    });
+
+    return { ...item, radar_score: (item.radar_score || 0) + Math.round(boost) };
+  });
+}
+
+function applyPrefsFilters(items) {
+  const prefs = getPrefs();
+  if (!prefs || Object.keys(prefs).length === 0) return items;
+
+  return items.filter(item => {
+    if (prefs.min_score && (item.radar_score || 0) < prefs.min_score) return false;
+    if (prefs.min_investment_usd && item.raw?.monto && item.raw.monto < prefs.min_investment_usd) return false;
+    if (prefs.date_from && item.updated_at && item.updated_at < prefs.date_from) return false;
+    if (prefs.date_to && item.updated_at && item.updated_at > prefs.date_to + "T23:59:59") return false;
+    return true;
+  });
+}
