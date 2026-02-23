@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Preferencias · Stratmap</title>
+  <style>
+    :root {
+      --sidebar: 220px;
+      --blue: #1a56db;
+      --blue-light: #eff6ff;
+      --border: #e2e8f0;
+      --bg: #f8fafc;
+      --card: #fff;
+      --text: #0f172a;
+      --muted: #94a3b8;
+      --green: #16a34a;
+      --orange: #e05a1e;
+      --yellow: #ca8a04;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+    /* Sidebar igual al dashboard */
+    .sidebar { width: var(--sidebar); background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
+    .sidebar-brand { padding: 20px 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
+    .sidebar-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
+    .sidebar-name { font-weight: 700; font-size: 15px; color: #fff; }
+    .sidebar-tagline { font-size: 10px; color: #64748b; margin-top: 1px; }
+    .sidebar-section { padding: 18px 12px 6px; font-size: 10px; font-weight: 700; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: #94a3b8; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; }
+    .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
+    .sidebar-item.active { background: #1e3a5f; color: #fff; border-left-color: var(--blue); }
+    .sidebar-item .icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+
+    /* Main */
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 50; }
+    .topbar-title { font-size: 15px; font-weight: 700; color: var(--text); }
+    .topbar-sub { font-size: 13px; color: var(--muted); }
+    .btn-primary { padding: 8px 20px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: auto; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-outline { padding: 7px 16px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; text-decoration: none; }
+
+    .content { padding: 28px 32px; max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
+    .feedback { font-size: 13px; color: var(--green); font-weight: 600; display: none; }
+    .feedback.show { display: block; }
+
+    /* Preference cards */
+    .pref-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .pref-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .pref-icon { font-size: 18px; }
+    .pref-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .pref-desc { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .pref-body { padding: 16px 20px; }
+
+    /* Tag selectors */
+    .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: 99px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; background: var(--card); color: var(--text); user-select: none; }
+    .tag:hover { border-color: var(--blue); color: var(--blue); }
+    .tag.selected { background: var(--blue-light); border-color: var(--blue); color: var(--blue); font-weight: 700; }
+    .tag.selected::before { content: "✓ "; }
+
+    /* Range slider */
+    .range-row { display: flex; align-items: center; gap: 14px; }
+    .range-input { flex: 1; accent-color: var(--blue); height: 4px; }
+    .range-val { font-size: 13px; font-weight: 700; color: var(--blue); min-width: 60px; text-align: right; }
+
+    /* Weight sliders */
+    .weight-grid { display: flex; flex-direction: column; gap: 12px; }
+    .weight-row { display: flex; align-items: center; gap: 12px; }
+    .weight-label { font-size: 13px; color: var(--text); min-width: 140px; }
+    .weight-bar { flex: 1; }
+    .weight-val { font-size: 12px; font-weight: 700; color: var(--blue); min-width: 30px; text-align: right; }
+
+    /* Keywords */
+    .kw-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .kw-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 99px; font-size: 12px; color: var(--blue); font-weight: 600; }
+    .kw-del { background: none; border: none; cursor: pointer; color: #93c5fd; font-size: 13px; line-height: 1; padding: 0; }
+    .kw-del:hover { color: #dc2626; }
+    .kw-input-row { display: flex; gap: 8px; }
+    .kw-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
+    .kw-input:focus { border-color: var(--blue); }
+    .kw-add { padding: 8px 14px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+    /* Date range */
+    .date-row { display: flex; gap: 16px; align-items: center; }
+    .date-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .date-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .date-input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; background: var(--card); }
+    .date-input:focus { border-color: var(--blue); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">S</div>
+      <div>
+        <div class="sidebar-name">Stratmap</div>
+        <div class="sidebar-tagline">Inteligencia Minera Chile</div>
+      </div>
+    </div>
+    <div class="sidebar-section">Vistas</div>
+    <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
+    <a class="sidebar-item" href="/"><span class="icon">🏗</span> Proyectos</a>
+    <a class="sidebar-item" href="/"><span class="icon">📰</span> Noticias</a>
+    <div class="sidebar-section">Configuración</div>
+    <a class="sidebar-item active" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">Preferencias de Scoring</div>
+      </div>
+      <span class="feedback" id="feedback">✓ Preferencias guardadas</span>
+      <button class="btn-primary" onclick="savePreferences()">Guardar preferencias</button>
+    </div>
+
+    <div class="content">
+
+      <!-- Industrias -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">⛏</span>
+          <div>
+            <div class="pref-title">Industrias de interés</div>
+            <div class="pref-desc">Los proyectos de estas industrias recibirán un boost de score</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="tag-grid" id="tag-industries">
+            <!-- generado por JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Regiones -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">🗺</span>
+          <div>
+            <div class="pref-title">Regiones de interés</div>
+            <div class="pref-desc">Prioriza proyectos en las regiones donde opera tu empresa</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="tag-grid" id="tag-regions"></div>
+        </div>
+      </div>
+
+      <!-- Mandantes -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">🏢</span>
+          <div>
+            <div class="pref-title">Mandantes clave</div>
+            <div class="pref-desc">Proyectos de estos mandantes subirán en el ranking</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="tag-grid" id="tag-companies"></div>
+        </div>
+      </div>
+
+      <!-- Fases -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">📋</span>
+          <div>
+            <div class="pref-title">Fases preferidas</div>
+            <div class="pref-desc">Enfócate en los proyectos en las fases que más te interesan</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="tag-grid" id="tag-phases"></div>
+        </div>
+      </div>
+
+      <!-- Fuentes -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">📡</span>
+          <div>
+            <div class="pref-title">Fuentes preferidas</div>
+            <div class="pref-desc">Prioriza oportunidades de estas fuentes</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="tag-grid" id="tag-sources"></div>
+        </div>
+      </div>
+
+      <!-- Palabras clave -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">🔍</span>
+          <div>
+            <div class="pref-title">Palabras clave</div>
+            <div class="pref-desc">Proyectos que contengan estas palabras en el título subirán de score</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="kw-wrap" id="kw-list"></div>
+          <div class="kw-input-row">
+            <input class="kw-input" id="kw-input" placeholder="Ej: túnel, EPC, planta, chancado…" />
+            <button class="kw-add" onclick="addKeyword()">+ Agregar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monto mínimo -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">💰</span>
+          <div>
+            <div class="pref-title">Monto mínimo estimado</div>
+            <div class="pref-desc">Filtra proyectos por debajo de este monto (USD)</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="range-row">
+            <span style="font-size:12px;color:var(--muted)">USD 0</span>
+            <input type="range" class="range-input" id="min-amount" min="0" max="100000000" step="1000000" value="0"
+              oninput="document.getElementById('min-amount-val').textContent = formatUSD(this.value)" />
+            <span style="font-size:12px;color:var(--muted)">USD 100M</span>
+            <span class="range-val" id="min-amount-val">Sin mínimo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Score mínimo -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">⚡</span>
+          <div>
+            <div class="pref-title">Score mínimo</div>
+            <div class="pref-desc">Ocultar proyectos con score por debajo de este umbral</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="range-row">
+            <span style="font-size:12px;color:var(--muted)">0</span>
+            <input type="range" class="range-input" id="min-score" min="0" max="90" step="5" value="0"
+              oninput="document.getElementById('min-score-val').textContent = this.value > 0 ? this.value : 'Sin mínimo'" />
+            <span style="font-size:12px;color:var(--muted)">90</span>
+            <span class="range-val" id="min-score-val">Sin mínimo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rango de fechas -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">📅</span>
+          <div>
+            <div class="pref-title">Rango de fechas</div>
+            <div class="pref-desc">Solo mostrar proyectos publicados en este período</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="date-row">
+            <div class="date-group">
+              <label class="date-label">Desde</label>
+              <input type="date" class="date-input" id="date-from" />
+            </div>
+            <div style="font-size:18px;color:var(--muted);padding-top:18px">→</div>
+            <div class="date-group">
+              <label class="date-label">Hasta</label>
+              <input type="date" class="date-input" id="date-to" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pesos del scoring -->
+      <div class="pref-card">
+        <div class="pref-head">
+          <span class="pref-icon">⚖️</span>
+          <div>
+            <div class="pref-title">Pesos del scoring</div>
+            <div class="pref-desc">Ajusta cuánto influye cada criterio en el score final</div>
+          </div>
+        </div>
+        <div class="pref-body">
+          <div class="weight-grid">
+            <div class="weight-row">
+              <span class="weight-label">Industria</span>
+              <input type="range" class="weight-bar range-input" min="0" max="2" step="0.1" value="1.0" id="w-industry"
+                oninput="document.getElementById('wv-industry').textContent = parseFloat(this.value).toFixed(1) + 'x'" />
+              <span class="weight-val" id="wv-industry">1.0x</span>
+            </div>
+            <div class="weight-row">
+              <span class="weight-label">Región</span>
+              <input type="range" class="weight-bar range-input" min="0" max="2" step="0.1" value="1.0" id="w-region"
+                oninput="document.getElementById('wv-region').textContent = parseFloat(this.value).toFixed(1) + 'x'" />
+              <span class="weight-val" id="wv-region">1.0x</span>
+            </div>
+            <div class="weight-row">
+              <span class="weight-label">Mandante</span>
+              <input type="range" class="weight-bar range-input" min="0" max="2" step="0.1" value="1.0" id="w-company"
+                oninput="document.getElementById('wv-company').textContent = parseFloat(this.value).toFixed(1) + 'x'" />
+              <span class="weight-val" id="wv-company">1.0x</span>
+            </div>
+            <div class="weight-row">
+              <span class="weight-label">Fase</span>
+              <input type="range" class="weight-bar range-input" min="0" max="2" step="0.1" value="1.0" id="w-phase"
+                oninput="document.getElementById('wv-phase').textContent = parseFloat(this.value).toFixed(1) + 'x'" />
+              <span class="weight-val" id="wv-phase">1.0x</span>
+            </div>
+            <div class="weight-row">
+              <span class="weight-label">Monto</span>
+              <input type="range" class="weight-bar range-input" min="0" max="2" step="0.1" value="1.0" id="w-investment"
+                oninput="document.getElementById('wv-investment').textContent = parseFloat(this.value).toFixed(1) + 'x'" />
+              <span class="weight-val" id="wv-investment">1.0x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const INDUSTRIES = ["Minería","Construcción","Energía","Infraestructura","Agua y Saneamiento","Telecomunicaciones","Logística","Inmobiliario","Gobierno"];
+    const REGIONS = ["Arica y Parinacota","Tarapacá","Antofagasta","Atacama","Coquimbo","Valparaíso","Metropolitana","O'Higgins","Maule","Ñuble","Biobío","Araucanía","Los Ríos","Los Lagos","Aysén","Magallanes","Interregional"];
+    const COMPANIES = ["Codelco","BHP","SQM","Anglo American","Teck","Antofagasta Minerals","Glencore","Freeport-McMoRan","MOP","Aguas del Valle","Enami","CAP"];
+    const PHASES = ["En ejecución","Construcción","Ingeniería","Licitación","Estudio","Prefactibilidad","Factibilidad","Operación","Cierre"];
+    const SOURCES = ["SEA","ChileCompra","MOP","COCHILCO","Portal Minero","Diario Financiero","Minería Chilena"];
+
+    // State
+    const selected = {
+      industries: new Set(),
+      regions: new Set(),
+      companies: new Set(),
+      phases: new Set(),
+      sources: new Set(),
+      keywords: [],
+    };
+
+    function buildTagGrid(containerId, items, key) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = items.map(item => `
+        <div class="tag ${selected[key].has(item) ? 'selected' : ''}" onclick="toggleTag('${containerId}','${key}','${item.replace(/'/g,"\\'")}',this)">
+          ${item}
+        </div>`).join("");
+    }
+
+    function toggleTag(containerId, key, value, el) {
+      if (selected[key].has(value)) {
+        selected[key].delete(value);
+        el.classList.remove("selected");
+      } else {
+        selected[key].add(value);
+        el.classList.add("selected");
+      }
+    }
+
+    function addKeyword() {
+      const input = document.getElementById("kw-input");
+      const val = input.value.trim();
+      if (!val || selected.keywords.includes(val)) { input.value = ""; return; }
+      selected.keywords.push(val);
+      input.value = "";
+      renderKeywords();
+    }
+
+    function removeKeyword(kw) {
+      selected.keywords = selected.keywords.filter(k => k !== kw);
+      renderKeywords();
+    }
+
+    function renderKeywords() {
+      document.getElementById("kw-list").innerHTML = selected.keywords.map(kw =>
+        `<span class="kw-tag">${kw} <button class="kw-del" onclick="removeKeyword('${kw.replace(/'/g,"\\'")}')">✕</button></span>`
+      ).join("");
+    }
+
+    function formatUSD(val) {
+      const n = parseInt(val);
+      if (n === 0) return "Sin mínimo";
+      if (n >= 1000000) return `USD ${(n/1000000).toFixed(0)}M`;
+      return `USD ${(n/1000).toFixed(0)}K`;
+    }
+
+    async function savePreferences() {
+      const prefs = {
+        preferred_industries: [...selected.industries],
+        preferred_regions: [...selected.regions],
+        preferred_companies: [...selected.companies],
+        preferred_phases: [...selected.phases],
+        keywords: selected.keywords,
+        min_investment_usd: parseInt(document.getElementById("min-amount").value) || null,
+        weight_industry: parseFloat(document.getElementById("w-industry").value),
+        weight_region: parseFloat(document.getElementById("w-region").value),
+        weight_company: parseFloat(document.getElementById("w-company").value),
+        weight_phase: parseFloat(document.getElementById("w-phase").value),
+        weight_investment: parseFloat(document.getElementById("w-investment").value),
+        // Guardar extras en localStorage por ahora
+        min_score: parseInt(document.getElementById("min-score").value) || 0,
+        date_from: document.getElementById("date-from").value || null,
+        date_to: document.getElementById("date-to").value || null,
+        preferred_sources: [...selected.sources],
+      };
+
+      // Guardar en localStorage para uso inmediato en dashboard
+      localStorage.setItem("stratmap_prefs", JSON.stringify(prefs));
+
+      // También enviar al backend
+      try {
+        await fetch("/me/preferences", {
+          method: "PUT",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(prefs)
+        });
+      } catch(e) { console.warn("Backend save failed:", e); }
+
+      const fb = document.getElementById("feedback");
+      fb.classList.add("show");
+      setTimeout(() => fb.classList.remove("show"), 3000);
+    }
+
+    function loadFromStorage() {
+      const raw = localStorage.getItem("stratmap_prefs");
+      if (!raw) return;
+      try {
+        const prefs = JSON.parse(raw);
+        (prefs.preferred_industries||[]).forEach(v => selected.industries.add(v));
+        (prefs.preferred_regions||[]).forEach(v => selected.regions.add(v));
+        (prefs.preferred_companies||[]).forEach(v => selected.companies.add(v));
+        (prefs.preferred_phases||[]).forEach(v => selected.phases.add(v));
+        (prefs.preferred_sources||[]).forEach(v => selected.sources.add(v));
+        selected.keywords = prefs.keywords || [];
+        if (prefs.min_investment_usd) {
+          document.getElementById("min-amount").value = prefs.min_investment_usd;
+          document.getElementById("min-amount-val").textContent = formatUSD(prefs.min_investment_usd);
+        }
+        if (prefs.min_score) {
+          document.getElementById("min-score").value = prefs.min_score;
+          document.getElementById("min-score-val").textContent = prefs.min_score > 0 ? prefs.min_score : "Sin mínimo";
+        }
+        if (prefs.date_from) document.getElementById("date-from").value = prefs.date_from;
+        if (prefs.date_to) document.getElementById("date-to").value = prefs.date_to;
+        const weights = ["industry","region","company","phase","investment"];
+        weights.forEach(w => {
+          const val = prefs[`weight_${w}`];
+          if (val !== undefined) {
+            document.getElementById(`w-${w}`).value = val;
+            document.getElementById(`wv-${w}`).textContent = parseFloat(val).toFixed(1) + "x";
+          }
+        });
+        renderKeywords();
+      } catch(e) {}
+    }
+
+    document.getElementById("kw-input").addEventListener("keydown", e => {
+      if (e.key === "Enter") addKeyword();
+    });
+
+    // Init
+    buildTagGrid("tag-industries", INDUSTRIES, "industries");
+    buildTagGrid("tag-regions", REGIONS, "regions");
+    buildTagGrid("tag-companies", COMPANIES, "companies");
+    buildTagGrid("tag-phases", PHASES, "phases");
+    buildTagGrid("tag-sources", SOURCES, "sources");
+    loadFromStorage();
+    // Re-render tags after loading state
+    buildTagGrid("tag-industries", INDUSTRIES, "industries");
+    buildTagGrid("tag-regions", REGIONS, "regions");
+    buildTagGrid("tag-companies", COMPANIES, "companies");
+    buildTagGrid("tag-phases", PHASES, "phases");
+    buildTagGrid("tag-sources", SOURCES, "sources");
+  </script>
+</body>
+</html>
