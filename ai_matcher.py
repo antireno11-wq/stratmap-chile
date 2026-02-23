@@ -22,7 +22,7 @@ import db
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 400
 BATCH_DELAY = 0.5   # segundos entre llamadas para no saturar la API
-MAX_PER_RUN = 300   # máximo de oportunidades a procesar por ejecución
+MAX_PER_RUN = 100   # máximo por corrida (subir a 500 cuando esté probado)
 
 
 def build_prompt(opp: Dict[str, Any], services: List[Dict[str, Any]], company_name: str) -> str:
