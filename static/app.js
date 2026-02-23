@@ -1,6 +1,11 @@
-const NEWS_SOURCES = ["Portal Minero","BioBioChile","Emol","Cooperativa",
+const NEWS_SOURCES = new Set([
+  "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
-  "Revista EI","Radio U. de Chile","RSS"];
+  "Revista EI","Radio U. de Chile","RSS"
+]);
+
+// Fuentes que SIEMPRE son proyectos, nunca noticias
+const PROJECT_SOURCES = new Set(["sea","SEA","MOP","ChileCompra","COCHILCO","manual"]);
 
 const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
 
@@ -15,8 +20,10 @@ const STATUS_COLORS = {
 };
 
 function isNews(item) {
+  const src = item.source || "";
+  if (PROJECT_SOURCES.has(src)) return false;
   if (item.phase === "Noticia") return true;
-  return NEWS_SOURCES.some(s => (item.source || "").includes(s));
+  return NEWS_SOURCES.has(src);
 }
 
 function el(id) { return document.getElementById(id); }
