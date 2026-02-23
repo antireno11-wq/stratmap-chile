@@ -1,165 +1,180 @@
-# connectors/mop.py
+"""
+Scraper MOP — proyectos.mop.gob.cl
+Scores recalibrados para no competir con proyectos mineros SEA.
+"""
+import time
+import re
 import requests
 from bs4 import BeautifulSoup
-from typing import Any, Dict, List
 
 BASE_URL = "https://proyectos.mop.gob.cl"
 SEARCH_URL = f"{BASE_URL}/Default.asp"
-HEADERS = {"User-Agent": "StratmapWorker/0.3"}
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; Stratmap/1.0)",
+    "Accept-Language": "es-CL,es;q=0.9",
+}
 
 REGION_MAP = {
-    "Arica y Parinacota": "Arica y Parinacota",
-    "Tarapacá": "Tarapacá",
-    "Antofagasta": "Antofagasta",
-    "Atacama": "Atacama",
-    "Coquimbo": "Coquimbo",
-    "Valparaíso": "Valparaíso",
-    "Metropolitana": "Región Metropolitana",
-    "O'Higgins": "O'Higgins",
-    "Maule": "Maule",
-    "Ñuble": "Ñuble",
-    "Biobío": "Biobío",
-    "Araucanía": "La Araucanía",
-    "Los Ríos": "Los Ríos",
-    "Los Lagos": "Los Lagos",
-    "Aysén": "Aysén",
-    "Magallanes": "Magallanes",
-    "Interregional": "Interregional",
+    "I":   "Tarapacá", "II":  "Antofagasta", "III": "Atacama",
+    "IV":  "Coquimbo", "V":   "Valparaíso",  "VI":  "O'Higgins",
+    "VII": "Maule",    "VIII":"Biobío",        "IX":  "Araucanía",
+    "X":   "Los Lagos","XI":  "Aysén",         "XII": "Magallanes",
+    "XIII":"Metropolitana","XIV":"Los Ríos",    "XV": "Arica y Parinacota",
+    "XVI": "Ñuble",    "RM":  "Metropolitana",
+    "INTERREGIONAL": "Interregional",
 }
 
-SERVICE_INDUSTRY = {
-    "Vialidad":             "Infraestructura",
-    "Portuarias":           "Infraestructura",
-    "Aeropuertos":          "Infraestructura",
-    "Hidráulicas":          "Infraestructura",
-    "Arquitectura":         "Infraestructura",
-    "Sanitarios Rurales":   "Infraestructura",
+SERVICE_MAP = {
+    "Vialidad":     "Vialidad",
+    "Portuarias":   "Obras Portuarias",
+    "Aeropuertos":  "Aeropuertos",
+    "Hidráulicas":  "Obras Hidráulicas",
+    "Arquitectura": "Arquitectura",
+    "Sanitarios":   "Agua Potable Rural",
 }
+
 
 def normalize_region(raw: str) -> str:
-    for key, val in REGION_MAP.items():
-        if key.lower() in raw.lower():
-            return val
-    return raw.strip()
+    raw = raw.strip().upper()
+    for k, v in REGION_MAP.items():
+        if raw == k or raw.startswith(k + " ") or raw.startswith(k + "-"):
+            return v
+    return raw.title()
 
-def normalize_service(raw: str) -> str:
-    for key in SERVICE_INDUSTRY:
-        if key.lower() in raw.lower():
-            return key
-    return raw.strip()
 
-def score_project(name: str, service: str, program: str) -> int:
-    base = 50
-    name_l = name.lower()
-    prog_l = (program or "").lower()
-    # Proyectos grandes
-    if any(k in name_l for k in ["construccion", "ampliacion", "nuevo"]):
-        base += 10
-    if any(k in name_l for k in ["ruta", "autopista", "carretera"]):
-        base += 8
-    if any(k in name_l for k in ["puente", "túnel", "embalse"]):
-        base += 8
-    if any(k in name_l for k in ["aeropuerto", "puerto", "portuario"]):
-        base += 10
-    if "mejoramiento" in name_l:
-        base += 5
-    if "conservacion" in name_l:
-        base += 3
-    return min(base, 90)
+def classify_service(service_raw: str) -> str:
+    for k, v in SERVICE_MAP.items():
+        if k.lower() in service_raw.lower():
+            return v
+    return service_raw.strip()
 
-def fetch_page(page: int, session: requests.Session) -> List[Dict[str, Any]]:
+
+def score_project(name: str, service: str) -> int:
+    """
+    Score MOP recalibrado: máximo 55 para no competir con SEA/minería (que llega a 90-100).
+    Proyectos de infraestructura son relevantes pero de distinta naturaleza.
+    """
+    name_lower = name.lower()
+    score = 30  # base MOP
+
+    # Tipo de obra — bonus por relevancia comercial
+    if any(w in name_lower for w in ["construccion", "construcción", "nuevo", "ampliacion", "ampliación"]):
+        score += 8
+    elif any(w in name_lower for w in ["mejoramiento", "mejoras"]):
+        score += 5
+    elif any(w in name_lower for w in ["conservacion", "conservación", "mantenimiento"]):
+        score += 2
+
+    # Tipo de infraestructura — mayor oportunidad comercial
+    if any(w in name_lower for w in ["aeropuerto", "puerto", "terminal"]):
+        score += 10
+    elif any(w in name_lower for w in ["embalse", "presa", "canal"]):
+        score += 8
+    elif any(w in name_lower for w in ["puente", "túnel", "tunel", "viaducto"]):
+        score += 6
+    elif any(w in name_lower for w in ["ruta", "autopista", "carretera", "acceso"]):
+        score += 4
+
+    # Servicio premium
+    if "aeropuerto" in service.lower() or "portuaria" in service.lower():
+        score += 5
+    elif "hidráulica" in service.lower() or "hidraulica" in service.lower():
+        score += 4
+
+    return min(score, 55)  # cap en 55
+
+
+def fetch_page(page: int, session: requests.Session) -> list:
     params = {
-        "whichpage": page,
         "buscar": "true",
-        "vigente": "",
-        "region": "null",
-        "planes": "",
-        "servicios": "null",
-        "clasificadores": "",
-        "palabras": "",
-        "pagesize": 20,
+        "whichpage": str(page),
+        "pagesize": "20",
     }
     try:
-        r = session.get(SEARCH_URL, params=params, headers=HEADERS, timeout=30)
-        r.raise_for_status()
-        r.encoding = "latin-1"
+        resp = session.get(SEARCH_URL, params=params, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
     except Exception as e:
         print(f"[mop] error página {page}: {e}")
         return []
 
-    soup = BeautifulSoup(r.text, "html.parser")
-    results = []
+    soup = BeautifulSoup(resp.text, "html.parser")
+    rows = soup.select("table tr")
+    projects = []
 
-    # La tabla de proyectos tiene columnas: Región, Servicio, Nombre, BIP, Programa
-    tables = soup.find_all("table")
-    for table in tables:
-        rows = table.find_all("tr")
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) < 4:
-                continue
-            texts = [c.get_text(strip=True) for c in cols]
-            # Detectar fila de datos: primera col es una región conocida
-            region_raw = texts[0]
-            if not any(k.lower() in region_raw.lower() for k in REGION_MAP):
-                continue
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) < 4:
+            continue
+        try:
+            region_raw = cols[0].get_text(strip=True)
+            service_raw = cols[1].get_text(strip=True)
+            name_cell = cols[2]
+            bip_raw = cols[3].get_text(strip=True) if len(cols) > 3 else ""
+            program_raw = cols[4].get_text(strip=True) if len(cols) > 4 else ""
 
-            service_raw = texts[1] if len(texts) > 1 else ""
-            # Nombre y link del proyecto
-            link_tag = cols[2].find("a") if len(cols) > 2 else None
-            name = link_tag.get_text(strip=True) if link_tag else texts[2]
-            href = link_tag.get("href", "") if link_tag else ""
-            url = f"{BASE_URL}/{href}" if href and not href.startswith("http") else href
-            if not url:
+            link = name_cell.find("a")
+            if not link:
                 continue
 
-            bip = texts[3] if len(texts) > 3 else ""
-            program = texts[4] if len(texts) > 4 else ""
+            name = link.get_text(strip=True)
+            href = link.get("href", "")
+            if not name or not href:
+                continue
 
             region = normalize_region(region_raw)
-            service = normalize_service(service_raw)
+            service = classify_service(service_raw)
+            score = score_project(name, service)
 
-            results.append({
+            projects.append({
                 "source": "MOP",
                 "title": name[:500],
-                "url": url,
+                "url": f"{BASE_URL}/{href}",
                 "company": "MOP",
-                "contractor": None,
                 "industry": "Infraestructura",
                 "region": region,
                 "phase": "En ejecución",
-                "score": score_project(name, service, program),
-                "entry": bip or None,
+                "score": score,
+                "entry": bip_raw or None,
                 "raw": {
-                    "bip": bip,
-                    "service": service_raw,
-                    "program": program,
+                    "bip": bip_raw,
                     "region": region_raw,
+                    "program": program_raw,
+                    "service": service_raw,
                 },
             })
+        except Exception:
+            continue
 
-    return results
+    return projects
 
 
-def fetch_mop(max_pages: int = 40, limit: int = 500) -> List[Dict[str, Any]]:
+def fetch_all(max_pages: int = 40, delay: float = 0.3) -> list:
     session = requests.Session()
-    all_items = []
+    all_projects = []
     seen_urls = set()
 
     for page in range(1, max_pages + 1):
-        items = fetch_page(page, session)
-        if not items:
+        projects = fetch_page(page, session)
+        if not projects:
             print(f"[mop] página {page} vacía — deteniendo")
             break
-        new = 0
-        for item in items:
-            if item["url"] not in seen_urls:
-                seen_urls.add(item["url"])
-                all_items.append(item)
-                new += 1
-        print(f"[mop] página {page}: {new} proyectos nuevos (total: {len(all_items)})")
-        if len(all_items) >= limit:
+
+        new = [p for p in projects if p["url"] not in seen_urls]
+        if not new:
             break
 
-    print(f"[mop] total: {len(all_items)} proyectos")
-    return all_items[:limit]
+        seen_urls.update(p["url"] for p in new)
+        all_projects.extend(new)
+        print(f"[mop] página {page}: {len(new)} proyectos nuevos (total: {len(all_projects)})")
+        time.sleep(delay)
+
+    return all_projects
+
+
+if __name__ == "__main__":
+    projects = fetch_all()
+    print(f"\n[mop] Total: {len(projects)} proyectos")
+    if projects:
+        scores = [p["score"] for p in projects]
+        print(f"[mop] Score min: {min(scores)}, max: {max(scores)}, avg: {sum(scores)//len(scores)}")
