@@ -9,58 +9,54 @@
       --sidebar: 220px;
       --blue: #1a56db;
       --blue-light: #eff6ff;
-      --border: #e2e8f0;
-      --bg: #f1f5f9;
+      --orange: #e05a1e;
+      --border: #e8edf2;
+      --bg: #f5f7fa;
       --card: #fff;
       --text: #0f172a;
-      --muted: #94a3b8;
+      --muted: #8896a5;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
-    .sidebar { width: var(--sidebar); background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
-    .sidebar-brand { padding: 20px 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
-    .sidebar-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
-    .sidebar-name { font-weight: 700; font-size: 15px; color: #fff; }
-    .sidebar-tagline { font-size: 10px; color: #64748b; margin-top: 1px; }
-    .sidebar-section { padding: 18px 12px 6px; font-size: 10px; font-weight: 700; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; }
-    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: #94a3b8; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; }
-    .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
-    .sidebar-item.active { background: #1e3a5f; color: #fff; border-left-color: var(--blue); }
-    .sidebar-item .icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+    .sidebar { width: var(--sidebar); background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
+    .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
+    .sidebar-name { font-weight: 700; font-size: 14px; color: var(--text); }
+    .sidebar-tagline { font-size: 10px; color: var(--muted); }
+    .sidebar-section { padding: 16px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.1s; }
+    .sidebar-item:hover { background: var(--bg); color: var(--text); }
+    .sidebar-item.active { background: var(--blue-light); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
-    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
-    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 50; flex-shrink: 0; }
-    .topbar-title { font-size: 15px; font-weight: 700; color: var(--text); }
-    .topbar-sub { font-size: 13px; color: var(--muted); }
-    .topbar-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
-    .btn-primary { padding: 8px 16px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 22px; height: 52px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+    .topbar-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .btn-back { padding: 6px 14px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; margin-left: auto; }
 
-    /* Kanban board */
-    .board { flex: 1; display: flex; gap: 12px; padding: 20px; overflow-x: auto; align-items: flex-start; }
-    .column { flex-shrink: 0; width: 240px; display: flex; flex-direction: column; gap: 8px; }
-    .col-header { padding: 10px 12px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; }
+    .board { flex: 1; display: flex; gap: 10px; padding: 18px; overflow-x: auto; align-items: flex-start; }
+    .column { flex-shrink: 0; width: 232px; display: flex; flex-direction: column; gap: 7px; }
+    .col-header { padding: 9px 12px; border-radius: 9px; display: flex; align-items: center; justify-content: space-between; }
     .col-title { font-size: 12px; font-weight: 700; }
-    .col-count { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: rgba(0,0,0,0.1); }
-    .col-cards { min-height: 80px; display: flex; flex-direction: column; gap: 8px; border-radius: 10px; padding: 6px; transition: background 0.15s; }
-    .col-cards.drag-over { background: rgba(26,86,219,0.08); outline: 2px dashed var(--blue); }
+    .col-count { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: rgba(0,0,0,0.08); }
+    .col-cards { min-height: 60px; display: flex; flex-direction: column; gap: 7px; border-radius: 9px; padding: 5px; transition: background 0.15s; }
+    .col-cards.drag-over { background: rgba(26,86,219,0.06); outline: 2px dashed #93c5fd; }
 
-    /* Cards */
-    .kanban-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; cursor: grab; transition: box-shadow 0.15s, transform 0.15s; user-select: none; }
-    .kanban-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
-    .kanban-card.dragging { opacity: 0.5; cursor: grabbing; }
-    .card-score { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 5px; margin-bottom: 6px; }
+    .kanban-card { background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; cursor: grab; transition: box-shadow 0.15s, transform 0.15s; }
+    .kanban-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.08); transform: translateY(-1px); }
+    .kanban-card.dragging { opacity: 0.45; cursor: grabbing; }
+    .card-score { display: inline-flex; padding: 2px 7px; font-size: 10px; font-weight: 700; border-radius: 5px; margin-bottom: 6px; }
     .card-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .card-meta { display: flex; flex-direction: column; gap: 2px; }
     .card-company { font-size: 11px; color: var(--blue); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card-region { font-size: 10px; color: var(--muted); }
-    .card-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .card-region { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .card-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--border); }
     .card-link { font-size: 11px; color: var(--blue); text-decoration: none; }
     .card-link:hover { text-decoration: underline; }
-    .card-notes-btn { font-size: 10px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; }
+    .card-notes-btn { font-size: 10px; color: var(--muted); background: none; border: none; cursor: pointer; }
     .card-notes-btn:hover { color: var(--text); }
+    .col-empty { text-align: center; padding: 16px 8px; font-size: 11px; color: var(--muted); border: 1.5px dashed var(--border); border-radius: 8px; }
 
-    /* Column colors */
     .col-detectada   .col-header { background: #eff6ff; color: #1d4ed8; }
     .col-analisis    .col-header { background: #fef3c7; color: #92400e; }
     .col-postular    .col-header { background: #f0fdf4; color: #15803d; }
@@ -69,25 +65,19 @@
     .col-adjudicada  .col-header { background: #dcfce7; color: #15803d; }
     .col-perdida     .col-header { background: #fef2f2; color: #dc2626; }
 
-    /* Empty state */
-    .col-empty { text-align: center; padding: 20px 10px; font-size: 11px; color: var(--muted); border: 2px dashed var(--border); border-radius: 8px; }
-
-    /* Modal notas */
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; align-items: center; justify-content: center; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.25); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
     .modal-overlay.open { display: flex; }
-    .modal { background: var(--card); border-radius: 14px; padding: 24px; width: 440px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-    .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .modal-sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
-    .note-card { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
-    .note-text { font-size: 13px; line-height: 1.5; }
-    .note-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
-    .note-form { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-    .note-textarea { padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; resize: vertical; outline: none; font-family: inherit; }
-    .note-textarea:focus { border-color: var(--blue); }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-    .btn-cancel { padding: 7px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 7px; font-size: 13px; cursor: pointer; }
-    .btn-save { padding: 7px 14px; background: var(--blue); color: #fff; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
-
+    .modal { background: var(--card); border-radius: 12px; padding: 22px; width: 420px; max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.15); border: 1px solid var(--border); }
+    .modal-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+    .modal-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .note-card { background: var(--bg); border-radius: 7px; padding: 9px 11px; margin-bottom: 7px; }
+    .note-text { font-size: 12px; line-height: 1.5; }
+    .note-meta { font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .cf-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; outline: none; background: var(--card); font-family: inherit; margin-bottom: 7px; }
+    .cf-input:focus { border-color: var(--blue); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 4px; }
+    .btn-cancel { padding: 6px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 7px; font-size: 12px; cursor: pointer; }
+    .btn-save { padding: 6px 14px; background: var(--blue); color: #fff; border: none; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; width: 100%; }
   </style>
 </head>
@@ -102,42 +92,33 @@
     </div>
     <div class="sidebar-section">Vistas</div>
     <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
-    <a class="sidebar-item" href="/"><span class="icon">🏗</span> Proyectos</a>
-    <a class="sidebar-item" href="/"><span class="icon">📰</span> Noticias</a>
     <a class="sidebar-item active" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
+    <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
     <div class="sidebar-section">Configuración</div>
     <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
   </aside>
 
   <div class="main">
     <div class="topbar">
-      <div>
-        <div class="topbar-title">Pipeline Kanban</div>
-      </div>
-      <span id="topbar-count" style="font-size:13px;color:var(--muted)"></span>
-      <div class="topbar-actions">
-        <a href="/" class="btn-primary" style="text-decoration:none">← Volver al Radar</a>
-      </div>
+      <div class="topbar-title">Pipeline Kanban</div>
+      <span id="topbar-count" style="font-size:12px;color:var(--muted)"></span>
+      <a href="/" class="btn-back">← Volver al Radar</a>
     </div>
-
     <div class="board" id="board">
       <div class="loading">Cargando pipeline...</div>
     </div>
   </div>
 
-  <!-- Modal notas -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal">
       <div class="modal-title" id="modal-title">Notas</div>
       <div class="modal-sub" id="modal-sub"></div>
       <div id="modal-notes"></div>
-      <div class="note-form">
-        <textarea class="note-textarea" id="modal-note-text" rows="3" placeholder="Escribe una nota..."></textarea>
-        <input class="note-textarea" id="modal-note-author" placeholder="Tu nombre (opcional)" style="resize:none" />
-        <div class="modal-actions">
-          <button class="btn-cancel" onclick="closeModal()">Cerrar</button>
-          <button class="btn-save" onclick="saveModalNote()">Agregar nota</button>
-        </div>
+      <textarea class="cf-input" id="modal-note-text" rows="3" placeholder="Escribe una nota..." style="resize:vertical;margin-top:8px"></textarea>
+      <input class="cf-input" id="modal-note-author" placeholder="Tu nombre (opcional)" />
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal()">Cerrar</button>
+        <button class="btn-save" onclick="saveModalNote()">Agregar nota</button>
       </div>
     </div>
   </div>
@@ -147,146 +128,100 @@
     const COL_CLASSES = ["col-detectada","col-analisis","col-postular","col-nopostular","col-presentada","col-adjudicada","col-perdida"];
 
     function scoreColor(s) {
-      if (s >= 80) return ["#15803d","#f0fdf4"];
-      if (s >= 65) return ["#92400e","#fef3c7"];
+      if (s >= 80) return ["#1d4ed8","#eff6ff"];
+      if (s >= 65) return ["#15803d","#f0fdf4"];
       if (s >= 50) return ["#c2410c","#fff7ed"];
       return ["#475569","#f1f5f9"];
     }
-
-    function fmtDate(d) {
-      if (!d) return "";
-      return new Date(d).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit"});
-    }
-
     function escapeHTML(str) {
       return String(str||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
     }
 
-    let allCards = {}; // oppId -> data
-    let dragOppId = null;
-    let modalOppId = null;
+    let allCards = {}, dragOppId = null, modalOppId = null;
 
     function buildBoard(items) {
       const board = document.getElementById("board");
       const byStatus = {};
       STATUSES.forEach(s => byStatus[s] = []);
-
       items.forEach(item => {
-        const status = item.status || "Detectada";
-        if (byStatus[status]) byStatus[status].push(item);
+        const s = item.status || "Detectada";
+        if (byStatus[s]) byStatus[s].push(item);
         allCards[item.id] = item;
       });
-
-      document.getElementById("topbar-count").textContent = `${items.length} oportunidades en pipeline`;
-
+      document.getElementById("topbar-count").textContent = `${items.length} oportunidades`;
       board.innerHTML = STATUSES.map((status, i) => {
         const cards = byStatus[status];
-        return `
-          <div class="column ${COL_CLASSES[i]}">
-            <div class="col-header">
-              <span class="col-title">${status}</span>
-              <span class="col-count">${cards.length}</span>
-            </div>
-            <div class="col-cards" data-status="${escapeHTML(status)}"
-              ondragover="onDragOver(event)"
-              ondragleave="onDragLeave(event)"
-              ondrop="onDrop(event, '${escapeHTML(status)}')">
-              ${cards.length === 0
-                ? `<div class="col-empty">Sin oportunidades</div>`
-                : cards.map(c => renderCard(c)).join("")
-              }
-            </div>
-          </div>`;
+        return `<div class="column ${COL_CLASSES[i]}">
+          <div class="col-header">
+            <span class="col-title">${status}</span>
+            <span class="col-count">${cards.length}</span>
+          </div>
+          <div class="col-cards" data-status="${escapeHTML(status)}"
+            ondragover="onDragOver(event)" ondragleave="onDragLeave(event)"
+            ondrop="onDrop(event,'${escapeHTML(status)}')">
+            ${cards.length === 0
+              ? `<div class="col-empty">Sin oportunidades</div>`
+              : cards.map(c => renderCard(c)).join("")}
+          </div>
+        </div>`;
       }).join("");
     }
 
     function renderCard(item) {
       const score = item.radar_score || 0;
       const [sc, sbg] = scoreColor(score);
-      return `
-        <div class="kanban-card" draggable="true" data-id="${item.id}"
-          ondragstart="onDragStart(event, ${item.id})"
-          ondragend="onDragEnd(event)">
-          <span class="card-score" style="color:${sc};background:${sbg}">${score}</span>
-          <div class="card-title">${escapeHTML(item.title)}</div>
-          <div class="card-meta">
-            <span class="card-company">${escapeHTML(item.company||"Sin mandante")}</span>
-            <span class="card-region">${escapeHTML(item.region||"")} ${item.industry ? "· "+escapeHTML(item.industry) : ""}</span>
-          </div>
-          <div class="card-actions">
-            <a class="card-link" href="${escapeHTML(item.url||"#")}" target="_blank">ver →</a>
-            <button class="card-notes-btn" onclick="openModal(${item.id})">📝 notas</button>
-          </div>
-        </div>`;
+      return `<div class="kanban-card" draggable="true" data-id="${item.id}"
+        ondragstart="onDragStart(event,${item.id})" ondragend="onDragEnd(event)">
+        <span class="card-score" style="color:${sc};background:${sbg}">${score}</span>
+        <div class="card-title">${escapeHTML(item.title)}</div>
+        <div class="card-company">${escapeHTML(item.company||"Sin mandante")}</div>
+        <div class="card-region">${escapeHTML(item.region||"")}${item.industry?" · "+escapeHTML(item.industry):""}</div>
+        <div class="card-actions">
+          <a class="card-link" href="${escapeHTML(item.url||"#")}" target="_blank">ver →</a>
+          <button class="card-notes-btn" onclick="openModal(${item.id})">📝 notas</button>
+        </div>
+      </div>`;
     }
-
-    // ── Drag & Drop ──────────────────────────────────────────────────────────
 
     function onDragStart(e, oppId) {
       dragOppId = oppId;
       e.dataTransfer.effectAllowed = "move";
       setTimeout(() => e.target.classList.add("dragging"), 0);
     }
-
-    function onDragEnd(e) {
-      e.target.classList.remove("dragging");
-      dragOppId = null;
-    }
-
-    function onDragOver(e) {
-      e.preventDefault();
-      e.currentTarget.classList.add("drag-over");
-    }
-
-    function onDragLeave(e) {
-      e.currentTarget.classList.remove("drag-over");
-    }
+    function onDragEnd(e) { e.target.classList.remove("dragging"); dragOppId = null; }
+    function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }
+    function onDragLeave(e) { e.currentTarget.classList.remove("drag-over"); }
 
     async function onDrop(e, newStatus) {
       e.preventDefault();
       e.currentTarget.classList.remove("drag-over");
       if (!dragOppId) return;
-
-      const oppId = dragOppId;
-      const item = allCards[oppId];
+      const item = allCards[dragOppId];
       if (!item || item.status === newStatus) return;
-
-      // Optimistic update
       item.status = newStatus;
       buildBoard(Object.values(allCards));
-
-      // Persist
-      try {
-        await fetch(`/opportunities/${oppId}/pipeline`, {
-          method: "PUT",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({status: newStatus, assignee: item.assignee || null})
-        });
-      } catch(err) {
-        console.error("Error saving pipeline:", err);
-      }
+      await fetch(`/opportunities/${dragOppId}/pipeline`, {
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({status: newStatus, assignee: item.assignee||null})
+      });
     }
-
-    // ── Modal notas ───────────────────────────────────────────────────────────
 
     async function openModal(oppId) {
       modalOppId = oppId;
       const item = allCards[oppId];
       document.getElementById("modal-title").textContent = item?.title || "Notas";
       document.getElementById("modal-sub").textContent = item?.company || "";
-      document.getElementById("modal-notes").innerHTML = "<p style='font-size:12px;color:#94a3b8'>Cargando...</p>";
+      document.getElementById("modal-notes").innerHTML = "<p style='font-size:11px;color:#8896a5'>Cargando...</p>";
       document.getElementById("modal-overlay").classList.add("open");
-
       const res = await fetch(`/opportunities/${oppId}/notes`);
       const data = await res.json();
       const notes = data.items || [];
       document.getElementById("modal-notes").innerHTML = notes.length
-        ? notes.map(n => `
-            <div class="note-card">
-              <div class="note-text">${escapeHTML(n.note)}</div>
-              <div class="note-meta">${n.author ? escapeHTML(n.author)+" · " : ""}${new Date(n.created_at).toLocaleString("es-CL")}</div>
-            </div>`).join("")
-        : "<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sin notas aún</p>";
+        ? notes.map(n => `<div class="note-card">
+            <div class="note-text">${escapeHTML(n.note)}</div>
+            <div class="note-meta">${n.author?escapeHTML(n.author)+" · ":""}${new Date(n.created_at).toLocaleString("es-CL")}</div>
+          </div>`).join("")
+        : "<p style='font-size:11px;color:#8896a5;padding:6px 0'>Sin notas aún</p>";
     }
 
     function closeModal() {
@@ -298,35 +233,25 @@
     async function saveModalNote() {
       if (!modalOppId) return;
       const note = document.getElementById("modal-note-text").value.trim();
-      const author = document.getElementById("modal-note-author").value.trim() || null;
       if (!note) return;
+      const author = document.getElementById("modal-note-author").value.trim() || null;
       await fetch(`/opportunities/${modalOppId}/notes`, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
+        method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({note, author})
       });
       document.getElementById("modal-note-text").value = "";
-      // Recargar notas
       await openModal(modalOppId);
     }
 
-    // Cerrar modal clickando overlay
     document.getElementById("modal-overlay").addEventListener("click", e => {
       if (e.target === e.currentTarget) closeModal();
     });
 
-    // ── Cargar datos ──────────────────────────────────────────────────────────
-
     async function load() {
-      try {
-        const res = await fetch("/pipeline");
-        const data = await res.json();
-        buildBoard(data.items || []);
-      } catch(e) {
-        document.getElementById("board").innerHTML = `<div class="loading">Error cargando pipeline: ${e.message}</div>`;
-      }
+      const res = await fetch("/pipeline");
+      const data = await res.json();
+      buildBoard(data.items || []);
     }
-
     load();
   </script>
 </body>
