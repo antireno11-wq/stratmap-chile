@@ -374,24 +374,33 @@ def trigger_ai_matcher():
 
 @app.post("/admin/fix-chilebcompra")
 def fix_chilebcompra():
-    """Fix de una sola vez: normaliza source y puebla company desde raw."""
+    """Fix: NombreUnidad = responsable de la licitación (mandante real)."""
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
+                # Primero ver qué campos hay disponibles
+                cur.execute("""
+                    SELECT raw->>'NombreUnidad' as unidad,
+                           raw->>'NombreOrganismo' as organismo,
+                           raw->>'Nombre' as nombre
+                    FROM opportunities
+                    WHERE source = 'Chile Compra'
+                    LIMIT 3;
+                """)
+                samples = cur.fetchall()
+                # Actualizar company con NombreUnidad (responsable directo)
                 cur.execute("""
                     UPDATE opportunities
-                    SET 
-                        source = 'Chile Compra',
-                        company = COALESCE(
-                            NULLIF(raw->>'NombreOrganismo', ''),
-                            NULLIF(raw->>'Organismo', ''),
-                            company
-                        )
-                    WHERE source ILIKE '%chilebcompra%' OR source ILIKE '%chile compra%';
+                    SET company = COALESCE(
+                        NULLIF(raw->>'NombreUnidad', ''),
+                        NULLIF(raw->>'NombreOrganismo', ''),
+                        company
+                    )
+                    WHERE source = 'Chile Compra';
                 """)
                 updated = cur.rowcount
             conn.commit()
-        return {"ok": True, "updated": updated}
+        return {"ok": True, "updated": updated, "samples": [dict(s) for s in samples]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
