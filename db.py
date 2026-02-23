@@ -408,21 +408,40 @@ COMPANY_ALIASES: Dict[str, List[str]] = {
 }
 
 def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
+    # Dedup: solo sumar signal_score una vez por día por proyecto
+    sql_check = """
+    SELECT COUNT(*) as cnt FROM opportunity_signals
+    WHERE opportunity_id = %(id)s
+      AND signal_type = 'jobs'
+      AND detected_at > NOW() - INTERVAL '24 hours';
+    """
     sql_signal = """
     INSERT INTO opportunity_signals
       (opportunity_id, signal_type, signal_source, signal_data, score_impact, detected_at)
     VALUES (%(opportunity_id)s, %(signal_type)s, %(signal_source)s, %(signal_data)s, %(score_impact)s, %(detected_at)s);
     """
-    sql_update = """
+    # Solo suma score si es la primera detección del día
+    sql_update_new = """
     UPDATE opportunities SET
       jobs_count = %(jobs_count)s,
-      signal_score = LEAST(COALESCE(signal_score, 0) + %(score_impact)s, 100),
+      signal_score = LEAST(COALESCE(signal_score, 0) + %(score_impact)s, 50),
       last_signal_at = NOW(),
       signals = COALESCE(signals, '[]'::jsonb) || %(new_signal)s::jsonb
     WHERE id = %(opportunity_id)s;
     """
+    # Si ya detectó hoy, solo actualiza jobs_count y last_signal_at
+    sql_update_existing = """
+    UPDATE opportunities SET
+      jobs_count = %(jobs_count)s,
+      last_signal_at = NOW()
+    WHERE id = %(opportunity_id)s;
+    """
     with get_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute(sql_check, {"id": opportunity_id})
+            row = cur.fetchone()
+            already_today = row and row.get("cnt", 0) > 0
+
             cur.execute(sql_signal, {
                 "opportunity_id": opportunity_id,
                 "signal_type": signal["signal_type"],
@@ -431,17 +450,24 @@ def save_job_signal(opportunity_id: int, signal: Dict[str, Any]) -> None:
                 "score_impact": signal["score_impact"],
                 "detected_at": signal["detected_at"],
             })
-            cur.execute(sql_update, {
-                "opportunity_id": opportunity_id,
-                "jobs_count": signal["jobs_count"],
-                "score_impact": signal["score_impact"],
-                "new_signal": Json({
-                    "type": "jobs",
+
+            if already_today:
+                cur.execute(sql_update_existing, {
+                    "opportunity_id": opportunity_id,
+                    "jobs_count": signal["jobs_count"],
+                })
+            else:
+                cur.execute(sql_update_new, {
+                    "opportunity_id": opportunity_id,
                     "jobs_count": signal["jobs_count"],
                     "score_impact": signal["score_impact"],
-                    "detected_at": signal["detected_at"].isoformat(),
-                }),
-            })
+                    "new_signal": Json({
+                        "type": "jobs",
+                        "jobs_count": signal["jobs_count"],
+                        "score_impact": signal["score_impact"],
+                        "detected_at": signal["detected_at"].isoformat(),
+                    }),
+                })
         conn.commit()
 
 def get_opportunities_by_company(company_name: str) -> List[Dict[str, Any]]:
