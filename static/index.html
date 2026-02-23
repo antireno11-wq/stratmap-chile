@@ -20,8 +20,6 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
-
-    /* Sidebar */
     .sidebar { width: var(--sidebar); background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
     .sidebar-brand { padding: 20px 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
     .sidebar-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
@@ -40,8 +38,6 @@
     .filter-item label { font-size: 12px; color: #94a3b8; cursor: pointer; flex: 1; }
     .filter-item .fc { font-size: 11px; color: #475569; margin-left: auto; }
     .filter-divider { border: none; border-top: 1px solid #1e293b; margin: 6px 0; }
-
-    /* Main */
     .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
     .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 50; }
     .topbar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
@@ -54,8 +50,6 @@
     .btn-outline { padding: 7px 14px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
     .status-bar { font-size: 12px; color: var(--muted); }
     .content { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-
-    /* Stats */
     .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
     .stat-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -65,28 +59,25 @@
     .stat-card.green { border-top: 3px solid var(--green); }
     .stat-card.orange { border-top: 3px solid var(--orange); }
     .stat-card.yellow { border-top: 3px solid var(--yellow); }
-
-    /* Section cards */
     .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     .section-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
     .section-icon { font-size: 16px; }
     .section-title { font-size: 14px; font-weight: 700; color: var(--text); }
     .section-badge { background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
     .section-updated { margin-left: auto; font-size: 11px; color: var(--muted); }
-
-    /* Table */
     .tableWrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: #f8fafc; }
     td { font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #f8fafc; }
-    .proj-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; display: block; }
+    .proj-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; display: block; }
     .proj-industry { font-size: 11px; color: var(--muted); margin-top: 1px; }
     .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; display: block; text-decoration: none; }
     .news-title:hover { text-decoration: underline; }
     .score-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 3px 8px; font-size: 12px; font-weight: 700; border-radius: 6px; }
     .source-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+    .status-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
     .phase-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
     .signal-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; margin-left: 4px; }
     a.row-link { color: var(--blue); font-size: 13px; text-decoration: none; font-weight: 500; }
@@ -94,21 +85,20 @@
     .muted-row { color: var(--muted); text-align: center; padding: 28px 0; font-size: 13px; }
     .clickable-link { color: var(--blue); cursor: pointer; font-size: 13px; }
     .clickable-link:hover { text-decoration: underline; }
-
     /* Drawer */
     .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200; }
     .drawer-overlay.open { display: block; }
-    .drawer { position: fixed; top: 0; right: -520px; width: 520px; height: 100vh; background: var(--card); z-index: 201; box-shadow: -4px 0 24px rgba(0,0,0,0.12); transition: right 0.25s ease; display: flex; flex-direction: column; }
+    .drawer { position: fixed; top: 0; right: -540px; width: 540px; height: 100vh; background: var(--card); z-index: 201; box-shadow: -4px 0 24px rgba(0,0,0,0.12); transition: right 0.25s ease; display: flex; flex-direction: column; }
     .drawer.open { right: 0; }
     .drawer-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
-    .drawer-title { font-size: 18px; font-weight: 800; color: var(--text); }
+    .drawer-title { font-size: 16px; font-weight: 800; color: var(--text); max-width: 440px; line-height: 1.3; }
     .drawer-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .drawer-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); padding: 0; line-height: 1; }
     .drawer-close:hover { color: var(--text); }
     .drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
     .drawer-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
     .drawer-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
-    .drawer-stat-val { font-size: 22px; font-weight: 800; color: var(--text); }
+    .drawer-stat-val { font-size: 20px; font-weight: 800; color: var(--text); }
     .drawer-stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .drawer-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
     .drawer-dist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
@@ -117,7 +107,31 @@
     .drawer-bar-wrap { flex: 1; background: var(--bg); border-radius: 99px; height: 6px; overflow: hidden; }
     .drawer-bar { height: 100%; background: var(--blue); border-radius: 99px; }
     .drawer-dist-n { font-size: 11px; color: var(--muted); min-width: 24px; text-align: right; }
-    .drawer-empty { font-size: 12px; color: var(--muted); }
+    .drawer-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
+    /* Notas */
+    .note-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    .note-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+    .note-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    /* Contactos */
+    .contact-card { display:flex; align-items:flex-start; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+    .contact-card:last-of-type { border-bottom:none; }
+    .contact-name { font-size:13px; font-weight:600; color:var(--text); }
+    .contact-role { font-size:11px; color:var(--muted); margin:2px 0 4px; }
+    .contact-meta { display:flex; flex-wrap:wrap; gap:8px; }
+    .contact-link { font-size:11px; color:var(--blue); text-decoration:none; }
+    .contact-link:hover { text-decoration:underline; }
+    .contact-link.linkedin { background:#0077b5; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600; }
+    .contact-delete { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:0 4px; flex-shrink:0; }
+    .contact-delete:hover { color:#dc2626; }
+    .btn-add-contact { margin-top:12px; width:100%; padding:9px; background:var(--blue-light); color:var(--blue); border:1px dashed #93c5fd; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-add-contact:hover { background:#dbeafe; }
+    .contact-form { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-top:10px; }
+    .cf-row { display:flex; gap:8px; margin-bottom:8px; }
+    .cf-input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:7px; font-size:13px; outline:none; background:var(--card); }
+    .cf-input:focus { border-color:var(--blue); }
+    .cf-actions { display:flex; justify-content:flex-end; gap:8px; align-items:center; }
+    .cf-btn-cancel { padding:7px 14px; background:var(--card); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
+    .cf-btn-save { padding:7px 14px; background:var(--blue); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -130,7 +144,7 @@
       </div>
     </div>
     <div class="sidebar-section">Vistas</div>
-    <div class="sidebar-item active"><span class="icon">⚡</span> Radar de Proyectos</div>
+    <div class="sidebar-item active"><span class="icon">⚡</span> Radar</div>
     <div class="sidebar-item"><span class="icon">🏗</span> Proyectos <span class="sidebar-count" id="sc-projects">—</span></div>
     <div class="sidebar-item"><span class="icon">📰</span> Noticias <span class="sidebar-count" id="sc-news">—</span></div>
     <hr class="filter-divider" />
@@ -140,6 +154,8 @@
     <div class="filter-group" id="filter-region"></div>
     <div class="sidebar-section">Fuente</div>
     <div class="filter-group" id="filter-source"></div>
+      <div class="sidebar-section">Configuración</div>
+    <a class="sidebar-item" href="/preferences.html" style="text-decoration:none"><span class="icon">⚙️</span> Preferencias</a>
   </aside>
 
   <div class="main">
@@ -151,10 +167,10 @@
       </div>
       <div class="topbar-actions">
         <select id="limit" class="topbar-select">
-          <option value="50">50 resultados</option>
-          <option value="100">100 resultados</option>
-          <option value="200" selected>200 resultados</option>
-          <option value="500">500 resultados</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200" selected>200</option>
+          <option value="500">500</option>
         </select>
         <a class="btn-outline" href="/docs" target="_blank">API</a>
         <button class="btn-primary" id="btnRefresh">↺ Actualizar</button>
@@ -165,43 +181,25 @@
       <div class="status-bar" id="status">Cargando…</div>
 
       <div class="stats-row">
-        <div class="stat-card blue">
-          <div class="stat-label">Proyectos activos</div>
-          <div class="stat-value" id="stat-projects">—</div>
-          <div class="stat-sub">en base de datos</div>
-        </div>
-        <div class="stat-card green">
-          <div class="stat-label">Con señales ⚡</div>
-          <div class="stat-value" id="stat-signals">—</div>
-          <div class="stat-sub">actividad detectada</div>
-        </div>
-        <div class="stat-card orange">
-          <div class="stat-label">Noticias</div>
-          <div class="stat-value" id="stat-news">—</div>
-          <div class="stat-sub">indexadas</div>
-        </div>
-        <div class="stat-card yellow">
-          <div class="stat-label">Score promedio</div>
-          <div class="stat-value" id="stat-avg">—</div>
-          <div class="stat-sub">radar score</div>
-        </div>
+        <div class="stat-card blue"><div class="stat-label">Proyectos activos</div><div class="stat-value" id="stat-projects">—</div><div class="stat-sub">en base de datos</div></div>
+        <div class="stat-card green"><div class="stat-label">Con señales ⚡</div><div class="stat-value" id="stat-signals">—</div><div class="stat-sub">actividad detectada</div></div>
+        <div class="stat-card orange"><div class="stat-label">Noticias</div><div class="stat-value" id="stat-news">—</div><div class="stat-sub">indexadas</div></div>
+        <div class="stat-card yellow"><div class="stat-label">Score promedio</div><div class="stat-value" id="stat-avg">—</div><div class="stat-sub">radar score</div></div>
       </div>
 
       <div class="section-card">
         <div class="section-head">
           <span class="section-icon">🏗</span>
-          <span class="section-title">Proyectos Recientes</span>
+          <span class="section-title">Proyectos</span>
           <span class="section-badge" id="badge-projects">—</span>
           <span class="section-updated" id="upd-projects"></span>
         </div>
         <div class="tableWrap">
           <table>
             <thead>
-              <tr><th>Score</th><th>Proyecto</th><th>Fuente</th><th>Mandante</th><th>Región</th><th>Fase</th><th>Fecha</th><th>Link</th></tr>
+              <tr><th>Score</th><th>Proyecto</th><th>Fuente</th><th>Mandante</th><th>Región</th><th>Pipeline</th><th>Fecha</th><th>Link</th></tr>
             </thead>
-            <tbody id="tbody-projects">
-              <tr><td colspan="8" class="muted-row">Cargando...</td></tr>
-            </tbody>
+            <tbody id="tbody-projects"><tr><td colspan="8" class="muted-row">Cargando...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -218,19 +216,14 @@
             <thead>
               <tr><th>Titular</th><th>Fuente</th><th>Industria</th><th>Fecha</th><th>Link</th></tr>
             </thead>
-            <tbody id="tbody-news">
-              <tr><td colspan="5" class="muted-row">Cargando...</td></tr>
-            </tbody>
+            <tbody id="tbody-news"><tr><td colspan="5" class="muted-row">Cargando...</td></tr></tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Drawer overlay -->
   <div class="drawer-overlay" id="drawer-overlay"></div>
-
-  <!-- Drawer panel -->
   <div class="drawer" id="drawer">
     <div class="drawer-header">
       <div>
@@ -245,26 +238,3 @@
   <script src="/app.js"></script>
 </body>
 </html>
-<!-- PATCH: agregar antes del </style> en index.html -->
-<style>
-  /* Contactos en drawer */
-  .contact-card { display:flex; align-items:flex-start; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
-  .contact-card:last-of-type { border-bottom:none; }
-  .contact-name { font-size:13px; font-weight:600; color:var(--text); }
-  .contact-role { font-size:11px; color:var(--muted); margin:2px 0 4px; }
-  .contact-meta { display:flex; flex-wrap:wrap; gap:8px; }
-  .contact-link { font-size:11px; color:var(--blue); text-decoration:none; }
-  .contact-link:hover { text-decoration:underline; }
-  .contact-link.linkedin { background:#0077b5; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600; }
-  .contact-delete { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:0 4px; flex-shrink:0; }
-  .contact-delete:hover { color:#dc2626; }
-  .btn-add-contact { margin-top:12px; width:100%; padding:9px; background:var(--blue-light); color:var(--blue); border:1px dashed #93c5fd; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
-  .btn-add-contact:hover { background:#dbeafe; }
-  .contact-form { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-top:10px; }
-  .cf-row { display:flex; gap:8px; margin-bottom:8px; }
-  .cf-input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:7px; font-size:13px; outline:none; }
-  .cf-input:focus { border-color:var(--blue); }
-  .cf-actions { display:flex; justify-content:flex-end; gap:8px; }
-  .cf-btn-cancel { padding:7px 14px; background:var(--card); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
-  .cf-btn-save { padding:7px 14px; background:var(--blue); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
-</style>
