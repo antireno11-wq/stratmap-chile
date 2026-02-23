@@ -313,6 +313,65 @@ def update_preferences(payload: PreferencesPayload, user=Depends(get_current_use
     return {"ok": True}
 
 
+# ── AI Matching ───────────────────────────────────────────────────────────────
+
+class ServiceItem(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class ServiceProfilePayload(BaseModel):
+    company_name: Optional[str] = None
+    services: List[ServiceItem] = []
+
+@app.get("/me/service-profile")
+def get_service_profile_endpoint():
+    profile = db.get_service_profile("default")
+    return profile or {"company_name": None, "services": []}
+
+@app.put("/me/service-profile")
+def update_service_profile(payload: ServiceProfilePayload):
+    db.init_ai_db()
+    profile = db.upsert_service_profile(
+        user_id="default",
+        company_name=payload.company_name or "",
+        services=[s.model_dump() for s in payload.services]
+    )
+    return {"ok": True, "profile": profile}
+
+@app.get("/ai/fits")
+def get_ai_fits(min_score: int = 40, limit: int = 200):
+    try:
+        items = db.list_top_ai_fits(user_id="default", min_score=min_score, limit=limit)
+        for r in items:
+            for f in ["created_at","updated_at","scored_at"]:
+                if r.get(f): r[f] = r[f].isoformat()
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        return {"items": [], "total": 0, "error": str(e)}
+
+@app.get("/opportunities/{opp_id}/ai-fit")
+def get_opportunity_ai_fit(opp_id: int):
+    try:
+        fit = db.get_ai_fit(opp_id, "default")
+        if fit and fit.get("scored_at"):
+            fit["scored_at"] = fit["scored_at"].isoformat()
+        return fit or {}
+    except Exception:
+        return {}
+
+@app.post("/admin/run-ai-matcher")
+def trigger_ai_matcher():
+    import subprocess, sys
+    try:
+        result = subprocess.Popen(
+            [sys.executable, "ai_matcher.py", "default"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        return {"ok": True, "pid": result.pid, "message": "AI matcher iniciado en background"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Static UI (debe ir al final) ──────────────────────────────────────────────
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
