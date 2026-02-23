@@ -372,13 +372,13 @@ def trigger_ai_matcher():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @app.post("/admin/fix-chilebcompra")
 def fix_chilebcompra():
-    """Fix: NombreUnidad = responsable de la licitación (mandante real)."""
+    """Fix: inspecciona keys del raw de Chile Compra."""
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                # Ver todos los keys del raw para encontrar el campo correcto
                 cur.execute("""
                     SELECT jsonb_object_keys(raw) as key
                     FROM opportunities
@@ -386,31 +386,32 @@ def fix_chilebcompra():
                     LIMIT 1;
                 """)
                 keys = [r['key'] for r in cur.fetchall()]
-                # Ver valores de los primeros campos de una fila
                 cur.execute("""
-                    SELECT raw
-                    FROM opportunities
+                    SELECT raw FROM opportunities
                     WHERE source = 'Chile Compra' AND raw IS NOT NULL
                     LIMIT 1;
                 """)
                 sample_row = cur.fetchone()
-                updated = 0
             conn.commit()
         return {"keys": keys, "sample": dict(sample_row) if sample_row else {}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/admin/chilebcompra-debug")
 def chilebcompra_debug():
-    """Llama directamente a la API de ChileCompra y muestra los campos que devuelve."""
-    import requests as req
-    ticket = "F8537A18-6766-4DEF-9E59-426B4FEE2844"
-    url = f"https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?buscar=mineria&ticket={ticket}&cantidad=1"
-    r = req.get(url, timeout=20)
-    data = r.json()
-    items = data.get("Listado") or []
-    if not items:
-        return {"error": "sin resultados", "raw": data}
-    item = items[0]
-    return {"keys": list(item.keys()), "sample": item}
+    """Llama directamente a la API de ChileCompra y muestra los campos reales."""
+    try:
+        import requests as req
+        ticket = "F8537A18-6766-4DEF-9E59-426B4FEE2844"
+        url = f"https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?buscar=mineria&ticket={ticket}&cantidad=1"
+        r = req.get(url, timeout=20)
+        data = r.json()
+        items = data.get("Listado") or []
+        if not items:
+            return {"error": "sin resultados"}
+        item = items[0]
+        return {"keys": list(item.keys()), "sample": item}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
