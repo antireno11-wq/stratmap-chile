@@ -397,6 +397,20 @@ def fix_chilebcompra():
                 updated = 0
             conn.commit()
         return {"keys": keys, "sample": dict(sample_row) if sample_row else {}}
+
+@app.get("/admin/chilebcompra-debug")
+def chilebcompra_debug():
+    """Llama directamente a la API de ChileCompra y muestra los campos que devuelve."""
+    import requests as req
+    ticket = "F8537A18-6766-4DEF-9E59-426B4FEE2844"
+    url = f"https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?buscar=mineria&ticket={ticket}&cantidad=1"
+    r = req.get(url, timeout=20)
+    data = r.json()
+    items = data.get("Listado") or []
+    if not items:
+        return {"error": "sin resultados", "raw": data}
+    item = items[0]
+    return {"keys": list(item.keys()), "sample": item}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
