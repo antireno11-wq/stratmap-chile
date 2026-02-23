@@ -10,90 +10,97 @@
     :root {
       --sidebar: 220px;
       --blue: #1a56db;
-      --blue-light: #eff6ff;
-      --border: #e2e8f0;
-      --bg: #f8fafc;
+      --orange: #e05a1e;
+      --border: #e8edf2;
+      --bg: #f5f7fa;
       --card: #fff;
       --text: #0f172a;
-      --muted: #94a3b8;
-      --green: #16a34a;
-      --orange: #e05a1e;
-      --yellow: #ca8a04;
+      --muted: #8896a5;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
-    .sidebar { width: var(--sidebar); background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
-    .sidebar-brand { padding: 20px 18px 16px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-    .sidebar-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
-    .sidebar-name { font-weight: 700; font-size: 15px; color: #fff; }
-    .sidebar-tagline { font-size: 10px; color: #64748b; margin-top: 1px; }
-    .sidebar-section { padding: 18px 12px 6px; font-size: 10px; font-weight: 700; color: #475569; letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0; }
-    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: #94a3b8; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; flex-shrink: 0; }
-    .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
-    .sidebar-item.active { background: #1e3a5f; color: #fff; border-left-color: var(--blue); }
-    .sidebar-item .icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
-    .filter-group { padding: 0 12px 8px; }
-    .filter-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
-    .filter-select { width: 100%; padding: 6px 8px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 12px; outline: none; }
-    .filter-range-row { display: flex; align-items: center; gap: 6px; }
-    .filter-range { flex: 1; accent-color: var(--blue); }
-    .filter-range-val { font-size: 11px; color: #94a3b8; min-width: 28px; text-align: right; }
-    .sidebar-stat { padding: 6px 16px; font-size: 12px; color: #64748b; }
-    .sidebar-stat span { color: #e2e8f0; font-weight: 700; }
+    /* Sidebar */
+    .sidebar { width: var(--sidebar); background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
+    .sidebar-name { font-weight: 700; font-size: 14px; color: var(--text); }
+    .sidebar-tagline { font-size: 10px; color: var(--muted); }
+    .sidebar-section { padding: 16px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.1s; }
+    .sidebar-item:hover { background: var(--bg); color: var(--text); }
+    .sidebar-item.active { background: #eff6ff; color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
+    .filter-group { padding: 4px 14px 8px; }
+    .filter-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+    .filter-select { width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; outline: none; }
+    .filter-select:focus { border-color: var(--blue); }
+    .filter-range { width: 100%; accent-color: var(--blue); margin-top: 4px; }
+    .sidebar-stat { padding: 3px 14px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    .sidebar-stat strong { color: var(--text); font-weight: 600; }
+
+    /* Main */
     .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; height: 100vh; }
-    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; z-index: 50; }
-    .topbar-title { font-size: 15px; font-weight: 700; }
-    .topbar-sub { font-size: 13px; color: var(--muted); }
-    .btn-outline { padding: 7px 14px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; text-decoration: none; margin-left: auto; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 20px; height: 52px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 50; }
+    .topbar-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .topbar-sub { font-size: 12px; color: var(--muted); }
+    .topbar-pill { padding: 4px 10px; background: #eff6ff; color: var(--blue); border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .topbar-pill.orange { background: #fff4ef; color: var(--orange); }
+    .btn-back { padding: 6px 14px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; margin-left: auto; }
+    .btn-back:hover { background: var(--border); }
 
     #map { flex: 1; z-index: 1; }
 
+    /* Legend */
+    .map-legend { position: absolute; bottom: 20px; right: 20px; z-index: 10; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .legend-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text); margin-bottom: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.8); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .legend-note { font-size: 10px; color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
     /* Popup */
-    .leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); border: 1px solid var(--border); padding: 0; overflow: hidden; }
+    .leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); border: 1px solid var(--border); padding: 0; overflow: hidden; }
     .leaflet-popup-content { margin: 0; width: 260px !important; }
     .popup-inner { padding: 14px; }
-    .popup-score { display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 5px; margin-bottom: 6px; }
-    .popup-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 6px; }
-    .popup-meta { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+    .popup-score { display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 5px; margin-bottom: 8px; }
+    .popup-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
+    .popup-meta { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
     .popup-company { color: var(--blue); font-weight: 500; }
-    .popup-actions { display: flex; gap: 8px; }
-    .popup-btn { flex: 1; padding: 6px; border-radius: 7px; font-size: 12px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: none; }
+    .popup-approx { font-size: 10px; color: var(--orange); font-style: italic; }
+    .popup-actions { display: flex; gap: 6px; }
+    .popup-btn { flex: 1; padding: 7px; border-radius: 7px; font-size: 12px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: none; transition: opacity 0.1s; }
+    .popup-btn:hover { opacity: 0.85; }
     .popup-btn-primary { background: var(--blue); color: #fff; }
     .popup-btn-outline { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
 
-    /* Legend */
-    .map-legend { position: absolute; bottom: 24px; right: 24px; z-index: 10; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .legend-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); margin-bottom: 4px; }
-    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-
     /* Drawer */
-    .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200; }
+    .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.25); z-index: 200; backdrop-filter: blur(2px); }
     .drawer-overlay.open { display: block; }
-    .drawer { position: fixed; top: 0; right: -540px; width: 540px; height: 100vh; background: var(--card); z-index: 201; box-shadow: -4px 0 24px rgba(0,0,0,0.12); transition: right 0.25s ease; display: flex; flex-direction: column; }
+    .drawer { position: fixed; top: 0; right: -520px; width: 520px; height: 100vh; background: var(--card); z-index: 201; box-shadow: -4px 0 32px rgba(0,0,0,0.1); transition: right 0.25s ease; display: flex; flex-direction: column; }
     .drawer.open { right: 0; }
-    .drawer-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
-    .drawer-title { font-size: 15px; font-weight: 800; color: var(--text); max-width: 440px; line-height: 1.3; }
+    .drawer-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
+    .drawer-title { font-size: 15px; font-weight: 700; color: var(--text); max-width: 420px; line-height: 1.35; }
     .drawer-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .drawer-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
-    .drawer-close:hover { color: var(--text); }
-    .drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
-    .drawer-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
-    .drawer-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
-    .drawer-stat-val { font-size: 20px; font-weight: 800; color: var(--text); }
-    .drawer-stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-    .drawer-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
-    .note-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    .drawer-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); padding: 2px; border-radius: 5px; }
+    .drawer-close:hover { background: var(--bg); color: var(--text); }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+    .drawer-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; }
+    .drawer-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 12px; text-align: center; }
+    .drawer-stat-val { font-size: 20px; font-weight: 800; }
+    .drawer-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .drawer-section-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin: 14px 0 8px; }
+    .note-card { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 7px; }
     .note-text { font-size: 13px; line-height: 1.5; }
-    .note-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
-    .status-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 4px; }
-    .cf-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; background: var(--card); margin-bottom: 8px; }
+    .note-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .cf-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; background: var(--card); margin-bottom: 7px; font-family: inherit; }
     .cf-input:focus { border-color: var(--blue); }
-    .cf-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-    .cf-btn-save { padding: 7px 16px; background: var(--blue); color: #fff; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .drawer-empty { font-size: 12px; color: var(--muted); }
+    .cf-row { display: flex; gap: 8px; }
+    .cf-btn-save { padding: 7px 16px; background: var(--blue); color: #fff; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .drawer-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
+    .detail-row { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
+    .detail-row a { color: var(--blue); text-decoration: none; }
+    .detail-row a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -105,17 +112,15 @@
         <div class="sidebar-tagline">Inteligencia Minera Chile</div>
       </div>
     </div>
+
     <div class="sidebar-section">Vistas</div>
     <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
-    <a class="sidebar-item" href="/"><span class="icon">🏗</span> Proyectos</a>
-    <a class="sidebar-item" href="/"><span class="icon">📰</span> Noticias</a>
     <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item active" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
     <div class="sidebar-section">Configuración</div>
     <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
 
     <div class="sidebar-section">Filtros</div>
-
     <div class="filter-group">
       <div class="filter-label">Industria</div>
       <select class="filter-select" id="f-industry" onchange="applyFilters()">
@@ -124,10 +129,8 @@
         <option value="Infraestructura">Infraestructura</option>
         <option value="Energía">Energía</option>
         <option value="Construcción">Construcción</option>
-        <option value="Agua y Saneamiento">Agua y Saneamiento</option>
       </select>
     </div>
-
     <div class="filter-group">
       <div class="filter-label">Fuente</div>
       <select class="filter-select" id="f-source" onchange="applyFilters()">
@@ -138,41 +141,38 @@
         <option value="COCHILCO">COCHILCO</option>
       </select>
     </div>
-
     <div class="filter-group">
-      <div class="filter-label">Score mínimo: <span id="score-label">0</span></div>
-      <div class="filter-range-row">
-        <input type="range" class="filter-range" id="f-score" min="0" max="90" step="5" value="0"
-          oninput="document.getElementById('score-label').textContent=this.value; applyFilters()" />
-      </div>
+      <div class="filter-label">Score mínimo: <strong id="score-label">0</strong></div>
+      <input type="range" class="filter-range" id="f-score" min="0" max="90" step="5" value="0"
+        oninput="document.getElementById('score-label').textContent=this.value; applyFilters()" />
     </div>
 
     <div class="sidebar-section">Resumen</div>
-    <div class="sidebar-stat">Proyectos con coords: <span id="stat-total">—</span></div>
-    <div class="sidebar-stat">Mostrando: <span id="stat-shown">—</span></div>
-    <div class="sidebar-stat">Minería: <span id="stat-mining">—</span></div>
-    <div class="sidebar-stat">Infraestructura: <span id="stat-infra">—</span></div>
+    <div class="sidebar-stat"><span>Con coords exactas</span><strong id="stat-exact">—</strong></div>
+    <div class="sidebar-stat"><span>Por región aprox.</span><strong id="stat-approx">—</strong></div>
+    <div class="sidebar-stat"><span>Mostrando</span><strong id="stat-shown">—</strong></div>
   </aside>
 
   <div class="main">
     <div class="topbar">
       <span class="topbar-title">🗺 Mapa de Proyectos</span>
       <span class="topbar-sub" id="topbar-sub">Cargando...</span>
-      <a href="/" class="btn-outline">← Volver al Radar</a>
+      <span class="topbar-pill" id="pill-exact">— exactos</span>
+      <span class="topbar-pill orange" id="pill-approx">— por región</span>
+      <a href="/" class="btn-back">← Volver</a>
     </div>
     <div id="map"></div>
   </div>
 
-  <!-- Leyenda -->
   <div class="map-legend">
     <div class="legend-title">Score</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div> Alto (80+)</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#ca8a04"></div> Medio (65–79)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a56db"></div> Alto (80+)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Medio (65–79)</div>
     <div class="legend-item"><div class="legend-dot" style="background:#e05a1e"></div> Normal (50–64)</div>
     <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> Bajo (&lt;50)</div>
+    <div class="legend-note">⊕ Punto exacto · ○ Aprox. región</div>
   </div>
 
-  <!-- Drawer -->
   <div class="drawer-overlay" id="drawer-overlay"></div>
   <div class="drawer" id="drawer">
     <div class="drawer-header">
@@ -186,45 +186,39 @@
   </div>
 
   <script>
-    // ── Map init ──────────────────────────────────────────────────────────────
-    const map = L.map("map", {
-      center: [-33.5, -70.6],
-      zoom: 5,
-      zoomControl: true,
-    });
-
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: '© OpenStreetMap © CartoDB',
-      subdomains: "abcd",
-      maxZoom: 19,
-    }).addTo(map);
-
-    // ── State ─────────────────────────────────────────────────────────────────
-    let allItems = [];
-    let markers = L.layerGroup().addTo(map);
-    let currentOppId = null;
-
-    const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
-    const STATUS_COLORS = {
-      "Detectada":   ["#1d4ed8","#eff6ff"],
-      "En análisis": ["#92400e","#fef3c7"],
-      "Postular":    ["#15803d","#f0fdf4"],
-      "No postular": ["#64748b","#f1f5f9"],
-      "Presentada":  ["#7c3aed","#f5f3ff"],
-      "Adjudicada":  ["#15803d","#dcfce7"],
-      "Perdida":     ["#dc2626","#fef2f2"],
+    // ── Coordenadas por región (centros aproximados) ───────────────────────────
+    const REGION_COORDS = {
+      "Arica y Parinacota": [-18.48, -70.32],
+      "Tarapacá":           [-20.21, -69.28],
+      "Antofagasta":        [-23.65, -70.39],
+      "Atacama":            [-27.37, -70.33],
+      "Coquimbo":           [-29.95, -71.34],
+      "Valparaíso":         [-33.05, -71.62],
+      "Metropolitana":      [-33.46, -70.65],
+      "O'Higgins":          [-34.57, -71.00],
+      "Maule":              [-35.43, -71.66],
+      "Ñuble":              [-36.60, -71.95],
+      "Biobío":             [-37.47, -72.35],
+      "Araucanía":          [-38.95, -72.33],
+      "Los Ríos":           [-39.82, -73.24],
+      "Los Lagos":          [-41.47, -72.94],
+      "Aysén":              [-45.57, -72.07],
+      "Magallanes":         [-53.16, -70.91],
+      "Interregional":      [-33.46, -70.65],
     };
 
+    const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
+
     function scoreColor(s) {
-      if (s >= 80) return "#15803d";
-      if (s >= 65) return "#ca8a04";
+      if (s >= 80) return "#1a56db";
+      if (s >= 65) return "#16a34a";
       if (s >= 50) return "#e05a1e";
       return "#94a3b8";
     }
 
     function scoreColorBg(s) {
-      if (s >= 80) return ["#15803d","#f0fdf4"];
-      if (s >= 65) return ["#92400e","#fef3c7"];
+      if (s >= 80) return ["#1d4ed8","#eff6ff"];
+      if (s >= 65) return ["#15803d","#f0fdf4"];
       if (s >= 50) return ["#c2410c","#fff7ed"];
       return ["#475569","#f1f5f9"];
     }
@@ -238,28 +232,46 @@
       return new Date(d).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
     }
 
-    // ── Markers ───────────────────────────────────────────────────────────────
+    // ── Map ───────────────────────────────────────────────────────────────────
+    const map = L.map("map", { center: [-33.5, -70.6], zoom: 5 });
 
-    function makeIcon(score) {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: "© OpenStreetMap © CartoDB",
+      subdomains: "abcd", maxZoom: 19,
+    }).addTo(map);
+
+    let allItems = [];
+    let markers = L.layerGroup().addTo(map);
+
+    function getCoords(item) {
+      const raw = item.raw || {};
+      const lng = raw.NUEVO_X || raw.X;
+      const lat = raw.NUEVO_Y || raw.Y;
+      if (lat && lng && lat !== 0 && lng !== 0 && Math.abs(lat) < 56 && Math.abs(lat) > 17 && lng < -60) {
+        return { coords: [lat, lng], exact: true };
+      }
+      // Fallback por región
+      const region = item.region || "";
+      for (const [key, coords] of Object.entries(REGION_COORDS)) {
+        if (region.includes(key) || key.includes(region.split(" ")[0])) {
+          // Jitter para no apilar todos en el mismo punto
+          const jitter = () => (Math.random() - 0.5) * 1.2;
+          return { coords: [coords[0] + jitter(), coords[1] + jitter()], exact: false };
+        }
+      }
+      return null;
+    }
+
+    function makeIcon(score, exact) {
       const color = scoreColor(score);
-      const size = score >= 80 ? 14 : score >= 65 ? 12 : 10;
+      const size = score >= 80 ? 13 : score >= 65 ? 11 : 9;
+      const border = exact ? `border:2px solid #fff` : `border:2px dashed #fff;opacity:0.75`;
       return L.divIcon({
-        html: `<div style="width:${size}px;height:${size}px;background:${color};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`,
+        html: `<div style="width:${size}px;height:${size}px;background:${color};${border};border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.25)"></div>`,
         className: "",
         iconSize: [size, size],
         iconAnchor: [size/2, size/2],
       });
-    }
-
-    function getCoords(item) {
-      const raw = item.raw || {};
-      // SEA usa NUEVO_X/NUEVO_Y (más preciso) o X/Y
-      const lng = raw.NUEVO_X || raw.X;
-      const lat = raw.NUEVO_Y || raw.Y;
-      if (lat && lng && lat !== 0 && lng !== 0 && Math.abs(lat) < 90 && Math.abs(lng) < 180) {
-        return [lat, lng];
-      }
-      return null;
     }
 
     function applyFilters() {
@@ -268,34 +280,31 @@
       const minScore = parseInt(document.getElementById("f-score").value) || 0;
 
       markers.clearLayers();
-      let shown = 0;
-      let mining = 0;
-      let infra = 0;
+      let shown = 0, exact = 0, approx = 0;
 
       allItems.forEach(item => {
-        const coords = getCoords(item);
-        if (!coords) return;
-
         const score = item.radar_score || item.score || 0;
         if (industry && item.industry !== industry) return;
-        if (source && !item.source?.toLowerCase().includes(source.toLowerCase())) return;
+        if (source && !(item.source||"").toLowerCase().includes(source.toLowerCase())) return;
         if (score < minScore) return;
 
-        shown++;
-        if (item.industry === "Minería") mining++;
-        if (item.industry === "Infraestructura") infra++;
+        const result = getCoords(item);
+        if (!result) return;
 
-        const marker = L.marker(coords, { icon: makeIcon(score) });
+        shown++;
+        if (result.exact) exact++; else approx++;
+
+        const marker = L.marker(result.coords, { icon: makeIcon(score, result.exact) });
         const [sc, sbg] = scoreColorBg(score);
 
         marker.bindPopup(`
           <div class="popup-inner">
             <span class="popup-score" style="color:${sc};background:${sbg}">${score}</span>
-            <div class="popup-title">${escapeHTML(item.title||"").substring(0,80)}${(item.title||"").length>80?"...":""}</div>
+            <div class="popup-title">${escapeHTML((item.title||"").substring(0,80))}${(item.title||"").length>80?"...":""}</div>
             <div class="popup-meta">
               <span class="popup-company">${escapeHTML(item.company||"—")}</span>
               <span>${escapeHTML(item.region||"—")} · ${escapeHTML(item.industry||"—")}</span>
-              <span>${escapeHTML(item.phase||"—")}</span>
+              ${!result.exact ? `<span class="popup-approx">📍 Ubicación aproximada por región</span>` : ""}
             </div>
             <div class="popup-actions">
               <button class="popup-btn popup-btn-primary" onclick="openDrawer(${item.id})">Ver detalle</button>
@@ -308,15 +317,15 @@
       });
 
       document.getElementById("stat-shown").textContent = shown;
-      document.getElementById("stat-mining").textContent = mining;
-      document.getElementById("stat-infra").textContent = infra;
-      document.getElementById("topbar-sub").textContent = `${shown} proyectos con ubicación`;
+      document.getElementById("stat-exact").textContent = exact;
+      document.getElementById("stat-approx").textContent = approx;
+      document.getElementById("pill-exact").textContent = `${exact} exactos`;
+      document.getElementById("pill-approx").textContent = `${approx} por región`;
+      document.getElementById("topbar-sub").textContent = `${shown} proyectos en mapa`;
     }
 
     // ── Drawer ────────────────────────────────────────────────────────────────
-
     window.openDrawer = async function(oppId) {
-      currentOppId = oppId;
       const item = allItems.find(i => i.id === oppId);
       if (!item) return;
 
@@ -325,10 +334,9 @@
       document.getElementById("drawer-body").innerHTML = `<p class="drawer-empty">Cargando...</p>`;
       document.getElementById("drawer").classList.add("open");
       document.getElementById("drawer-overlay").classList.add("open");
-
       map.closePopup();
 
-      const [pipelineRes, notesRes] = await Promise.all([
+      const [pipeRes, notesRes] = await Promise.all([
         fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
         fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
       ]);
@@ -336,112 +344,92 @@
       const score = item.radar_score || item.score || 0;
       const [sc] = scoreColorBg(score);
       const notes = notesRes.items || [];
-      const status = pipelineRes.status;
-      const [stColor, stBg] = STATUS_COLORS[status] || ["#64748b","#f1f5f9"];
+      const status = pipeRes.status;
 
       document.getElementById("drawer-body").innerHTML = `
         <div class="drawer-stats">
           <div class="drawer-stat"><div class="drawer-stat-val" style="color:${sc}">${score}</div><div class="drawer-stat-lbl">Score</div></div>
-          <div class="drawer-stat"><div class="drawer-stat-val" style="font-size:14px">${escapeHTML(item.region||"—")}</div><div class="drawer-stat-lbl">Región</div></div>
-          <div class="drawer-stat"><div class="drawer-stat-val" style="font-size:13px">${escapeHTML(item.industry||"—")}</div><div class="drawer-stat-lbl">Industria</div></div>
+          <div class="drawer-stat"><div class="drawer-stat-val" style="font-size:13px">${escapeHTML(item.region||"—")}</div><div class="drawer-stat-lbl">Región</div></div>
+          <div class="drawer-stat"><div class="drawer-stat-val" style="font-size:12px">${escapeHTML(item.industry||"—")}</div><div class="drawer-stat-lbl">Industria</div></div>
         </div>
 
-        <div class="drawer-section-title">Estado Pipeline</div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-          <select id="pipeline-status" class="cf-input" style="flex:1;min-width:160px;margin:0">
-            ${PIPELINE_STATUSES.map(s => `<option value="${s}" ${s===status?"selected":""}>${s}</option>`).join("")}
+        <div class="drawer-section-title">Pipeline</div>
+        <div class="cf-row" style="margin-bottom:8px">
+          <select id="ps" class="cf-input" style="margin:0">
+            ${PIPELINE_STATUSES.map(s=>`<option value="${s}" ${s===status?"selected":""}>${s}</option>`).join("")}
           </select>
-          <input id="pipeline-assignee" class="cf-input" placeholder="Responsable" value="${escapeHTML(pipelineRes.assignee||"")}" style="flex:1;min-width:120px;margin:0" />
-          <button class="cf-btn-save" onclick="savePipeline(${oppId})">Guardar</button>
+          <input id="pa" class="cf-input" placeholder="Responsable" value="${escapeHTML(pipeRes.assignee||"")}" style="margin:0" />
+          <button class="cf-btn-save" onclick="savePipe(${oppId})">✓</button>
         </div>
-        <div id="pipeline-feedback" style="font-size:12px;color:#15803d;margin-bottom:12px;display:none">✓ Guardado</div>
+        <div id="pipe-ok" style="font-size:11px;color:#16a34a;display:none;margin-bottom:8px">✓ Guardado</div>
 
-        <div class="drawer-section-title">Notas <span style="font-weight:400;color:#94a3b8">(${notes.length})</span></div>
-        <div id="notes-list" style="margin-bottom:12px">
-          ${notes.length ? notes.map(n => `
+        <div class="drawer-section-title">Notas (${notes.length})</div>
+        <div id="notes-list" style="margin-bottom:10px">
+          ${notes.length ? notes.map(n=>`
             <div class="note-card">
               <div class="note-text">${escapeHTML(n.note)}</div>
               <div class="note-meta">${n.author?escapeHTML(n.author)+" · ":""}${fmtDatetime(n.created_at)}</div>
-            </div>`).join("") : `<p class="drawer-empty">Sin notas</p>`}
+            </div>`).join("") : `<p class="drawer-empty" style="margin-bottom:8px">Sin notas aún</p>`}
         </div>
-        <textarea id="note-text" class="cf-input" rows="2" placeholder="Agregar nota..." style="resize:vertical"></textarea>
-        <div class="cf-actions">
-          <input id="note-author" class="cf-input" placeholder="Tu nombre (opcional)" style="flex:1;margin:0" />
-          <button class="cf-btn-save" onclick="saveNote(${oppId})">Agregar nota</button>
+        <textarea id="nt" class="cf-input" rows="2" placeholder="Agregar nota..." style="resize:vertical"></textarea>
+        <div class="cf-row">
+          <input id="na" class="cf-input" placeholder="Tu nombre (opcional)" style="margin:0;flex:1" />
+          <button class="cf-btn-save" onclick="saveNote(${oppId})">Agregar</button>
         </div>
 
-        <div class="drawer-section-title" style="margin-top:20px">Detalles</div>
-        <div style="font-size:12px;color:#64748b;display:flex;flex-direction:column;gap:4px">
+        <div class="drawer-section-title" style="margin-top:16px">Detalles</div>
+        <div class="detail-row">
           <span>Fuente: <strong>${escapeHTML(item.source||"—")}</strong></span>
           <span>Mandante: <strong>${escapeHTML(item.company||"—")}</strong></span>
           <span>Fase: <strong>${escapeHTML(item.phase||"—")}</strong></span>
           ${item.raw?.INVERSION_US ? `<span>Inversión: <strong>USD ${(item.raw.INVERSION_US/1e6).toFixed(1)}M</strong></span>` : ""}
-          ${item.url ? `<a href="${item.url}" target="_blank" class="contact-link" style="color:var(--blue);margin-top:4px">🔗 Ver fuente original</a>` : ""}
+          ${item.url ? `<a href="${item.url}" target="_blank">🔗 Ver fuente original</a>` : ""}
         </div>
       `;
     };
 
-    window.savePipeline = async function(oppId) {
-      const status = document.getElementById("pipeline-status").value;
-      const assignee = document.getElementById("pipeline-assignee").value.trim() || null;
+    window.savePipe = async function(oppId) {
       await fetch(`/opportunities/${oppId}/pipeline`, {
-        method: "PUT",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({status, assignee})
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({status:document.getElementById("ps").value, assignee:document.getElementById("pa").value||null})
       });
-      const fb = document.getElementById("pipeline-feedback");
-      fb.style.display = "block";
-      setTimeout(() => fb.style.display = "none", 2000);
+      const ok = document.getElementById("pipe-ok");
+      ok.style.display = "block";
+      setTimeout(()=>ok.style.display="none", 2000);
     };
 
     window.saveNote = async function(oppId) {
-      const note = document.getElementById("note-text").value.trim();
-      const author = document.getElementById("note-author").value.trim() || null;
+      const note = document.getElementById("nt").value.trim();
       if (!note) return;
+      const author = document.getElementById("na").value.trim() || null;
       const res = await fetch(`/opportunities/${oppId}/notes`, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
+        method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({note, author})
       });
       const saved = await res.json();
-      document.getElementById("note-text").value = "";
+      document.getElementById("nt").value = "";
       const list = document.getElementById("notes-list");
       const card = document.createElement("div");
       card.className = "note-card";
-      card.innerHTML = `<div class="note-text">${escapeHTML(saved.note)}</div>
-        <div class="note-meta">${saved.author?escapeHTML(saved.author)+" · ":""}${fmtDatetime(saved.created_at)}</div>`;
+      card.innerHTML = `<div class="note-text">${escapeHTML(saved.note)}</div><div class="note-meta">${saved.author?escapeHTML(saved.author)+" · ":""}${fmtDatetime(saved.created_at)}</div>`;
       list.insertBefore(card, list.firstChild);
-      if (list.querySelector(".drawer-empty")) list.querySelector(".drawer-empty").remove();
+      list.querySelector(".drawer-empty")?.remove();
     };
 
     function closeDrawer() {
       document.getElementById("drawer").classList.remove("open");
       document.getElementById("drawer-overlay").classList.remove("open");
-      currentOppId = null;
     }
-
     document.getElementById("drawer-close").addEventListener("click", closeDrawer);
     document.getElementById("drawer-overlay").addEventListener("click", closeDrawer);
 
-    // ── Load data ─────────────────────────────────────────────────────────────
-
+    // ── Load ──────────────────────────────────────────────────────────────────
     async function load() {
-      try {
-        const res = await fetch("/opportunities?limit=2000");
-        const data = await res.json();
-        allItems = data.items || [];
-
-        const withCoords = allItems.filter(i => getCoords(i));
-        document.getElementById("stat-total").textContent = withCoords.length;
-        document.getElementById("topbar-sub").textContent = `${withCoords.length} proyectos con ubicación`;
-
-        applyFilters();
-
-        // Centrar mapa en Chile
-        map.setView([-30, -70], 5);
-      } catch(e) {
-        document.getElementById("topbar-sub").textContent = `Error: ${e.message}`;
-      }
+      const res = await fetch("/opportunities?limit=2000");
+      const data = await res.json();
+      allItems = data.items || [];
+      applyFilters();
+      map.setView([-30, -70], 5);
     }
 
     load();
