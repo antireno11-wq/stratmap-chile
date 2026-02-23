@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Preferencias · Stratmap</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     :root {
       --sidebar: 220px;
       --blue: #1a56db;
@@ -18,17 +19,17 @@
       --green: #16a34a;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+    body { font-family: 'Inter', ui-sans-serif, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
-    .sidebar { width: var(--sidebar); background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
+    .sidebar { width: var(--sidebar); background: #0d1117; border-right: none; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
     .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-    .sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
-    .sidebar-name { font-weight: 700; font-size: 14px; color: var(--text); }
-    .sidebar-tagline { font-size: 10px; color: var(--muted); }
-    .sidebar-section { padding: 16px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.1s; }
-    .sidebar-item:hover { background: var(--bg); color: var(--text); }
-    .sidebar-item.active { background: var(--blue-light); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+    .sidebar-logo { width: 32px; height: 32px; background: linear-gradient(135deg, #2563eb, #f97316); border-radius: 9px; box-shadow: 0 4px 12px rgba(37,99,235,0.4); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
+    .sidebar-name { font-weight: 800; font-size: 14px; color: #fff; }
+    .sidebar-tagline { font-size: 10px; color: #4b5563; }
+    .sidebar-section { padding: 16px 18px 4px; font-size: 9px; font-weight: 700; color: #374151; letter-spacing: 0.08em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
+    .sidebar-item:hover { background: #161b22; color: #d1d5db; border-left-color: #374151; }
+    .sidebar-item.active { background: #1c2333; color: #fff; border-left-color: #f97316; font-weight: 600; }
     .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
     .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; }
@@ -190,6 +191,42 @@
         </div>
       </div>
 
+
+      <div class="pref-card" style="border-top: 3px solid #2563eb;">
+        <div class="pref-head">
+          <span class="pref-icon">🤖</span>
+          <div>
+            <div class="pref-title">Mis servicios — AI Matching</div>
+            <div class="pref-desc">La IA analiza las licitaciones y calcula qué tan bien encajan con tus servicios</div>
+          </div>
+          <div id="ai-status" style="margin-left:auto;font-size:11px;color:#6b7280"></div>
+        </div>
+        <div class="pref-body">
+          <div style="margin-bottom:14px">
+            <label class="filter-label" style="display:block;margin-bottom:4px;font-size:12px;font-weight:600;color:#0d1117">Nombre de tu empresa</label>
+            <input class="kw-input" id="company-name" placeholder="Ej: Mitta, Codelco, BHP…" style="width:100%;max-width:360px" />
+          </div>
+
+          <div style="margin-bottom:10px;font-size:12px;font-weight:600;color:#0d1117">Servicios que ofreces</div>
+          <div id="services-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+
+          <button onclick="addService()" style="padding:8px 14px;background:#eff6ff;color:#2563eb;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;width:100%">+ Agregar servicio</button>
+
+          <div style="margin-top:16px;padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px">
+            <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:4px">⚡ Cómo funciona</div>
+            <div style="font-size:11px;color:#166534;line-height:1.6">
+              Cada noche Claude analiza todas las licitaciones nuevas y les asigna un <strong>score de fit 0-100</strong> basado en tus servicios.
+              Luego en el Radar verás una columna <strong>"AI Fit"</strong> con el score y una explicación de por qué encaja.
+            </div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <button onclick="runMatcher()" id="btn-run-matcher" style="padding:8px 16px;background:#0d1117;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">▶ Correr AI Matcher ahora</button>
+            <span id="matcher-status" style="font-size:11px;color:#6b7280"></span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -258,6 +295,17 @@
         preferred_sources: [...selected.sources],
       };
       localStorage.setItem("stratmap_prefs", JSON.stringify(prefs));
+      // Guardar perfil de servicios
+      const companyName = document.getElementById('company-name').value.trim();
+      const servicePayload = {
+        company_name: companyName,
+        services: services.map(({name, description}) => ({name, description})).filter(s => s.name.trim())
+      };
+      await fetch('/me/service-profile', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(servicePayload)
+      });
       try { await fetch("/me/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(prefs)}); } catch(e) {}
       const fb = document.getElementById("feedback");
       fb.classList.add("show");
@@ -289,7 +337,77 @@
 
     document.getElementById("kw-input").addEventListener("keydown", e => { if(e.key==="Enter") addKeyword(); });
 
+
+    // ── Service profile ───────────────────────────────────────────────────────
+    let services = [];
+
+    function addService(name='', description='') {
+      const id = Date.now();
+      services.push({ id, name, description });
+      renderServices();
+    }
+
+    function removeService(id) {
+      services = services.filter(s => s.id !== id);
+      renderServices();
+    }
+
+    function renderServices() {
+      document.getElementById('services-list').innerHTML = services.length
+        ? services.map(s => `
+          <div style="display:flex;gap:8px;align-items:flex-start;background:#f5f7fa;border:1.5px solid #e8edf2;border-radius:9px;padding:10px 12px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+              <input class="kw-input" value="${s.name}" placeholder="Nombre del servicio (ej: Leasing operativo de flota)"
+                oninput="updateService(${s.id},'name',this.value)" style="margin:0;font-weight:600" />
+              <input class="kw-input" value="${s.description||''}" placeholder="Descripción breve (ej: Arriendo de camiones tolva, buses de personal y vehículos 4x4 para proyectos mineros)"
+                oninput="updateService(${s.id},'description',this.value)" style="margin:0;font-size:11px" />
+            </div>
+            <button onclick="removeService(${s.id})" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px">✕</button>
+          </div>`).join('')
+        : '<p style="font-size:12px;color:#8896a5;padding:4px 0">Sin servicios configurados aún</p>';
+    }
+
+    function updateService(id, field, value) {
+      const s = services.find(s => s.id === id);
+      if (s) s[field] = value;
+    }
+
+    async function loadServiceProfile() {
+      try {
+        const res = await fetch('/me/service-profile');
+        const data = await res.json();
+        if (data.company_name) document.getElementById('company-name').value = data.company_name;
+        if (data.services?.length) {
+          services = data.services.map((s,i) => ({...s, id: i+1}));
+          renderServices();
+        }
+        document.getElementById('ai-status').textContent = data.services?.length
+          ? `${data.services.length} servicio${data.services.length>1?'s':''} configurado${data.services.length>1?'s':''}` : '';
+      } catch(e) {}
+    }
+
+    async function runMatcher() {
+      const btn = document.getElementById('btn-run-matcher');
+      const status = document.getElementById('matcher-status');
+      btn.disabled = true;
+      btn.textContent = '⏳ Corriendo…';
+      status.textContent = 'Iniciando AI matcher…';
+      try {
+        const res = await fetch('/admin/run-ai-matcher', { method: 'POST' });
+        const data = await res.json();
+        status.textContent = data.ok ? '✓ Matcher iniciado — puede tardar varios minutos' : 'Error al iniciar';
+        status.style.color = data.ok ? '#16a34a' : '#dc2626';
+      } catch(e) {
+        status.textContent = 'Error de conexión';
+        status.style.color = '#dc2626';
+      }
+      btn.disabled = false;
+      btn.textContent = '▶ Correr AI Matcher ahora';
+    }
+
+
     loadFromStorage();
+    loadServiceProfile();
     buildTagGrid("tag-industries", INDUSTRIES, "industries");
     buildTagGrid("tag-regions", REGIONS, "regions");
     buildTagGrid("tag-companies", COMPANIES, "companies");
