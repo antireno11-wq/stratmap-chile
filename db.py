@@ -583,3 +583,141 @@ def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
             print(f"[contacts] error importando {c.get('name')}: {e}")
             errors += 1
     return inserted, errors
+
+
+# ── AI Matching ───────────────────────────────────────────────────────────────
+
+def init_ai_db() -> None:
+    sql = """
+    CREATE TABLE IF NOT EXISTS service_profiles (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'default',
+        company_name TEXT,
+        services JSONB NOT NULL DEFAULT '[]',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_opportunity_fits (
+        id SERIAL PRIMARY KEY,
+        opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL DEFAULT 'default',
+        fit_score INTEGER NOT NULL DEFAULT 0,
+        fit_reason TEXT,
+        service_applicable TEXT,
+        contact_suggestion TEXT,
+        model_version TEXT DEFAULT 'claude-sonnet-4-6',
+        scored_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(opportunity_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_fits_user ON ai_opportunity_fits (user_id, fit_score DESC);
+    CREATE INDEX IF NOT EXISTS idx_ai_fits_opp ON ai_opportunity_fits (opportunity_id);
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+
+def upsert_service_profile(user_id: str, company_name: str, services: list) -> Dict[str, Any]:
+    sql = """
+    INSERT INTO service_profiles (user_id, company_name, services, updated_at)
+    VALUES (%(user_id)s, %(company_name)s, %(services)s, NOW())
+    ON CONFLICT (user_id) DO UPDATE SET
+        company_name = EXCLUDED.company_name,
+        services = EXCLUDED.services,
+        updated_at = NOW()
+    RETURNING *;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {
+                "user_id": user_id,
+                "company_name": company_name,
+                "services": Json(services)
+            })
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def get_service_profile(user_id: str = "default") -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM service_profiles WHERE user_id = %(user_id)s;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"user_id": user_id})
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def upsert_ai_fit(opportunity_id: int, user_id: str, fit_score: int,
+                  fit_reason: str, service_applicable: str,
+                  contact_suggestion: str, model_version: str = "claude-sonnet-4-6") -> None:
+    sql = """
+    INSERT INTO ai_opportunity_fits
+        (opportunity_id, user_id, fit_score, fit_reason, service_applicable, contact_suggestion, model_version, scored_at)
+    VALUES
+        (%(opp_id)s, %(user_id)s, %(score)s, %(reason)s, %(service)s, %(contact)s, %(model)s, NOW())
+    ON CONFLICT (opportunity_id, user_id) DO UPDATE SET
+        fit_score = EXCLUDED.fit_score,
+        fit_reason = EXCLUDED.fit_reason,
+        service_applicable = EXCLUDED.service_applicable,
+        contact_suggestion = EXCLUDED.contact_suggestion,
+        model_version = EXCLUDED.model_version,
+        scored_at = NOW();
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {
+                "opp_id": opportunity_id, "user_id": user_id,
+                "score": fit_score, "reason": fit_reason,
+                "service": service_applicable, "contact": contact_suggestion,
+                "model": model_version
+            })
+        conn.commit()
+
+
+def get_ai_fit(opportunity_id: int, user_id: str = "default") -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM ai_opportunity_fits WHERE opportunity_id=%(opp_id)s AND user_id=%(user_id)s;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"opp_id": opportunity_id, "user_id": user_id})
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_opportunities_for_ai_scoring(user_id: str = "default", limit: int = 500) -> List[Dict[str, Any]]:
+    """Retorna oportunidades que aún no tienen AI fit score o fueron actualizadas después del último score."""
+    sql = """
+    SELECT o.id, o.title, o.source, o.company, o.industry, o.region, o.phase,
+           o.score, o.url, o.updated_at,
+           f.fit_score, f.scored_at
+    FROM opportunities o
+    LEFT JOIN ai_opportunity_fits f ON f.opportunity_id = o.id AND f.user_id = %(user_id)s
+    WHERE f.id IS NULL OR o.updated_at > f.scored_at
+    ORDER BY o.score DESC
+    LIMIT %(limit)s;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"user_id": user_id, "limit": limit})
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_top_ai_fits(user_id: str = "default", min_score: int = 40, limit: int = 200) -> List[Dict[str, Any]]:
+    sql = """
+    SELECT o.*, f.fit_score, f.fit_reason, f.service_applicable, f.contact_suggestion, f.scored_at,
+           COALESCE(s.signal_score, 0) as signal_score,
+           (o.score + COALESCE(s.signal_score,0)) as radar_score
+    FROM ai_opportunity_fits f
+    JOIN opportunities o ON o.id = f.opportunity_id
+    LEFT JOIN opportunity_signals s ON s.opportunity_id = o.id
+    WHERE f.user_id = %(user_id)s AND f.fit_score >= %(min_score)s
+    ORDER BY f.fit_score DESC, o.score DESC
+    LIMIT %(limit)s;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"user_id": user_id, "min_score": min_score, "limit": limit})
+            return [dict(r) for r in cur.fetchall()]
