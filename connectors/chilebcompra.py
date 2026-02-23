@@ -121,7 +121,10 @@ def process_licitacion(item):
                 break
         except Exception:
             pass
-    org = item.get("NombreOrganismo") or item.get("Organismo") or None
+    # Organismo = entidad que manda la licitación (Codelco, MOP, municipio, etc.)
+    organismo = item.get("NombreOrganismo") or item.get("Organismo") or None
+    # Unidad = unidad interna responsable del proceso dentro del organismo
+    unidad    = item.get("NombreUnidad") or item.get("Unidad") or None
     region = item.get("RegionUnidad") or item.get("Region") or None
     code = item.get("CodigoExterno") or item.get("Codigo") or ""
     url = (
@@ -129,11 +132,11 @@ def process_licitacion(item):
         if code else "https://www.mercadopublico.cl"
     )
     return {
-        "source": "ChileCompra",
+        "source": "Chile Compra",
         "title": name[:500],
         "url": url,
-        "company": str(org)[:200] if org else None,
-        "contractor": None,
+        "company":    str(organismo)[:200] if organismo else None,  # Mandante real
+        "contractor": str(unidad)[:200]    if unidad    else None,  # Unidad responsable
         "industry": industry,
         "region": str(region)[:100] if region else None,
         "phase": item.get("EstadoLicitacion") or "Activa",
