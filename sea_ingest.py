@@ -1,210 +1,62 @@
-import os
-import sys
+"""
+sea_ingest.py — orquestador principal de ingesta
+Corre todos los connectors y guarda en BD.
+"""
 import time
-import random
-import subprocess
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from typing import Any, Dict, List
-import requests
+from db import upsert_opportunities, init_db_safe
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from connectors.sea import fetch_sea
-from connectors.chilebcompra import fetch_chilebcompra
-from connectors.rss_mineria import fetch_rss_mineria
-from connectors.cochilco import fetch_cochilco
-from connectors.mop import fetch_mop
-from connectors.scraper import fetch_scraper
-from connectors.jobs_scraper import fetch_jobs_signals
-
-import db
-
-TZ = ZoneInfo("America/Santiago")
-BASE_URL = os.getenv("BASE_URL", "https://stratmap-chile-production.up.railway.app").rstrip("/")
-SEA_DAYS_BACK = int(os.getenv("SEA_DAYS_BACK", "365"))
-SEA_LIMIT = int(os.getenv("SEA_LIMIT", "2000"))
-CHILEBCOMPRA_DAYS_BACK = int(os.getenv("CHILEBCOMPRA_DAYS_BACK", "30"))
-CHILEBCOMPRA_LIMIT = int(os.getenv("CHILEBCOMPRA_LIMIT", "500"))
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "100"))
-INGEST_TIMEOUT = int(os.getenv("INGEST_TIMEOUT", "120"))
-INGEST_RETRIES = int(os.getenv("INGEST_RETRIES", "6"))
-WAIT_HEALTH_SECONDS = int(os.getenv("WAIT_HEALTH_SECONDS", "180"))
-HEALTH_POLL_SECONDS = float(os.getenv("HEALTH_POLL_SECONDS", "5"))
-
-HEADERS = {"User-Agent": "StratmapWorker/0.2", "Accept": "application/json"}
-
-
-def now_clt() -> str:
-    return datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S CLT")
-
-
-def install_playwright_browsers() -> None:
-    """Instala Chromium si no está disponible."""
-    chromium_path = os.path.expanduser(
-        "~/.cache/ms-playwright/chromium_headless_shell-1208/"
-        "chrome-headless-shell-linux64/chrome-headless-shell"
-    )
-    if not os.path.exists(chromium_path):
-        print(f"[{now_clt()}] Instalando Chromium para Playwright...")
-        try:
-            result = subprocess.run(
-                ["playwright", "install", "chromium", "--with-deps"],
-                capture_output=True, text=True, timeout=300
-            )
-            if result.returncode == 0:
-                print(f"[{now_clt()}] Chromium instalado correctamente")
-            else:
-                print(f"[{now_clt()}] Error instalando Chromium: {result.stderr[:200]}")
-        except Exception as e:
-            print(f"[{now_clt()}] Error instalando Chromium: {e}")
-    else:
-        print(f"[{now_clt()}] Chromium ya disponible")
-
-
-def wait_for_health(session: requests.Session) -> bool:
-    url = f"{BASE_URL}/health"
-    print(f"[{now_clt()}] waiting health: {url}")
-    deadline = time.time() + WAIT_HEALTH_SECONDS
-    while time.time() < deadline:
-        try:
-            r = session.get(url, timeout=15, headers=HEADERS)
-            if r.status_code == 200 and r.json().get("db_ok"):
-                print(f"[{now_clt()}] health OK")
-                return True
-        except Exception as e:
-            print(f"[{now_clt()}] health: {e}")
-        time.sleep(HEALTH_POLL_SECONDS)
-    print(f"[{now_clt()}] health timeout -> continue anyway")
-    return False
-
-
-def post_batch(session: requests.Session, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-    url = f"{BASE_URL}/ingest"
-    for attempt in range(1, INGEST_RETRIES + 1):
-        try:
-            r = session.post(url, json={"items": batch}, timeout=INGEST_TIMEOUT, headers=HEADERS)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            wait = min(60, 2 ** attempt) + random.uniform(0, 0.6)
-            print(f"[{now_clt()}] attempt {attempt} failed: {e} | sleep {wait:.1f}s")
-            time.sleep(wait)
-    raise RuntimeError(f"Ingest failed after {INGEST_RETRIES} retries")
-
-
-def ingest(session: requests.Session, items: List[Dict[str, Any]], source: str) -> None:
-    if not items:
-        print(f"[{now_clt()}] {source}: nothing to ingest")
-        return
-    total_ins = total_upd = 0
-    for i in range(0, len(items), BATCH_SIZE):
-        batch = items[i:i + BATCH_SIZE]
-        res = post_batch(session, batch)
-        total_ins += int(res.get("inserted", 0))
-        total_upd += int(res.get("updated", 0))
-        print(f"[{now_clt()}] {source} batch: inserted={res.get('inserted')} updated={res.get('updated')}")
-        time.sleep(0.25)
-    print(f"[{now_clt()}] {source} DONE: inserted={total_ins} updated={total_upd}")
-
-
-def run_jobs_signals() -> None:
-    """Corre el scraper de empleos y actualiza signal_score en opportunities."""
-    print(f"[{now_clt()}] Fetching Jobs Signals...")
-    signals = fetch_jobs_signals()
-    print(f"[{now_clt()}] Jobs: {len(signals)} empresas con actividad detectada")
-
-    total_updated = 0
-    for signal in signals:
-        company_name = signal["company"]
-        opportunities = db.get_opportunities_by_company(company_name)
-
-        if not opportunities:
-            print(f"[{now_clt()}] Jobs: '{company_name}' sin oportunidades en BD — skipping")
-            continue
-
-        for opp in opportunities:
-            try:
-                db.save_job_signal(opp["id"], signal)
-                total_updated += 1
-                print(f"[{now_clt()}] Jobs: '{company_name}' → opp_id={opp['id']} +{signal['score_impact']}pts ({signal['jobs_count']} empleos)")
-            except Exception as e:
-                print(f"[{now_clt()}] Jobs: error guardando señal para opp_id={opp['id']}: {e}")
-
-    print(f"[{now_clt()}] Jobs DONE: {total_updated} oportunidades actualizadas")
-
-
-def run() -> None:
-    print(f"[{now_clt()}] Worker start -> {BASE_URL}")
-
-    session = requests.Session()
-    wait_for_health(session)
-
-    # Instalar Chromium después del health check para no bloquear el startup
-    install_playwright_browsers()
-
-    # SEA
-    print(f"[{now_clt()}] Fetching SEA...")
+def run_sea():
     try:
-        items = fetch_sea(days_back=SEA_DAYS_BACK, limit=SEA_LIMIT)
-        print(f"[{now_clt()}] SEA: {len(items)} items")
-        ingest(session, items, "SEA")
+        from connectors.sea import fetch_all as sea_fetch
+        items = sea_fetch()
+        if items:
+            ins, upd = upsert_opportunities(items)
+            print(f"[sea] {ins} nuevos, {upd} actualizados")
     except Exception as e:
-        print(f"[{now_clt()}] SEA error: {e.__class__.__name__} — skipping")
+        print(f"[sea] error: {e}")
 
-    # ChileCompra
-    print(f"[{now_clt()}] Fetching ChileCompra...")
+def run_mop():
     try:
-        items = fetch_chilebcompra(days_back=CHILEBCOMPRA_DAYS_BACK, limit=CHILEBCOMPRA_LIMIT)
-        print(f"[{now_clt()}] ChileCompra: {len(items)} items")
-        ingest(session, items, "ChileCompra")
+        from connectors.mop import fetch_all as mop_fetch
+        items = mop_fetch(max_pages=40)
+        if items:
+            ins, upd = upsert_opportunities(items)
+            print(f"[mop] {ins} nuevos, {upd} actualizados")
     except Exception as e:
-        print(f"[{now_clt()}] ChileCompra error: {e.__class__.__name__} — skipping")
+        print(f"[mop] error: {e}")
 
-    # COCHILCO
-    print(f"[{now_clt()}] Fetching COCHILCO...")
+def run_chilecompra():
     try:
-        items = fetch_cochilco(limit=300)
-        print(f"[{now_clt()}] COCHILCO: {len(items)} items")
-        ingest(session, items, "COCHILCO")
+        from connectors.chilecompra import fetch_all as cc_fetch
+        items = cc_fetch()
+        if items:
+            ins, upd = upsert_opportunities(items)
+            print(f"[chilecompra] {ins} nuevos, {upd} actualizados")
     except Exception as e:
-        print(f"[{now_clt()}] COCHILCO error: {e.__class__.__name__} — skipping")
+        print(f"[chilecompra] error: {e}")
 
-    # MOP
-    print(f"[{now_clt()}] Fetching MOP...")
+def run_rss():
     try:
-        items = fetch_mop(limit=500)
-        print(f"[{now_clt()}] MOP: {len(items)} items")
-        ingest(session, items, "MOP")
+        from connectors.rss import fetch_all as rss_fetch
+        items = rss_fetch()
+        if items:
+            ins, upd = upsert_opportunities(items)
+            print(f"[rss] {ins} nuevos, {upd} actualizados")
     except Exception as e:
-        print(f"[{now_clt()}] MOP error: {e.__class__.__name__} — skipping")
+        print(f"[rss] error: {e}")
 
-    # Scraper
-    print(f"[{now_clt()}] Fetching Scraper...")
+def run_signals():
     try:
-        items = fetch_scraper(limit=200)
-        print(f"[{now_clt()}] Scraper: {len(items)} items")
-        ingest(session, items, "Scraper")
+        from signals.jobs import run as jobs_run
+        jobs_run()
     except Exception as e:
-        print(f"[{now_clt()}] Scraper error: {e.__class__.__name__} — skipping")
-
-    # RSS Minería
-    print(f"[{now_clt()}] Fetching RSS Minería...")
-    try:
-        items = fetch_rss_mineria(limit=300)
-        print(f"[{now_clt()}] RSS: {len(items)} items")
-        ingest(session, items, "RSS")
-    except Exception as e:
-        print(f"[{now_clt()}] RSS error: {e.__class__.__name__} — skipping")
-
-    # Jobs Signals
-    try:
-        run_jobs_signals()
-    except Exception as e:
-        print(f"[{now_clt()}] Jobs error: {e.__class__.__name__} — skipping")
-
-    print(f"[{now_clt()}] Worker finished")
-
+        print(f"[signals] error: {e}")
 
 if __name__ == "__main__":
-    run()
+    print("[ingest] Iniciando...")
+    init_db_safe()
+    run_sea()
+    run_mop()
+    run_chilecompra()
+    run_rss()
+    print("[ingest] Listo")
