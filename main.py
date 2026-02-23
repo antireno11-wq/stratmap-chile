@@ -372,6 +372,30 @@ def trigger_ai_matcher():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/admin/fix-chilebcompra")
+def fix_chilebcompra():
+    """Fix de una sola vez: normaliza source y puebla company desde raw."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE opportunities
+                    SET 
+                        source = 'Chile Compra',
+                        company = COALESCE(
+                            NULLIF(raw->>'NombreOrganismo', ''),
+                            NULLIF(raw->>'Organismo', ''),
+                            company
+                        )
+                    WHERE source ILIKE '%chilebcompra%' OR source ILIKE '%chile compra%';
+                """)
+                updated = cur.rowcount
+            conn.commit()
+        return {"ok": True, "updated": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Static UI (debe ir al final) ──────────────────────────────────────────────
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
