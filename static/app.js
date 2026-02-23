@@ -6,7 +6,7 @@ const NEWS_SOURCES = new Set([
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
-const PROJECT_SOURCES = new Set(["sea","SEA","MOP","ChileCompra","COCHILCO","manual"]);
+const PROJECT_SOURCES = new Set(["sea","SEA","MOP","Chile Compra","COCHILCO","manual"]);
 
 const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
 
@@ -36,7 +36,7 @@ function escapeHTML(str) {
 
 const SOURCE_COLORS = {
   "SEA":               ["#1d4ed8","#eff6ff"],
-  "ChileCompra":       ["#15803d","#f0fdf4"],
+  "Chile Compra":       ["#15803d","#f0fdf4"],
   "COCHILCO":          ["#7c3aed","#f5f3ff"],
   "MOP":               ["#c2410c","#fff7ed"],
   "Portal Minero":     ["#0369a1","#f0f9ff"],
