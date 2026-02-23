@@ -172,6 +172,12 @@ def fetch_all(max_pages: int = 40, delay: float = 0.3) -> list:
     return all_projects
 
 
+# Alias para compatibilidad con sea_ingest.py
+def fetch_mop(limit: int = 500, max_pages: int = 40) -> list:
+    items = fetch_all(max_pages=max_pages)
+    return items[:limit]
+
+
 if __name__ == "__main__":
     projects = fetch_all()
     print(f"\n[mop] Total: {len(projects)} proyectos")
