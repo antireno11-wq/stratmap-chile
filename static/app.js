@@ -6,7 +6,7 @@ const NEWS_SOURCES = new Set([
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
-const PROJECT_SOURCES = new Set(["sea","SEA","MOP","Chile Compra","COCHILCO","manual"]);
+const PROJECT_SOURCES = new Set(["sea","SEA","MOP","Chile Compra","COCHILCO","SICEP","manual"]);
 
 const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
 
