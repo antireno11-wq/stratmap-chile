@@ -92,5 +92,15 @@ if __name__ == "__main__":
     run_sicep()
     run_mlp()
     run_lithium_chile()
+    run_ariba()
     run_signals()
     print(f"[ingest] Listo")
+
+
+def run_ariba():
+    try:
+        from connectors.ariba import fetch_ariba
+        items = fetch_ariba(limit=200)
+        ingest(items, "ariba")
+    except Exception as e:
+        print(f"[ariba] error: {e}")
