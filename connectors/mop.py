@@ -149,7 +149,7 @@ def fetch_page(page: int, session: requests.Session) -> list:
     return projects
 
 
-def fetch_all(max_pages: int = 40, delay: float = 0.3) -> list:
+def fetch_all(max_pages: int = 15, delay: float = 0.3) -> list:
     session = requests.Session()
     all_projects = []
     seen_urls = set()
