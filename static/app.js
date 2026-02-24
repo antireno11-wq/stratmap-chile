@@ -502,6 +502,34 @@ function renderFiltered() {
   el("status").textContent = `${projects.length} proyectos · ${news.length} noticias`;
 }
 
+// ── Session state ─────────────────────────────────────────────────────────────
+let isLoggedIn = false;
+
+async function checkSession() {
+  const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
+  const hasLocalPrefs = !!(prefs.industries?.length || prefs.keywords?.length || prefs.preferred_regions?.length);
+  
+  // También verificar si tiene perfil de servicios configurado en backend
+  let hasServices = false;
+  try {
+    const res = await fetch('/me/service-profile');
+    const data = await res.json();
+    hasServices = !!(data.services?.length);
+  } catch(e) {}
+  
+  isLoggedIn = hasLocalPrefs || hasServices;
+  updateScoreVisibility();
+}
+
+function updateScoreVisibility() {
+  const show = isLoggedIn;
+  document.querySelectorAll('.col-score, .col-aifit').forEach(el => {
+    el.style.display = show ? '' : 'none';
+  });
+  const banner = document.getElementById('no-session-banner');
+  if (banner) banner.style.display = show ? 'none' : 'flex';
+}
+
 async function load() {
   const q = el("q").value.trim();
   const limit = el("limit").value;
@@ -510,6 +538,7 @@ async function load() {
   el("status").textContent = "Cargando…";
   try {
     const data = await fetchJSON(url);
+    await checkSession();
     loadAiFits();
     allItems = applyPrefsScoring(data.items || []).sort((a,b) => (b.radar_score||0) - (a.radar_score||0));
     buildFilters(allItems);
