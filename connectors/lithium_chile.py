@@ -1,8 +1,7 @@
 """
 connectors/lithium_chile.py
-Scraper de noticias de Lithium Chile Inc. (canadiense, en inglés).
-https://lithiumchile.ca/all-news/
-Traduce automáticamente los títulos al español.
+Scraper de noticias de Lithium Chile Inc.
+Estructura: tarjeta con fecha arriba y título/link abajo.
 """
 
 import re
@@ -12,13 +11,20 @@ from typing import Any, Dict, List, Optional
 import requests
 from bs4 import BeautifulSoup
 
-BASE_URL   = "https://lithiumchile.ca"
-NEWS_URL   = "https://lithiumchile.ca/all-news/"
-NEWS_2026  = "https://lithiumchile.ca/news-2026/"
-NEWS_2025  = "https://lithiumchile.ca/news-2025/"
-HEADERS    = {"User-Agent": "StratmapBot/1.0 (+https://stratmap.cl)"}
+BASE_URL = "https://lithiumchile.ca"
+NEWS_URLS = [
+    "https://lithiumchile.ca/all-news/",
+    "https://lithiumchile.ca/news-2026/",
+    "https://lithiumchile.ca/news-2025/",
+]
+HEADERS = {"User-Agent": "StratmapBot/1.0 (+https://stratmap.cl)"}
 
-# Diccionario de traducción rápida de términos comunes en titulares mineros
+DATE_PATTERN = re.compile(
+    r'(January|February|March|April|May|June|July|August|September|October|November|December)'
+    r'\s+\d{1,2},?\s+\d{4}',
+    re.IGNORECASE
+)
+
 TRANSLATIONS = {
     "announces": "anuncia", "announce": "anuncia",
     "provides update": "entrega actualización",
@@ -32,8 +38,9 @@ TRANSLATIONS = {
     "sale of": "venta de",
     "acquisition": "adquisición",
     "transaction": "transacción",
-    "agreement": "acuerdo",
     "definitive agreement": "acuerdo definitivo",
+    "formal agreement": "acuerdo formal",
+    "agreement": "acuerdo",
     "executes": "firma",
     "offering": "oferta pública",
     "deposit": "depósito",
@@ -44,13 +51,10 @@ TRANSLATIONS = {
     "concession": "concesión",
     "adjacent to": "adyacente a",
     "project": "proyecto",
-    "salar": "salar",
     "chile": "Chile",
     "argentina": "Argentina",
     "million": "millones",
     "billion": "miles de millones",
-    "upsized": "ampliada",
-    "life offering": "oferta de mercado",
     "special meeting": "junta especial",
     "shareholders": "accionistas",
     "exploration": "exploración",
@@ -60,32 +64,35 @@ TRANSLATIONS = {
     "files": "presenta",
     "reports": "reporta",
     "confirms": "confirma",
+    "toward": "hacia",
+    "timing of": "cronograma de",
+    "approve": "aprobar",
+    "its argentine": "su proyecto argentino",
+    "life offering": "oferta pública",
 }
 
 
 def translate_title(title: str) -> str:
-    """Traducción rápida basada en diccionario + preserva nombres propios."""
     result = title
     for en, es in TRANSLATIONS.items():
-        result = re.sub(re.escape(en), es, result, flags=re.IGNORECASE)
-    # Capitalizar primera letra
+        result = re.sub(r'\b' + re.escape(en) + r'\b', es, result, flags=re.IGNORECASE)
     return result[0].upper() + result[1:] if result else title
 
 
 def parse_date(date_str: str) -> Optional[str]:
-    """Parsea fechas como 'February 18, 2026' → ISO."""
-    try:
-        dt = datetime.strptime(date_str.strip(), "%B %d, %Y")
-        return dt.replace(tzinfo=timezone.utc).isoformat()
-    except Exception:
-        return None
+    for fmt in ["%B %d, %Y", "%B %d %Y"]:
+        try:
+            dt = datetime.strptime(date_str.strip(), fmt)
+            return dt.replace(tzinfo=timezone.utc).isoformat()
+        except Exception:
+            continue
+    return None
 
 
 def score_item(title: str) -> int:
     text = title.lower()
-    score = 50  # base — empresa de litio en Chile, alta relevancia
-
-    if any(kw in text for kw in ["awarded", "adjudicó", "salar", "ceol", "concesión"]):
+    score = 50
+    if any(kw in text for kw in ["awarded", "adjudicó", "salar", "concesión"]):
         score += 20
     if any(kw in text for kw in ["sale", "venta", "agreement", "acuerdo", "transaction"]):
         score += 15
@@ -93,7 +100,6 @@ def score_item(title: str) -> int:
         score += 10
     if any(kw in text for kw in ["chile", "coipasa", "llamara", "turi", "atacama"]):
         score += 10
-
     return min(score, 88)
 
 
@@ -103,70 +109,80 @@ def fetch_page(url: str) -> List[Dict[str, Any]]:
         res = requests.get(url, headers=HEADERS, timeout=20)
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
-
-        # Lithium Chile news page: lista de "date + link" en el contenido principal
         content = soup.find("main") or soup.find("div", class_=re.compile(r"content|entry|post", re.I)) or soup
 
-        # Buscar párrafos o divs que contengan fecha + link
-        # Patrón: "Month DD, YYYY[link text](url)"
-        date_pattern = re.compile(
-            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}',
-            re.IGNORECASE
-        )
-
-        # Buscar todos los links en la página de noticias
+        # Cada noticia es una tarjeta/div que contiene fecha + título+link
+        # Buscamos todos los contenedores que tengan fecha Y link dentro
+        # Estrategia: encontrar todos los links de noticias y buscar fecha en su tarjeta padre
         for a_tag in content.find_all("a", href=True):
             title_en = a_tag.get_text(strip=True)
             if len(title_en) < 15:
                 continue
 
             href = a_tag["href"]
-            # Solo PDFs o páginas de noticias
-            if not (href.endswith(".pdf") or "lithiumchile.ca" in href or href.startswith("/")):
+            if not ("lithiumchile.ca" in href or href.startswith("/") or href.endswith(".pdf")):
+                continue
+            if href in ["/", BASE_URL + "/"]:
                 continue
 
             url_final = href if href.startswith("http") else BASE_URL + href
 
-            # Buscar fecha cerca del link
-            parent = a_tag.parent or a_tag
-            parent_text = parent.get_text(" ", strip=True)
-            date_match = date_pattern.search(parent_text)
-            date_iso = parse_date(date_match.group(0)) if date_match else None
+            # Buscar fecha: subir en el árbol hasta encontrar un contenedor
+            # que tenga texto con fecha (la fecha está ANTES del link en la tarjeta)
+            date_iso = None
+            node = a_tag.parent
+            for _ in range(5):  # subir hasta 5 niveles
+                if node is None:
+                    break
+                # Buscar en todos los elementos hijo de este contenedor
+                full_text = node.get_text(" ", strip=True)
+                m = DATE_PATTERN.search(full_text)
+                if m:
+                    date_iso = parse_date(m.group(0))
+                    if date_iso:
+                        break
+                node = node.parent
+
+            # Si aún no hay fecha, buscar en elemento anterior sibling
+            if not date_iso:
+                prev = a_tag.find_previous(string=DATE_PATTERN)
+                if prev:
+                    m = DATE_PATTERN.search(str(prev))
+                    if m:
+                        date_iso = parse_date(m.group(0))
 
             title_es = translate_title(title_en)
+            display_title = title_es if title_es.lower() != title_en.lower() else title_en
 
-            score = score_item(title_en)
             items.append({
                 "source": "Lithium Chile",
-                "title": f"{title_es} [EN: {title_en[:100]}]" if title_es != title_en else title_en,
+                "title": display_title[:400],
                 "url": url_final,
                 "company": "Lithium Chile Inc.",
                 "industry": "Minería",
                 "region": "Antofagasta",
                 "phase": "Noticia",
-                "score": score,
-                "entry": f"Fuente original en inglés: {title_en}",
+                "score": score_item(title_en),
+                "entry": title_en[:300],
+                "published_at": date_iso,
                 "raw": {
-                    "source_url": url,
                     "title_original": title_en,
                     "title_es": title_es,
                     "published_at": date_iso,
+                    "source_url": url,
                     "tipo": "noticia_lithium_chile"
                 }
             })
 
-        return items
-
     except Exception as e:
         print(f"[lithium_chile] Error fetching {url}: {e}")
-        return []
+
+    return items
 
 
 def fetch_lithium_chile(limit: int = 100) -> List[Dict[str, Any]]:
     items = []
-
-    # Scrapear página principal de noticias + 2026 + 2025
-    for url in [NEWS_URL, NEWS_2026, NEWS_2025]:
+    for url in NEWS_URLS:
         items.extend(fetch_page(url))
 
     # Deduplicar por URL
@@ -177,7 +193,6 @@ def fetch_lithium_chile(limit: int = 100) -> List[Dict[str, Any]]:
             seen.add(item["url"])
             unique.append(item)
 
-    # Ordenar por score
     unique.sort(key=lambda x: x["score"], reverse=True)
     print(f"[lithium_chile] {len(unique)} items")
     return unique[:limit]
@@ -186,4 +201,5 @@ def fetch_lithium_chile(limit: int = 100) -> List[Dict[str, Any]]:
 if __name__ == "__main__":
     items = fetch_lithium_chile()
     for i in items[:8]:
-        print(f"  [{i['score']}] {i['title'][:80]}")
+        d = (i.get("published_at") or "sin fecha")[:10]
+        print(f"  [{i['score']}] {d} | {i['title'][:70]}")
