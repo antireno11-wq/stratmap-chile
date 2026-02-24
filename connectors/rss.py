@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 RSS_FEEDS = [
     {
-        "url": "https://www.biobiochile.cl/lista/categorias/economia/feed",
+        "url": "https://www.biobiochile.cl/feed",
         "source": "BioBioChile - Economía",
         "industry": None,
     },
@@ -21,7 +21,7 @@ RSS_FEEDS = [
         "industry": None,
     },
     {
-        "url": "https://www.latercera.com/feed/",
+        "url": "https://www.latercera.com/arc/outboundfeeds/rss/",
         "source": "La Tercera",
         "industry": None,
     },
