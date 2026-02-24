@@ -1,5 +1,6 @@
 # connectors/chilebcompra.py
 import re
+import time
 import requests
 import os
 from datetime import datetime, timedelta
@@ -106,7 +107,25 @@ def score_licitacion(monto, industry, title):
     return max(0, min(100, base + inv + kw))
 
 
-def process_licitacion(item):
+def fetch_detail(code: str, ticket: str, session) -> dict:
+    """Llama al endpoint de detalle para obtener organismo y unidad."""
+    try:
+        url = f"{SEARCH_URL}?codigo={code}&ticket={ticket}"
+        r = session.get(url, timeout=15, headers={"User-Agent": "StratmapWorker/0.2"})
+        r.raise_for_status()
+        data = r.json()
+        licitacion = data.get("Listado", [{}])[0] if data.get("Listado") else {}
+        comprador = licitacion.get("Comprador") or {}
+        return {
+            "organismo": comprador.get("NombreOrganismo") or licitacion.get("NombreOrganismo") or "",
+            "unidad":    comprador.get("NombreUnidad")    or licitacion.get("NombreUnidad")    or "",
+            "region":    comprador.get("RegionUnidad")    or licitacion.get("RegionUnidad")    or "",
+        }
+    except Exception:
+        return {}
+
+
+def process_licitacion(item, detail: dict = None):
     name = item.get("Nombre") or item.get("NombreLicitacion") or ""
     desc = item.get("Descripcion") or item.get("DescripcionLicitacion") or ""
     industry = classify(name, desc)
@@ -121,12 +140,14 @@ def process_licitacion(item):
                 break
         except Exception:
             pass
-    # Organismo = entidad que manda la licitación (Codelco, MOP, municipio, etc.)
-    organismo = item.get("NombreOrganismo") or item.get("Organismo") or None
-    # Unidad = unidad interna responsable del proceso dentro del organismo
-    unidad    = item.get("NombreUnidad") or item.get("Unidad") or None
-    region = item.get("RegionUnidad") or item.get("Region") or None
     code = item.get("CodigoExterno") or item.get("Codigo") or ""
+
+    # Usar detalle si está disponible, sino intentar desde item
+    d = detail or {}
+    organismo = d.get("organismo") or item.get("NombreOrganismo") or item.get("Organismo") or None
+    unidad    = d.get("unidad")    or item.get("NombreUnidad")    or item.get("Unidad")    or None
+    region    = d.get("region")    or item.get("RegionUnidad")    or item.get("Region")    or None
+
     url = (
         f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion={code}"
         if code else "https://www.mercadopublico.cl"
@@ -135,14 +156,14 @@ def process_licitacion(item):
         "source": "Chile Compra",
         "title": name[:500],
         "url": url,
-        "company":    str(organismo)[:200] if organismo else None,  # Mandante real
-        "contractor": str(unidad)[:200]    if unidad    else None,  # Unidad responsable
+        "company":    str(organismo)[:200] if organismo else None,
+        "contractor": str(unidad)[:200]    if unidad    else None,
         "industry": industry,
         "region": str(region)[:100] if region else None,
-        "phase": item.get("EstadoLicitacion") or "Activa",
+        "phase": item.get("EstadoLicitacion") or item.get("CodigoEstado") or "Activa",
         "score": score_licitacion(monto, industry, name),
         "entry": code,
-        "raw": item,
+        "raw": {**item, **({"_detail": d} if d else {})},
     }
 
 
@@ -186,10 +207,13 @@ def fetch_chilebcompra(days_back=30, limit=500):
         if items:
             date_success = True
             for item in items:
-                o = process_licitacion(item)
+                code = item.get("CodigoExterno") or item.get("Codigo") or ""
+                detail = fetch_detail(code, ticket, session) if code else {}
+                o = process_licitacion(item, detail)
                 if o and o["entry"] not in seen:
                     seen.add(o["entry"])
                     results.append(o)
+                time.sleep(0.3)  # evitar error de peticiones simultáneas
         if len(results) >= limit:
             break
 
@@ -198,12 +222,15 @@ def fetch_chilebcompra(days_back=30, limit=500):
         for kw in KEYWORDS:
             items = fetch_by_keyword(kw, ticket, session)
             for item in items:
-                o = process_licitacion(item)
+                code = item.get("CodigoExterno") or item.get("Codigo") or ""
+                detail = fetch_detail(code, ticket, session) if code else {}
+                o = process_licitacion(item, detail)
                 if o:
                     key = o["entry"] or o["title"]
                     if key not in seen:
                         seen.add(key)
                         results.append(o)
+                time.sleep(0.3)
             if len(results) >= limit:
                 break
 
