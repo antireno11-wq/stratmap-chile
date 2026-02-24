@@ -407,9 +407,17 @@ def chilebcompra_debug():
         url = f"https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?buscar=mineria&ticket={ticket}&cantidad=1"
         r = req.get(url, timeout=20)
         data = r.json()
+        # Intentar por fecha de hoy si keyword no funciona
         items = data.get("Listado") or []
         if not items:
-            return {"error": "sin resultados"}
+            from datetime import datetime
+            today = datetime.now().strftime("%d%m%Y")
+            url2 = f"https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?fecha={today}&ticket={ticket}"
+            r2 = req.get(url2, timeout=20)
+            data2 = r2.json()
+            items = data2.get("Listado") or []
+            if not items:
+                return {"error": "sin resultados en ningún endpoint", "data_kw": data, "data_fecha": data2}
         item = items[0]
         return {"keys": list(item.keys()), "sample": item}
     except Exception as e:
