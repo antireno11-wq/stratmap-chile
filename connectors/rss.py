@@ -6,12 +6,12 @@ from typing import Any, Dict, List, Optional
 
 RSS_FEEDS = [
     {
-        "url": "https://www.biobiochile.cl/feed",
-        "source": "BioBioChile - Economía",
+        "url": "https://www.biobiochile.cl/noticias/nacional/region-de-antofagasta/feed",
+        "source": "BioBioChile",
         "industry": None,
     },
     {
-        "url": "https://www.emol.com/rss/Noticias_del_Dia.xml",
+        "url": "https://www.emol.com/rss/Economia.xml",
         "source": "Emol",
         "industry": None,
     },
@@ -21,7 +21,7 @@ RSS_FEEDS = [
         "industry": None,
     },
     {
-        "url": "https://www.latercera.com/arc/outboundfeeds/rss/",
+        "url": "https://www.latercera.com/canal/pulso/feed/",
         "source": "La Tercera",
         "industry": None,
     },
