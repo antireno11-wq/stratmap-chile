@@ -30,7 +30,7 @@ def run_sea():
 def run_mop():
     try:
         from connectors.mop import fetch_all as mop_fetch
-        items = mop_fetch(max_pages=40)
+        items = mop_fetch(max_pages=15)
         ingest(items, "mop")
     except Exception as e:
         print(f"[mop] error: {e}")
