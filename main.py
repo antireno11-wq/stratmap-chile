@@ -424,6 +424,27 @@ def chilebcompra_debug():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/admin/sources-summary")
+def sources_summary():
+    """Muestra cuántos registros hay por source y su score promedio."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT source, COUNT(*) as total, 
+                           ROUND(AVG(score)) as avg_score,
+                           MAX(score) as max_score,
+                           MIN(score) as min_score
+                    FROM opportunities
+                    GROUP BY source
+                    ORDER BY total DESC;
+                """)
+                rows = cur.fetchall()
+        return {"sources": [dict(r) for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Static UI (debe ir al final) ──────────────────────────────────────────────
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
