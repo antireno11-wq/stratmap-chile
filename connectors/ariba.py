@@ -88,13 +88,15 @@ def fetch_ariba(limit: int = 200) -> List[Dict[str, Any]]:
             pass_input = page.query_selector("input[type='password']")
 
             if not user_input or not pass_input:
-                # DEBUG — imprimir HTML del body para entender estructura
-        try:
-            html = page.evaluate("document.body.innerHTML")
-            print(f"[ariba] DEBUG HTML login: {html[:1000]}")
-        except Exception as de:
-            print(f"[ariba] DEBUG error: {de}")
-        print("[ariba] No se encontraron campos de login")
+                try:
+                    html = page.evaluate("document.body.innerHTML")
+                    print(f"[ariba] DEBUG HTML login: {html[:2000]}")
+                    # También listar todos los inputs
+                    inputs = page.evaluate("Array.from(document.querySelectorAll('input')).map(i => i.type + ':' + i.name + ':' + i.id + ':' + i.placeholder)")
+                    print(f"[ariba] DEBUG inputs: {inputs}")
+                except Exception as de:
+                    print(f"[ariba] DEBUG error: {de}")
+                print("[ariba] No se encontraron campos de login")
                 browser.close()
                 return []
 
