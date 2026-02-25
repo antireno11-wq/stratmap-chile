@@ -120,7 +120,7 @@ def fetch_sicep(limit: int = 200) -> List[Dict[str, Any]]:
     items = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"])
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         )
@@ -197,16 +197,37 @@ def fetch_sicep(limit: int = 200) -> List[Dict[str, Any]]:
 
             print(f"[sicep] {len(cards)} tarjetas encontradas")
 
+            # DEBUG — imprimir HTML de primera tarjeta para entender estructura
+            if cards:
+                try:
+                    html = cards[0].evaluate("el => el.outerHTML")
+                    print(f"[sicep] DEBUG primera tarjeta HTML: {html[:800]}")
+                    txt = cards[0].inner_text()
+                    print(f"[sicep] DEBUG texto: {repr(txt[:300])}")
+                except Exception as de:
+                    print(f"[sicep] DEBUG error: {de}")
+
             # Parsear cada tarjeta
             for card in cards[:limit]:
                 try:
-                    # Título
+                    # DEBUG — ver todo el texto de la tarjeta
+                    try:
+                        full_debug = card.inner_text()
+                        html_debug = card.evaluate("el => el.outerHTML")
+                        print(f"[sicep] CARD texto: {repr(full_debug[:200])}")
+                        print(f"[sicep] CARD html: {html_debug[:400]}")
+                    except:
+                        pass
+
+                    # Título — intentar todos los elementos posibles
                     title_el = (
                         card.query_selector("a[href*='detalle'], a[href*='publicacion']") or
-                        card.query_selector("h3, h4, .titulo, [class*='title']") or
-                        card.query_selector("a")
+                        card.query_selector("h3, h4, h5, .titulo, [class*='title']") or
+                        card.query_selector(".card-title, .panel-title, strong") or
+                        card.query_selector("a") or
+                        card.query_selector("span")
                     )
-                    title = title_el.inner_text().strip() if title_el else ""
+                    title = title_el.inner_text().strip() if title_el else card.inner_text().strip()[:200]
                     title = re.sub(r'\(Clic para ver detalles\)', '', title, flags=re.IGNORECASE).strip()
                     if not title or len(title) < 5:
                         continue
