@@ -519,6 +519,7 @@ async function checkSession() {
   
   isLoggedIn = hasLocalPrefs || hasServices;
   updateScoreVisibility();
+  updateUserMenuState();
 }
 
 function updateScoreVisibility() {
@@ -617,4 +618,56 @@ function applyPrefsFilters(items) {
     if (prefs.date_to && item.updated_at && item.updated_at > prefs.date_to + "T23:59:59") return false;
     return true;
   });
+}
+
+
+// ── User menu ──────────────────────────────────────────────────────────────────
+function toggleUserMenu() {
+  const dropdown = document.getElementById('userDropdown');
+  const btn = document.getElementById('userAvatarBtn');
+  const isOpen = dropdown.classList.contains('open');
+  dropdown.classList.toggle('open', !isOpen);
+  btn.classList.toggle('active', !isOpen);
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('userMenu');
+  if (menu && !menu.contains(e.target)) {
+    document.getElementById('userDropdown')?.classList.remove('open');
+    document.getElementById('userAvatarBtn')?.classList.remove('active');
+  }
+});
+
+function resetSession() {
+  if (!confirm('¿Cerrar sesión? Se borrarán tus preferencias guardadas localmente.')) return;
+  localStorage.removeItem('stratmap_prefs');
+  localStorage.removeItem('stratmap_services');
+  isLoggedIn = false;
+  updateScoreVisibility();
+  updateUserMenuState();
+  toggleUserMenu();
+  load();
+}
+
+function updateUserMenuState() {
+  const icon = document.getElementById('userAvatarIcon');
+  const label = document.getElementById('userAvatarLabel');
+  const status = document.getElementById('dropdownStatus');
+  const subtitle = document.getElementById('dropdownSubtitle');
+  const dot = document.querySelector('.user-avatar-dot');
+
+  if (isLoggedIn) {
+    if (icon) icon.textContent = '✅';
+    if (label) label.textContent = 'Mi perfil';
+    if (status) status.textContent = 'Perfil configurado';
+    if (subtitle) subtitle.textContent = 'Score personalizado activo';
+    if (dot) dot.classList.add('active');
+  } else {
+    if (icon) icon.textContent = '👤';
+    if (label) label.textContent = 'Mi cuenta';
+    if (status) status.textContent = 'Sin preferencias';
+    if (subtitle) subtitle.textContent = 'Configura tu perfil para ver scores';
+    if (dot) dot.classList.remove('active');
+  }
 }
