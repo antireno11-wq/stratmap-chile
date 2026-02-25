@@ -8,7 +8,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-ARIBA_URL = "https://service.ariba.com/Sourcing.aw/109582012/aw?awh=r&awssk=imz7nWe8&dard=1"
+ARIBA_URL = "https://service.ariba.com/Sourcing.aw/109578011/aw?awh=r&awssk=aBlATlgm&dard=1"
 
 # Mapa de divisiones Codelco a regiones
 DIVISION_REGION = {
@@ -88,7 +88,13 @@ def fetch_ariba(limit: int = 200) -> List[Dict[str, Any]]:
             pass_input = page.query_selector("input[type='password']")
 
             if not user_input or not pass_input:
-                print("[ariba] No se encontraron campos de login")
+                # DEBUG — imprimir HTML del body para entender estructura
+        try:
+            html = page.evaluate("document.body.innerHTML")
+            print(f"[ariba] DEBUG HTML login: {html[:1000]}")
+        except Exception as de:
+            print(f"[ariba] DEBUG error: {de}")
+        print("[ariba] No se encontraron campos de login")
                 browser.close()
                 return []
 
