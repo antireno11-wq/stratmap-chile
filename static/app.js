@@ -67,6 +67,11 @@ function scoreColor(s) {
   return ["#475569","#f1f5f9"];
 }
 
+function itemDate(item) {
+  // Prefer published_at (real publication date) over updated_at (ingestion date)
+  return item.published_at || item.updated_at || item.created_at || null;
+}
+
 function fmtDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"2-digit"});
@@ -541,7 +546,8 @@ async function load() {
     const data = await fetchJSON(url);
     await checkSession();
     loadAiFits();
-    allItems = applyPrefsScoring(data.items || []).sort((a,b) => (b.radar_score||0) - (a.radar_score||0));
+    const scored = applyPrefsScoring(data.items || []);
+    allItems = sortItems(scored);
     buildFilters(allItems);
     renderFiltered();
   } catch(e) {
@@ -579,6 +585,41 @@ function getPrefs() {
   try {
     return JSON.parse(localStorage.getItem("stratmap_prefs") || "{}");
   } catch(e) { return {}; }
+}
+
+function sortItems(items) {
+  if (isLoggedIn) {
+    // Con sesión: ordenar por score personalizado
+    return [...items].sort((a, b) => (b.radar_score || 0) - (a.radar_score || 0));
+  } else {
+    // Sin sesión: ordenar por fecha pero con cap de 5 por fuente
+    // para evitar que una fuente domine el top
+    const sourceCount = {};
+    const MAX_PER_SOURCE = 5;
+
+    // Separar noticias (phase=Noticia) de proyectos
+    const byDate = [...items].sort((a, b) => {
+      const da = new Date(itemDate(b) || 0);
+      const db = new Date(itemDate(a) || 0);
+      return da - db;
+    });
+
+    const result = [];
+    const overflow = [];
+
+    for (const item of byDate) {
+      const src = item.source || 'unknown';
+      sourceCount[src] = (sourceCount[src] || 0) + 1;
+      if (sourceCount[src] <= MAX_PER_SOURCE) {
+        result.push(item);
+      } else {
+        overflow.push(item);
+      }
+    }
+
+    // Agregar los overflow al final
+    return [...result, ...overflow];
+  }
 }
 
 function applyPrefsScoring(items) {
