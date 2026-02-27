@@ -174,99 +174,56 @@ def fetch_sicep(limit: int = 200) -> List[Dict[str, Any]]:
                 page.goto(LOGIN_URL, wait_until="networkidle", timeout=30000)
                 page.wait_for_timeout(2000)
 
-            # Scroll para cargar más items (lista infinita)
+            # SICEP es una SPA — la lista de licitaciones está en el sidebar izquierdo
+            # Al hacer click en cada item, el detalle aparece en el panel derecho
             print("[sicep] Cargando lista de publicaciones...")
-            last_count = 0
-            scroll_attempts = 0
-            max_scrolls = 15
+            page.wait_for_timeout(3000)
 
-            while scroll_attempts < max_scrolls:
-                cards = page.query_selector_all(".publicacion-item, .list-group-item, [class*='publicacion'], [class*='licitacion']")
-                if not cards:
-                    # Fallback — buscar divs con el patrón visual
-                    cards = page.query_selector_all("div.panel, div.card, li.list-item")
+            # Buscar los items clickeables de la lista principal (no los li de detalle)
+            # Los items de la lista tienen un evento click y muestran el título de la licitación
+            list_items = page.query_selector_all("ul.list-group > li, .list-group > li")
+            
+            # Filtrar solo los que son items reales de licitación (no headers ni footers)
+            clickable = []
+            for li in list_items:
+                txt = li.inner_text().strip()
+                # Items válidos tienen texto sustancial y no son solo labels de campo
+                if len(txt) > 20 and not any(x in txt for x in ['Categoría', 'Ciudad', 'Fecha de', 'Monto']):
+                    clickable.append(li)
 
-                current_count = len(cards)
-                if current_count >= limit or current_count == last_count:
-                    break
+            print(f"[sicep] {len(clickable)} licitaciones en lista")
 
-                last_count = current_count
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(1500)
-                scroll_attempts += 1
-
-            print(f"[sicep] {len(cards)} tarjetas encontradas")
-
-            # DEBUG — imprimir HTML de primera tarjeta para entender estructura
-            if cards:
+            seen_titles = set()
+            for item in clickable[:limit]:
                 try:
-                    html = cards[0].evaluate("el => el.outerHTML")
-                    print(f"[sicep] DEBUG primera tarjeta HTML: {html[:800]}")
-                    txt = cards[0].inner_text()
-                    print(f"[sicep] DEBUG texto: {repr(txt[:300])}")
-                except Exception as de:
-                    print(f"[sicep] DEBUG error: {de}")
+                    # Click en el item para cargar su detalle
+                    item.click()
+                    page.wait_for_timeout(1500)
 
-            # Parsear cada tarjeta
-            for card in cards[:limit]:
-                try:
-                    # DEBUG — ver todo el texto de la tarjeta
-                    try:
-                        full_debug = card.inner_text()
-                        html_debug = card.evaluate("el => el.outerHTML")
-                        print(f"[sicep] CARD texto: {repr(full_debug[:200])}")
-                        print(f"[sicep] CARD html: {html_debug[:400]}")
-                    except:
-                        pass
-
-                    # Título — intentar todos los elementos posibles
-                    title_el = (
-                        card.query_selector("a[href*='detalle'], a[href*='publicacion']") or
-                        card.query_selector("h3, h4, h5, .titulo, [class*='title']") or
-                        card.query_selector(".card-title, .panel-title, strong") or
-                        card.query_selector("a") or
-                        card.query_selector("span")
-                    )
-                    title = title_el.inner_text().strip() if title_el else card.inner_text().strip()[:200]
-                    title = re.sub(r'\(Clic para ver detalles\)', '', title, flags=re.IGNORECASE).strip()
-                    if not title or len(title) < 5:
+                    # Leer el panel de detalle (IDs fijos del HTML)
+                    title = page.evaluate("document.getElementById('lblTituloOperacionDetallePublicacion')?.innerText || ''")
+                    if not title:
+                        # Fallback — leer texto del item mismo
+                        title = item.inner_text().strip()[:200]
+                    title = title.strip()
+                    if not title or len(title) < 5 or title in seen_titles:
                         continue
+                    seen_titles.add(title)
+
+                    categoria = page.evaluate("document.getElementById('lblCategoriaDetallePublicacion')?.innerText || ''")
+                    ciudad = page.evaluate("document.getElementById('lblCiudadDetallePublicacion')?.innerText || ''")
+                    fecha_cierre = page.evaluate("document.getElementById('lblFechaCierreDetallePublicacion')?.innerText || ''")
+                    fecha_pub = page.evaluate("document.getElementById('lblFechaPublicacionDetallePublicacion')?.innerText || ''")
+                    mandante_raw = page.evaluate("document.getElementById('lblOperacionDetallePublicacion')?.innerText || ''")
 
                     # URL del detalle
-                    href = title_el.get_attribute("href") if title_el else None
-                    url = f"https://www.sistemasicep.cl{href}" if href and href.startswith("/") else (href or LOGIN_URL)
+                    url = page.url or LOGIN_URL
 
-                    # Texto completo de la tarjeta
-                    full_text = card.inner_text()
-
-                    # Descripción
-                    desc_el = card.query_selector("p, .descripcion, [class*='desc']")
-                    description = desc_el.inner_text().strip()[:300] if desc_el else ""
-
-                    # Mandante — buscar "Publicado por X"
-                    mandante_raw = ""
-                    m = re.search(r'por\s+([A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]+?)(?:\s+\d|\s*-|\s*·|$)', full_text)
-                    if m:
-                        mandante_raw = m.group(1).strip()
                     mandante = normalize_mandante(mandante_raw)
-
-                    # Categoría (badge de color)
-                    cat_el = card.query_selector("[class*='badge'], [class*='label'], [class*='categoria'], [class*='rubro']")
-                    category = cat_el.inner_text().strip() if cat_el else ""
-
-                    # Tipo: Licitación / Oportunidad de negocio
+                    category = categoria.strip() if categoria else ""
                     phase = "Licitación"
-                    if "oportunidad de negocio" in full_text.lower():
-                        phase = "Oportunidad de negocio"
-                    elif "licitación" in full_text.lower():
-                        phase = "Licitación"
 
-                    # Estado: NUEVO / FINALIZADO
-                    is_new = "+ nuevo" in full_text.lower()
-                    is_done = "finalizado" in full_text.lower()
-                    if is_done:
-                        phase = f"{phase} (Finalizada)"
-
+                    full_text = f"{title} {ciudad} {categoria} {mandante_raw}"
                     # Región
                     region = None
                     region_match = re.search(
