@@ -108,29 +108,35 @@ def fetch_detail(code: str, session: requests.Session) -> Dict[str, Optional[str
     return result
 
 
-def fetch_by_keyword(keyword: str, ticket: str, session: requests.Session) -> List[Dict]:
+def fetch_by_date(date_str: str, ticket: str, session: requests.Session) -> List[Dict]:
+    """fecha en formato DDMMYYYY"""
     try:
-        url = f"{API_URL}?buscar={requests.utils.quote(keyword)}&ticket={ticket}&cantidad=100"
+        url = f"{API_URL}?fecha={date_str}&ticket={ticket}"
         r = session.get(url, timeout=15, headers={"User-Agent": "StratmapWorker/1.0"})
         r.raise_for_status()
         data = r.json()
         return data.get("Listado", []) or []
     except Exception as e:
-        print(f"[chilebcompra] error keyword '{keyword}': {e}")
+        print(f"[chilebcompra] error día {date_str}: {e}")
         return []
 
 
 def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
     ticket = os.getenv("CHILEBCOMPRA_TICKET", DEFAULT_TICKET)
     session = requests.Session()
-    all_items = []
+    from datetime import datetime, timedelta
     seen_codes = set()
+    all_items = []
 
-    for kw in KEYWORDS:
-        print(f"[chilebcompra] buscando: {kw}")
-        licitaciones = fetch_by_keyword(kw, ticket, session)
-        print(f"[chilebcompra] '{kw}': {len(licitaciones)} resultados")
+    # Buscar últimos 7 días
+    for i in range(7):
+        date = datetime.now() - timedelta(days=i)
+        date_str = date.strftime("%d%m%Y")
+        print(f"[chilebcompra] buscando día: {date_str}")
+        licitaciones = fetch_by_date(date_str, ticket, session)
+        print(f"[chilebcompra] {date_str}: {len(licitaciones)} resultados")
 
+        consecutive_errors = 0
         for lic in licitaciones:
             code = lic.get("CodigoExterno", "") or lic.get("Codigo", "")
             if not code or code in seen_codes:
@@ -186,6 +192,7 @@ def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
         time.sleep(0.5)
         if len(all_items) >= limit:
             break
+        time.sleep(1)
 
     print(f"[chilebcompra] {len(all_items)} licitaciones encontradas")
     return all_items[:limit]
