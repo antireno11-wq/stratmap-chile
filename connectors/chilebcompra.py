@@ -1,9 +1,10 @@
 """
 connectors/chilebcompra.py
-Scraper de ChileCompra usando la API REST pública (sin ticket para búsqueda)
-y scraping de detalle para extraer mandante y región real.
+API oficial de ChileCompra con ticket.
+Obtiene licitaciones por keyword y extrae mandante + región del detalle.
 """
 
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional
@@ -11,14 +12,14 @@ from typing import Any, Dict, List, Optional
 import requests
 from bs4 import BeautifulSoup
 
-BASE_URL = "https://www.mercadopublico.cl"
+API_URL = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
 DETAIL_URL = "https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx"
-SEARCH_URL = "https://buscador.mercadopublico.cl/search"
+BASE_URL = "https://www.mercadopublico.cl"
+DEFAULT_TICKET = "3510D840-A3C2-49B9-93A6-A4ADAEBE5956"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Accept-Language": "es-CL,es;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
 REGIONES = [
@@ -27,19 +28,14 @@ REGIONES = [
     "Aysén", "Magallanes", "Metropolitana", "Los Ríos", "Arica", "Ñuble"
 ]
 
-KEYWORDS_MINERIA = [
-    "minera", "mina", "cobre", "litio", "molibdeno", "relave",
-    "concentradora", "chancado", "perforación", "extracción",
-    "codelco", "bhp", "escondida", "collahuasi", "sqm", "albemarle",
+KEYWORDS = [
+    "minera", "cobre", "litio", "codelco", "mina",
+    "obras civiles", "energía solar", "mantención industrial",
 ]
-KEYWORDS_ENERGIA = [
-    "energía", "solar", "eólica", "fotovoltaica", "subestación",
-    "transmisión eléctrica", "generación eléctrica",
-]
-KEYWORDS_INFRA = [
-    "obras civiles", "construcción", "infraestructura", "vialidad",
-    "puente", "camino", "pavimentación", "alcantarillado",
-]
+
+KEYWORDS_MINERIA = ["minera", "mina", "cobre", "litio", "molibdeno", "relave",
+                    "codelco", "bhp", "escondida", "collahuasi", "sqm", "albemarle"]
+KEYWORDS_ENERGIA = ["energía", "solar", "eólica", "fotovoltaica", "subestación"]
 
 
 def parse_region(text: str) -> Optional[str]:
@@ -73,10 +69,11 @@ def score_item(title: str, industry: str) -> int:
     return min(base, 85)
 
 
-def fetch_detail(url: str, session: requests.Session) -> Dict[str, Optional[str]]:
-    """Entra a la página de detalle y extrae mandante y región."""
+def fetch_detail(code: str, session: requests.Session) -> Dict[str, Optional[str]]:
+    """Scraping de página de detalle para extraer mandante y región."""
     result = {"mandante": None, "region": None}
     try:
+        url = f"{DETAIL_URL}?idlicitacion={code}"
         r = session.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
@@ -84,7 +81,6 @@ def fetch_detail(url: str, session: requests.Session) -> Dict[str, Optional[str]
         # Buscar "Razón social:" → mandante
         for label in soup.find_all(string=re.compile(r"Razón social", re.I)):
             parent = label.parent
-            # El valor está en el siguiente td o span
             next_el = parent.find_next_sibling() or parent.parent.find_next_sibling()
             if next_el:
                 val = next_el.get_text(strip=True)
@@ -103,124 +99,91 @@ def fetch_detail(url: str, session: requests.Session) -> Dict[str, Optional[str]
                     result["region"] = region
                     break
 
-        # Fallback — buscar región en todo el texto
         if not result["region"]:
-            full_text = soup.get_text()
-            result["region"] = parse_region(full_text)
+            result["region"] = parse_region(soup.get_text())
 
-    except Exception as e:
-        pass  # Silencioso — el detalle es opcional
+    except Exception:
+        pass
 
     return result
 
 
-def search_keyword(keyword: str, session: requests.Session) -> List[Dict]:
-    """Busca en el buscador público de mercadopublico.cl."""
-    items = []
+def fetch_by_keyword(keyword: str, ticket: str, session: requests.Session) -> List[Dict]:
     try:
-        # Intentar con el buscador Solr de mercadopublico
-        params = {
-            "q": keyword,
-            "rows": 50,
-            "tipoBusqueda": "1",  # Licitaciones
-        }
-        r = session.get(SEARCH_URL, params=params, headers=HEADERS, timeout=20)
-
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, "html.parser")
-            # Extraer resultados del buscador
-            for result in soup.select(".resultado, .search-result, article, .item-licitacion"):
-                a = result.find("a")
-                if not a:
-                    continue
-                title = a.get_text(strip=True)
-                if len(title) < 10:
-                    continue
-                href = a.get("href", "")
-                url = BASE_URL + href if href.startswith("/") else href
-                items.append({"title": title, "url": url})
-
-        # Si el buscador no funciona, usar ListSearch directamente
-        if not items:
-            list_url = f"{BASE_URL}/Procurement/Modules/RFB/ListSearch.aspx"
-            params2 = {"hddSearch": keyword, "ddlRegion": "0"}
-            r2 = session.get(list_url, params=params2, headers=HEADERS, timeout=20)
-            if r2.status_code == 200:
-                soup2 = BeautifulSoup(r2.text, "html.parser")
-                for row in soup2.select("table tr"):
-                    cells = row.find_all("td")
-                    if not cells:
-                        continue
-                    a = row.find("a")
-                    if not a:
-                        continue
-                    title = a.get_text(strip=True)
-                    if len(title) < 10:
-                        continue
-                    href = a.get("href", "")
-                    url = BASE_URL + href if href.startswith("/") else href
-                    organismo = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-                    items.append({"title": title, "url": url, "organismo": organismo})
-
+        url = f"{API_URL}?buscar={requests.utils.quote(keyword)}&ticket={ticket}&cantidad=100"
+        r = session.get(url, timeout=15, headers={"User-Agent": "StratmapWorker/1.0"})
+        r.raise_for_status()
+        data = r.json()
+        return data.get("Listado", []) or []
     except Exception as e:
-        print(f"[chilebcompra] Error buscando '{keyword}': {e}")
+        print(f"[chilebcompra] error keyword '{keyword}': {e}")
+        return []
 
-    return items
 
-
-def fetch_chilebcompra(limit: int = 150) -> List[Dict[str, Any]]:
+def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
+    ticket = os.getenv("CHILEBCOMPRA_TICKET", DEFAULT_TICKET)
     session = requests.Session()
     all_items = []
-    seen_urls = set()
+    seen_codes = set()
 
-    search_terms = [
-        "minera cobre", "litio", "codelco licitación",
-        "obras civiles mina", "energía solar", "mantención industrial minería",
-    ]
-
-    for kw in search_terms:
+    for kw in KEYWORDS:
         print(f"[chilebcompra] buscando: {kw}")
-        rows = search_keyword(kw, session)
-        print(f"[chilebcompra] '{kw}': {len(rows)} resultados")
+        licitaciones = fetch_by_keyword(kw, ticket, session)
+        print(f"[chilebcompra] '{kw}': {len(licitaciones)} resultados")
 
-        for row in rows:
-            url = row.get("url", "")
-            if not url or url in seen_urls:
+        for lic in licitaciones:
+            code = lic.get("CodigoExterno", "") or lic.get("Codigo", "")
+            if not code or code in seen_codes:
                 continue
-            seen_urls.add(url)
+            seen_codes.add(code)
 
-            title = row.get("title", "")
-            organismo_list = row.get("organismo", "")
-            industry = classify_industry(title, organismo_list)
+            title = lic.get("Nombre", "") or lic.get("NombreLicitacion", "")
+            if not title or len(title) < 5:
+                continue
 
-            # Entrar al detalle para mandante y región real
-            detail = fetch_detail(url, session)
-            mandante = detail["mandante"] or organismo_list or None
-            region = detail["region"] or parse_region(organismo_list + " " + title)
+            organismo = lic.get("NombreOrganismo", "") or lic.get("Organismo", {}).get("Nombre", "")
+            region_api = lic.get("Region", "") or lic.get("NombreRegion", "")
+            estado = lic.get("Estado", "") or lic.get("CodigoEstado", "")
 
+            # Solo licitaciones activas
+            if estado and any(x in str(estado).lower() for x in ["adjudicada", "desierta", "revocada", "suspendida"]):
+                continue
+
+            industry = classify_industry(title, organismo)
+            region = parse_region(region_api) or parse_region(organismo) or parse_region(title)
+
+            # Entrar al detalle si falta mandante o región
+            if not organismo or not region:
+                detail = fetch_detail(code, session)
+                organismo = organismo or detail["mandante"]
+                region = region or detail["region"]
+                time.sleep(0.3)
+
+            detail_page_url = f"{DETAIL_URL}?idlicitacion={code}"
             score = score_item(title, industry)
 
             all_items.append({
                 "source": "Chile Compra",
                 "title": title[:400],
-                "url": url,
-                "company": mandante,
+                "url": detail_page_url,
+                "company": organismo or None,
                 "contractor": None,
                 "industry": industry,
                 "region": region,
                 "phase": "Licitación",
                 "score": score,
-                "entry": f"Mandante: {mandante} | Región: {region}" if mandante else None,
+                "entry": f"Mandante: {organismo} | Región: {region} | Código: {code}" if organismo else code,
                 "raw": {
-                    "organismo": mandante,
+                    "codigo": code,
+                    "organismo": organismo,
                     "region": region,
+                    "estado": estado,
                     "keyword": kw,
-                    "tipo": "chilebcompra_web"
+                    "tipo": "chilebcompra_api"
                 }
             })
-            time.sleep(0.5)  # Respetar el servidor
 
-        time.sleep(1)
+        time.sleep(0.5)
         if len(all_items) >= limit:
             break
 
