@@ -24,13 +24,6 @@ def run_mop():
     except Exception as e:
         print(f"[mop] error: {e}")
 
-def run_chilecompra():
-    try:
-        from connectors.chilebcompra import fetch_chilebcompra
-        ingest(fetch_chilebcompra(), "chilecompra")
-    except Exception as e:
-        print(f"[chilecompra] error: {e}")
-
 def run_rss():
     try:
         from connectors.rss import fetch_rss
@@ -78,7 +71,6 @@ if __name__ == "__main__":
     init_db_safe()
     run_sea()
     run_mop()
-    run_chilecompra()
     run_rss()
     run_mlp()
     run_lithium_chile()
