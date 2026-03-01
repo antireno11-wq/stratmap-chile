@@ -437,7 +437,7 @@ async function fetchJSON(url) {
   return res.json();
 }
 
-let activeFilters = { industry: new Set(['Minería']), region: new Set(), source: new Set() };
+let activeFilters = { industry: new Set(), region: new Set(), source: new Set() };
 let allItems = [];
 
 function syncFilterUI() {
