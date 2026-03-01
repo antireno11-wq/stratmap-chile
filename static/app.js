@@ -437,8 +437,19 @@ async function fetchJSON(url) {
   return res.json();
 }
 
-let activeFilters = { industry: new Set(), region: new Set(), source: new Set() };
+let activeFilters = { industry: new Set(['Minería']), region: new Set(), source: new Set() };
 let allItems = [];
+
+function syncFilterUI() {
+  // Sync checkboxes to match activeFilters state
+  ['industry','region','source'].forEach(key => {
+    const container = el(`filter-${key}`);
+    if (!container) return;
+    container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.checked = activeFilters[key].has(cb.value);
+    });
+  });
+}
 
 function buildFilters(items) {
   const counts = { industry: {}, region: {}, source: {} };
@@ -549,6 +560,7 @@ async function load() {
     const scored = applyPrefsScoring(data.items || []);
     allItems = sortItems(scored);
     buildFilters(allItems);
+    syncFilterUI();
     renderFiltered();
   } catch(e) {
     el("status").textContent = `Error: ${e.message}`;
