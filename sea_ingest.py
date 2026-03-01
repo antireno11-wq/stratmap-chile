@@ -52,6 +52,13 @@ def run_sicep():
     except Exception as e:
         print(f"[sicep] error: {e}")
 
+def run_enami():
+    try:
+        from connectors.enami import fetch_enami
+        ingest(fetch_enami(limit=100), "enami")
+    except Exception as e:
+        print(f"[enami] error: {e}")
+
 def run_codelco():
     try:
         from connectors.codelco import fetch_codelco
@@ -83,6 +90,7 @@ if __name__ == "__main__":
     run_lithium_chile()
     run_sicep()
     run_codelco()
+    run_enami()
     run_infomineria()
     run_signals()
     print("[ingest] Listo")
