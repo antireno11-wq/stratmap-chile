@@ -498,7 +498,7 @@ def delete_chilebcompra():
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM opportunities WHERE source = 'Chile Compra'")
+                cur.execute("DELETE FROM opportunities WHERE source IN ('Chile Compra', 'ChileCompra')")
                 deleted = cur.rowcount
             conn.commit()
         return {"deleted": deleted}
