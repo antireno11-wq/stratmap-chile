@@ -375,25 +375,26 @@ def trigger_ai_matcher():
 
 @app.post("/admin/fix-chilebcompra")
 def fix_chilebcompra():
-    """Fix: inspecciona keys del raw de Chile Compra."""
+    """Normaliza source ChileCompra → Chile Compra y sube scores de MOP."""
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
+                # Fix source name
                 cur.execute("""
-                    SELECT jsonb_object_keys(raw) as key
-                    FROM opportunities
-                    WHERE source = 'Chile Compra' AND raw IS NOT NULL
-                    LIMIT 1;
+                    UPDATE opportunities
+                    SET source = 'Chile Compra'
+                    WHERE source = 'ChileCompra';
                 """)
-                keys = [r['key'] for r in cur.fetchall()]
+                fixed_source = cur.rowcount
+                # Fix MOP scores — subir base de 30 a 50
                 cur.execute("""
-                    SELECT raw FROM opportunities
-                    WHERE source = 'Chile Compra' AND raw IS NOT NULL
-                    LIMIT 1;
+                    UPDATE opportunities
+                    SET score = LEAST(score + 20, 82)
+                    WHERE source = 'MOP' AND score < 60;
                 """)
-                sample_row = cur.fetchone()
+                fixed_mop = cur.rowcount
             conn.commit()
-        return {"keys": keys, "sample": dict(sample_row) if sample_row else {}}
+        return {"ok": True, "fixed_source": fixed_source, "fixed_mop_scores": fixed_mop}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -446,5 +447,49 @@ def sources_summary():
 
 
 # ── Static UI (debe ir al final) ──────────────────────────────────────────────
+
+
+@app.post("/admin/delete-non-mining")
+def delete_non_mining():
+    """Elimina todos los proyectos que no son de industria Minería o Energía minera."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                # Contar antes
+                cur.execute("SELECT COUNT(*) as n FROM opportunities")
+                total_before = cur.fetchone()["n"]
+
+                # Eliminar no-minería (conservar Minería, Energía, y NULL para revisar)
+                cur.execute("""
+                    DELETE FROM opportunities 
+                    WHERE industry NOT IN ('Minería', 'Energía')
+                    AND industry IS NOT NULL
+                """)
+                deleted = cur.rowcount
+
+                # También eliminar MOP (infraestructura vial pura)
+                cur.execute("""
+                    DELETE FROM opportunities
+                    WHERE source = 'MOP'
+                    AND NOT (
+                        title ILIKE '%mina%' OR title ILIKE '%minera%' OR
+                        title ILIKE '%cobre%' OR title ILIKE '%litio%' OR
+                        title ILIKE '%codelco%' OR title ILIKE '%faena%'
+                    )
+                """)
+                deleted_mop = cur.rowcount
+
+                cur.execute("SELECT COUNT(*) as n FROM opportunities")
+                total_after = cur.fetchone()["n"]
+
+            conn.commit()
+        return {
+            "before": total_before,
+            "after": total_after,
+            "deleted_non_mining": deleted,
+            "deleted_mop_non_mining": deleted_mop
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
