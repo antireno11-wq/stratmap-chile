@@ -199,7 +199,7 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
       contractor = EXCLUDED.contractor, industry = EXCLUDED.industry, region = EXCLUDED.region,
       phase = EXCLUDED.phase, score = EXCLUDED.score, entry = EXCLUDED.entry,
       raw = EXCLUDED.raw,
-      published_at = COALESCE(EXCLUDED.published_at, opportunities.published_at),
+      published_at = CASE WHEN EXCLUDED.published_at IS NOT NULL THEN EXCLUDED.published_at ELSE opportunities.published_at END,
       updated_at = NOW()
     RETURNING (xmax = 0) AS inserted;
     """
