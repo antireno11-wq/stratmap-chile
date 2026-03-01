@@ -125,6 +125,58 @@ def parse_sharepoint_items(data: dict) -> List[Dict]:
     return items
 
 
+def parse_xml_rows(rows_xml) -> List[Dict]:
+    """Parsea filas XML de SharePoint Lists.asmx SOAP response."""
+    items = []
+    cutoff = (datetime.now(tz=TZ) - timedelta(days=90)).isoformat()
+
+    for row in rows_xml:
+        attrs = row.attrib
+        # Buscar título en atributos comunes de SharePoint
+        title = (
+            attrs.get("ows_Title") or attrs.get("ows_Nombre") or
+            attrs.get("ows_NombreLicitacion") or attrs.get("ows_LinkTitle") or
+            attrs.get("ows_FileLeafRef") or ""
+        )
+        if not title or len(title) < 5:
+            continue
+
+        # Fecha
+        date_raw = (
+            attrs.get("ows_FechaPublicacion") or attrs.get("ows_Created") or
+            attrs.get("ows_Modified") or attrs.get("ows_Fecha") or
+            attrs.get("ows_FechaCierre") or ""
+        )
+        date_iso = parse_date(str(date_raw)) if date_raw else None
+        if date_iso and date_iso < cutoff:
+            continue
+
+        # URL documento
+        url_doc = attrs.get("ows_FileRef") or attrs.get("ows_Url") or URL
+        if url_doc and url_doc.startswith("/"):
+            url_doc = BASE_URL + url_doc.split(";#")[-1]  # SharePoint usa ;# como separador
+
+        region = parse_region(str(attrs))
+        score = score_licitacion(title)
+
+        items.append({
+            "source": "ENAMI",
+            "title": title[:400],
+            "url": url_doc,
+            "company": "ENAMI",
+            "contractor": None,
+            "industry": "Minería",
+            "region": region,
+            "phase": "Licitación",
+            "score": score,
+            "entry": str(attrs)[:300],
+            "published_at": date_iso,
+            "raw": {"tipo": "enami_licitacion"}
+        })
+
+    return items
+
+
 def fetch_enami(limit: int = 100) -> List[Dict[str, Any]]:
     try:
         from playwright.sync_api import sync_playwright
@@ -175,16 +227,27 @@ def fetch_enami(limit: int = 100) -> List[Dict[str, Any]]:
 
             print(f"[enami] APIs capturadas: {len(api_data_found)}")
 
-            # Procesar datos de API si los capturamos
+            # Procesar datos de API — SOAP/XML
             for api in api_data_found:
                 try:
-                    data = json.loads(api["body"])
-                    parsed = parse_sharepoint_items(data)
+                    body = api["body"]
+                    print(f"[enami] body snippet: {body[:300]}")
+                    # Parsear XML SOAP
+                    import xml.etree.ElementTree as ET
+                    root = ET.fromstring(body)
+                    # Buscar elementos z:row o row en cualquier namespace
+                    ns = {'z': 'urn:schemas-microsoft-com:rowset', 's': 'uuid:BDC6E3F0-6DA3-11d1-A2A3-00AA00C14882'}
+                    rows_xml = root.findall('.//{urn:schemas-microsoft-com:rowset}row') or                                root.findall('.//row') or                                root.findall('.//{#RowsetSchema}row')
+                    print(f"[enami] XML rows encontrados: {len(rows_xml)}")
+                    if rows_xml:
+                        print(f"[enami] primer row attrs: {list(rows_xml[0].attrib.keys())[:10]}")
+                    parsed = parse_xml_rows(rows_xml)
                     if parsed:
-                        print(f"[enami] {len(parsed)} items de {api['url'][:80]}")
+                        print(f"[enami] {len(parsed)} items parseados")
                         items.extend(parsed)
                 except Exception as je:
-                    print(f"[enami] error parse JSON: {je}")
+                    print(f"[enami] error parse XML: {je}")
+                    import traceback; traceback.print_exc()
 
             # Si no obtuvimos nada via API, intentar leer DOM
             if not items:
