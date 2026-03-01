@@ -161,7 +161,13 @@ def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
             if estado and any(x in str(estado).lower() for x in ["adjudicada", "desierta", "revocada", "suspendida"]):
                 continue
 
+            # Filtrar solo minería y sectores industriales relevantes
             industry = classify_industry(title, organismo)
+            if industry not in ("Minería", "Energía"):
+                # Incluir infraestructura solo si tiene keywords mineros
+                if not any(k in title.lower() for k in KEYWORDS_MINERIA):
+                    continue
+
             region = parse_region(region_api) or parse_region(organismo) or parse_region(title)
 
             # Entrar al detalle si falta mandante o región
