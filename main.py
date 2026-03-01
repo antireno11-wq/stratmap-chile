@@ -492,4 +492,17 @@ def delete_non_mining():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/admin/delete-chilebcompra")
+def delete_chilebcompra():
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'Chile Compra'")
+                deleted = cur.rowcount
+            conn.commit()
+        return {"deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
