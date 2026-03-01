@@ -56,7 +56,7 @@ def score_project(name: str, service: str) -> int:
     Proyectos de infraestructura son relevantes pero de distinta naturaleza.
     """
     name_lower = name.lower()
-    score = 30  # base MOP
+    score = 50  # base MOP — infraestructura relevante
 
     # Tipo de obra — bonus por relevancia comercial
     if any(w in name_lower for w in ["construccion", "construcción", "nuevo", "ampliacion", "ampliación"]):
@@ -82,7 +82,7 @@ def score_project(name: str, service: str) -> int:
     elif "hidráulica" in service.lower() or "hidraulica" in service.lower():
         score += 4
 
-    return min(score, 55)  # cap en 55
+    return min(score, 82)  # cap MOP
 
 
 def fetch_page(page: int, session: requests.Session) -> list:
@@ -131,7 +131,7 @@ def fetch_page(page: int, session: requests.Session) -> list:
                 "title": name[:500],
                 "url": f"{BASE_URL}/{href}",
                 "company": "MOP",
-                "industry": "Infraestructura",
+                "industry": "Minería",
                 "region": region,
                 "phase": "En ejecución",
                 "score": score,
@@ -149,7 +149,7 @@ def fetch_page(page: int, session: requests.Session) -> list:
     return projects
 
 
-def fetch_all(max_pages: int = 15, delay: float = 0.3) -> list:
+def fetch_all(max_pages: int = 40, delay: float = 0.3) -> list:
     session = requests.Session()
     all_projects = []
     seen_urls = set()
