@@ -172,7 +172,20 @@
     .cf-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
     .cf-btn-cancel { padding: 7px 13px; background: var(--card); border: 1.5px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; }
     .cf-btn-save { padding: 7px 16px; background: var(--orange); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
-  </style>
+  
+    .sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .sortable:hover {
+      color: #3b82f6;
+    }
+    .sort-arrow {
+      font-size: 11px;
+      color: #3b82f6;
+    }
+
+    </style>
 </head>
 <body>
   <aside class="sidebar">
@@ -272,7 +285,7 @@
         </div>
         <div class="tableWrap">
           <table>
-            <thead><tr><th>Score</th><th>Proyecto</th><th>Fuente</th><th>Mandante</th><th>Región</th><th>Pipeline</th><th>Fecha</th><th></th></tr></thead>
+            <thead><tr><th class="col-score sortable" onclick="setSortBy('score')" title="Ordenar por score">Score <span class="sort-arrow" id="arr-score"></span></th><th class="sortable" onclick="setSortBy('title')" title="Ordenar por nombre">Proyecto <span class="sort-arrow" id="arr-title"></span></th><th>Fuente</th><th class="sortable" onclick="setSortBy('company')" title="Ordenar por mandante">Mandante <span class="sort-arrow" id="arr-company"></span></th><th class="sortable" onclick="setSortBy('region')" title="Ordenar por región">Región <span class="sort-arrow" id="arr-region"></span></th><th>Pipeline</th><th class="sortable" onclick="setSortBy('date')" title="Ordenar por fecha">Fecha <span class="sort-arrow" id="arr-date"></span></th><th></th></tr></thead>
             <tbody id="tbody-projects"><tr><td colspan="8" class="muted-row">Cargando...</td></tr></tbody>
           </table>
         </div>
