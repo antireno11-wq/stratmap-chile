@@ -157,7 +157,7 @@ window.openOppDrawer = async function(oppId) {
       <span>Fuente: ${sourceChip(item.source||"")}</span>
       <span>Mandante: ${escapeHTML(item.company||"—")}</span>
       <span>Fase: ${escapeHTML(item.phase||"—")}</span>
-      <span>Actualizado: ${fmtDate(item.updated_at)}</span>
+      <span>Publicado: ${fmtDate(itemDate(item))}</span>
       ${item.url ? `<a href="${item.url}" target="_blank" class="contact-link" style="margin-top:4px">🔗 Ver fuente original</a>` : ""}
     </div>
   `;
@@ -312,7 +312,7 @@ async function openDrawer(type, value) {
       <td><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
           <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
       <td>${statusChip(i.pipeline_status)}</td>
-      <td>${fmtDate(i.updated_at)}</td>
+      <td>${fmtDate(itemDate(i))}</td>
       <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
     </tr>`;
   }).join("");
@@ -414,7 +414,7 @@ function projectRow(item) {
     <td>${company}</td>
     <td>${region}</td>
     <td>${statusChip(item.pipeline_status)}</td>
-    <td>${fmtDate(item.updated_at)}</td>
+    <td>${fmtDate(itemDate(item))}</td>
     <td><a class="row-link" href="${item.url||"#"}" target="_blank" rel="noreferrer">ver →</a></td>
   </tr>`;
 }
@@ -424,7 +424,7 @@ function newsRow(item) {
     <td><a class="news-title" href="${item.url||"#"}" target="_blank" rel="noreferrer">${escapeHTML(item.title||"")}</a></td>
     <td>${sourceChip(item.source||"")}</td>
     <td>${escapeHTML(item.industry||"—")}</td>
-    <td>${fmtDate(item.updated_at)}</td>
+    <td>${fmtDate(itemDate(item))}</td>
     <td><a class="row-link" href="${item.url||"#"}" target="_blank" rel="noreferrer">ver →</a></td>
   </tr>`;
 }
