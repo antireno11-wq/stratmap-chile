@@ -2,10 +2,11 @@
 connectors/enami.py
 Scraper de licitaciones de ENAMI.
 Fuente: https://www.enami.cl/Contratistas-y-Proveedores/Pages/default.aspx#/tabs3
-Usa Playwright porque es una SPA.
+Usa Playwright + intercepción de API SharePoint (AngularJS).
 """
 
 import re
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -17,29 +18,33 @@ URL = "https://www.enami.cl/Contratistas-y-Proveedores/Pages/default.aspx#/tabs3
 SCORE_KEYWORDS = {
     "construcción": 8, "montaje": 8, "obras": 6,
     "servicio": 5, "mantención": 7, "mantenimiento": 7,
-    "operación": 5, "suministro": 5, "reparación": 6,
-    "ingeniería": 7, "planta": 6, "mina": 7,
-    "eléctric": 6, "instrumentación": 6,
+    "suministro": 5, "reparación": 6, "ingeniería": 7,
+    "planta": 6, "mina": 7, "eléctric": 6,
 }
 
 DIVISION_REGION = {
-    "atacama":       "Atacama",
-    "coquimbo":      "Coquimbo",
-    "valparaíso":    "Valparaíso",
-    "o'higgins":     "O'Higgins",
-    "metropolitana": "Metropolitana",
-    "antofagasta":   "Antofagasta",
+    "atacama": "Atacama", "coquimbo": "Coquimbo",
+    "valparaíso": "Valparaíso", "valparaiso": "Valparaíso",
+    "o'higgins": "O'Higgins", "ohiggins": "O'Higgins",
+    "metropolitana": "Metropolitana", "antofagasta": "Antofagasta",
 }
 
 
 def parse_date(text: str) -> Optional[str]:
     if not text:
         return None
-    # DD/MM/YYYY
     m = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', text)
     if m:
         try:
             dt = datetime(int(m.group(3)), int(m.group(2)), int(m.group(1)), tzinfo=TZ)
+            return dt.isoformat()
+        except ValueError:
+            pass
+    # ISO format
+    m = re.search(r'(\d{4})-(\d{2})-(\d{2})', text)
+    if m:
+        try:
+            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=TZ)
             return dt.isoformat()
         except ValueError:
             pass
@@ -55,7 +60,7 @@ def parse_region(text: str) -> Optional[str]:
 
 
 def score_licitacion(title: str) -> int:
-    base = 68  # ENAMI fuente premium
+    base = 68
     t = title.lower()
     for kw, pts in SCORE_KEYWORDS.items():
         if kw in t:
@@ -63,14 +68,72 @@ def score_licitacion(title: str) -> int:
     return min(base, 92)
 
 
+def parse_sharepoint_items(data: dict) -> List[Dict]:
+    """Parsea respuesta JSON de SharePoint REST API."""
+    items = []
+    rows = []
+
+    # Formato OData v3/v4
+    if "d" in data and "results" in data.get("d", {}):
+        rows = data["d"]["results"]
+    elif "value" in data:
+        rows = data["value"]
+
+    cutoff = (datetime.now(tz=TZ) - timedelta(days=90)).isoformat()
+
+    for row in rows:
+        title = (
+            row.get("Title") or row.get("Titulo") or
+            row.get("NombreLicitacion") or row.get("Nombre") or ""
+        )
+        if not title or len(title) < 5:
+            continue
+
+        # Fecha
+        date_raw = (
+            row.get("FechaPublicacion") or row.get("Created") or
+            row.get("Modified") or row.get("Fecha") or ""
+        )
+        date_iso = parse_date(str(date_raw)) if date_raw else None
+
+        # Filtrar antiguos
+        if date_iso and date_iso < cutoff:
+            continue
+
+        url_doc = row.get("UrlDocumento") or row.get("Url") or row.get("FileRef") or URL
+        if url_doc and url_doc.startswith("/"):
+            url_doc = BASE_URL + url_doc
+
+        region = parse_region(str(row))
+        score = score_licitacion(title)
+
+        items.append({
+            "source": "ENAMI",
+            "title": title[:400],
+            "url": url_doc,
+            "company": "ENAMI",
+            "contractor": None,
+            "industry": "Minería",
+            "region": region,
+            "phase": "Licitación",
+            "score": score,
+            "entry": str(row)[:300],
+            "published_at": date_iso,
+            "raw": {"tipo": "enami_licitacion", "raw_row": str(row)[:200]}
+        })
+
+    return items
+
+
 def fetch_enami(limit: int = 100) -> List[Dict[str, Any]]:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("[enami] Playwright no instalado — saltando")
+        print("[enami] Playwright no instalado")
         return []
 
     items = []
+    api_data_found = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -81,124 +144,111 @@ def fetch_enami(limit: int = 100) -> List[Dict[str, Any]]:
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         )
 
+        # Interceptar respuestas de red
+        def handle_response(response):
+            url_r = response.url
+            if any(x in url_r for x in ["_api/web/lists", "_vti_bin", "GetItems", "listdata.svc"]):
+                try:
+                    body = response.text()
+                    if len(body) > 200 and ("{" in body or "<entry" in body):
+                        api_data_found.append({"url": url_r, "body": body})
+                        print(f"[enami] API capturada: {url_r[:100]}")
+                except:
+                    pass
+
+        page.on("response", handle_response)
+
         try:
             print("[enami] Cargando página...")
-            # Ir primero a la página base
-            page.goto("https://www.enami.cl/Contratistas-y-Proveedores/Pages/default.aspx", 
-                      wait_until="networkidle", timeout=40000)
-            page.wait_for_timeout(3000)
+            page.goto(URL, wait_until="domcontentloaded", timeout=40000)
+            page.wait_for_timeout(8000)  # Esperar Angular
 
-            # Click en el tab LICITACIONES
+            # Click en LICITACIONES
             try:
-                lic_tab = (
-                    page.query_selector("a:has-text('LICITACIONES')") or
-                    page.query_selector("[href*='tabs3']") or
-                    page.query_selector("a[href*='licitacion' i]")
-                )
+                lic_tab = page.query_selector("a:has-text('LICITACIONES')")
                 if lic_tab:
                     lic_tab.click()
-                    print("[enami] Click en tab LICITACIONES")
-                    page.wait_for_timeout(5000)
-                else:
-                    print("[enami] Tab no encontrado, intentando URL directa con hash")
-                    page.evaluate("window.location.hash = '#/tabs3'")
-                    page.wait_for_timeout(5000)
+                    print("[enami] Click en LICITACIONES")
+                    page.wait_for_timeout(8000)
             except Exception as ce:
-                print(f"[enami] error click tab: {ce}")
+                print(f"[enami] error click: {ce}")
 
-            print(f"[enami] URL actual: {page.url}")
+            print(f"[enami] APIs capturadas: {len(api_data_found)}")
 
-            # Esperar que aparezca contenido de licitaciones
-            try:
-                page.wait_for_selector("table, [class*='licit'], iframe", timeout=15000)
-            except:
-                pass
-            page.wait_for_timeout(3000)
-
-            # Verificar si hay iframe con el contenido
-            iframes = page.query_selector_all("iframe")
-            print(f"[enami] iframes: {len(iframes)}")
-
-            # DEBUG
-            try:
-                html_snippet = page.evaluate("document.body.innerHTML.substring(0, 2000)")
-                print(f"[enami] DEBUG body: {html_snippet}")
-            except Exception as de:
-                print(f"[enami] debug error: {de}")
-
-            # Intentar extraer tabla de licitaciones
-            rows = page.query_selector_all("table tr")
-            if not rows:
-                rows = page.query_selector_all("[class*='licit'], [class*='item-licit']")
-
-            print(f"[enami] {len(rows)} filas encontradas")
-
-            seen_titles = set()
-            for row in rows[1:limit+1]:  # Skip header
+            # Procesar datos de API si los capturamos
+            for api in api_data_found:
                 try:
-                    cells = row.query_selector_all("td")
-                    if not cells or len(cells) < 2:
-                        continue
+                    data = json.loads(api["body"])
+                    parsed = parse_sharepoint_items(data)
+                    if parsed:
+                        print(f"[enami] {len(parsed)} items de {api['url'][:80]}")
+                        items.extend(parsed)
+                except Exception as je:
+                    print(f"[enami] error parse JSON: {je}")
 
-                    # Extraer campos típicos de tabla de licitaciones
-                    full_text = row.inner_text().strip()
-                    if not full_text or len(full_text) < 10:
-                        continue
+            # Si no obtuvimos nada via API, intentar leer DOM
+            if not items:
+                print("[enami] Sin datos de API, intentando DOM...")
+                # Esperar más para Angular
+                page.wait_for_timeout(5000)
 
-                    # Buscar link
-                    link_el = row.query_selector("a")
-                    title = link_el.inner_text().strip() if link_el else cells[0].inner_text().strip()
-                    href = link_el.get_attribute("href") if link_el else None
-                    url = (BASE_URL + href if href and href.startswith("/") else href) or URL
+                # Extraer texto visible del área de licitaciones
+                try:
+                    # Buscar ng-repeat renderizado
+                    ng_items = page.query_selector_all("[ng-repeat], [data-ng-repeat]")
+                    print(f"[enami] ng-repeat: {len(ng_items)}")
 
-                    if not title or len(title) < 5 or title in seen_titles:
-                        continue
-                    seen_titles.add(title)
+                    # Buscar tabla renderizada por Angular
+                    rows = page.query_selector_all("table tbody tr")
+                    print(f"[enami] filas tabla: {len(rows)}")
+                    if rows:
+                        for row in rows[:limit]:
+                            cells = row.query_selector_all("td")
+                            if len(cells) < 2:
+                                continue
+                            full = row.inner_text().strip()
+                            link_el = row.query_selector("a")
+                            title = link_el.inner_text().strip() if link_el else cells[0].inner_text().strip()
+                            href = link_el.get_attribute("href") if link_el else None
+                            url_item = (BASE_URL + href if href and href.startswith("/") else href) or URL
+                            date_iso = parse_date(full)
+                            region = parse_region(full)
+                            if not title or len(title) < 5:
+                                continue
+                            items.append({
+                                "source": "ENAMI",
+                                "title": title[:400],
+                                "url": url_item,
+                                "company": "ENAMI",
+                                "contractor": None,
+                                "industry": "Minería",
+                                "region": region,
+                                "phase": "Licitación",
+                                "score": score_licitacion(title),
+                                "entry": full[:300],
+                                "published_at": date_iso,
+                                "raw": {"tipo": "enami_licitacion"}
+                            })
 
-                    # Fecha (buscar en celdas)
-                    date_iso = None
-                    for cell in cells:
-                        txt = cell.inner_text().strip()
-                        if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', txt):
-                            date_iso = parse_date(txt)
-                            break
+                    # Debug final
+                    if not items:
+                        section = page.evaluate(
+                            "document.querySelector('[ng-controller],[ng-app],#tabs3,.tab-pane.active') ? "
+                            "document.querySelector('[ng-controller],[ng-app],#tabs3,.tab-pane.active').innerText.substring(0,800) : "
+                            "'NO SECTION'"
+                        )
+                        print(f"[enami] DEBUG section: {section}")
 
-                    region = parse_region(full_text)
-                    score = score_licitacion(title)
-
-                    # Solo últimos 3 meses
-                    if date_iso:
-                        cutoff = (datetime.now(tz=TZ) - timedelta(days=90)).isoformat()
-                        if date_iso < cutoff:
-                            print(f"[enami] Fecha {date_iso} muy antigua — deteniendo")
-                            items = items  # Keep what we have
-                            break
-
-                    items.append({
-                        "source": "ENAMI",
-                        "title": title[:400],
-                        "url": url,
-                        "company": "ENAMI",
-                        "contractor": None,
-                        "industry": "Minería",
-                        "region": region,
-                        "phase": "Licitación",
-                        "score": score,
-                        "entry": full_text[:300],
-                        "published_at": date_iso,
-                        "raw": {"tipo": "enami_licitacion"}
-                    })
-
-                except Exception:
-                    continue
+                except Exception as de:
+                    print(f"[enami] DOM error: {de}")
 
         except Exception as e:
-            print(f"[enami] Error: {e}")
+            print(f"[enami] Error general: {e}")
         finally:
             browser.close()
 
     print(f"[enami] {len(items)} licitaciones extraídas")
-    return items
+    return items[:limit]
 
 
 if __name__ == "__main__":
