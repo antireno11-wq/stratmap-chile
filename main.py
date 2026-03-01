@@ -583,4 +583,24 @@ def delete_mop():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/admin/delete-lithium-old")
+def delete_lithium_old():
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    DELETE FROM opportunities 
+                    WHERE source = 'Lithium Chile'
+                    AND (
+                        published_at < NOW() - INTERVAL '90 days'
+                        OR published_at IS NULL
+                    )
+                """)
+                deleted = cur.rowcount
+            conn.commit()
+        return {"deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
