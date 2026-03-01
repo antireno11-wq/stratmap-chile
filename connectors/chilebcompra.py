@@ -135,6 +135,12 @@ def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
         print(f"[chilebcompra] buscando día: {date_str}")
         licitaciones = fetch_by_date(date_str, ticket, session)
         print(f"[chilebcompra] {date_str}: {len(licitaciones)} resultados")
+        if licitaciones and i == 0:
+            # DEBUG — mostrar estructura del primer item
+            first = licitaciones[0]
+            print(f"[chilebcompra] DEBUG keys: {list(first.keys())}")
+            for k, v in first.items():
+                print(f"[chilebcompra] DEBUG {k}: {repr(str(v))[:80]}")
 
         consecutive_errors = 0
         for lic in licitaciones:
