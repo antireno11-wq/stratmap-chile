@@ -179,15 +179,34 @@ def fetch_sicep(limit: int = 200) -> List[Dict[str, Any]]:
             print("[sicep] Cargando lista de publicaciones...")
             page.wait_for_timeout(3000)
 
-            # Buscar los items clickeables de la lista principal (no los li de detalle)
-            # Los items de la lista tienen un evento click y muestran el título de la licitación
-            list_items = page.query_selector_all("ul.list-group > li, .list-group > li")
-            
-            # Filtrar solo los que son items reales de licitación (no headers ni footers)
+            # DEBUG — ver estructura completa de la página
+            try:
+                # Imprimir todos los elementos con texto sustancial
+                all_lis = page.query_selector_all("li, tr, .item, [class*='row'], [class*='card'], [onclick]")
+                print(f"[sicep] Total elementos encontrados: {len(all_lis)}")
+                for el in all_lis[:10]:
+                    txt = el.inner_text().strip()[:100]
+                    cls = el.get_attribute("class") or ""
+                    if txt and len(txt) > 10:
+                        print(f"[sicep] EL class='{cls}': {repr(txt)}")
+                
+                # También ver el HTML general de la lista
+                body_html = page.evaluate("document.querySelector('ul, ol, .list, [class*=list]')?.outerHTML || 'NO LIST FOUND'")
+                print(f"[sicep] LISTA HTML: {body_html[:600]}")
+            except Exception as de:
+                print(f"[sicep] debug error: {de}")
+
+            # Buscar items clickeables con múltiples estrategias
+            list_items = (
+                page.query_selector_all("[ng-repeat], [v-for]") or
+                page.query_selector_all(".licitacion-item, .publicacion-item, .item-licitacion") or
+                page.query_selector_all("ul.list-group > li, .list-group > li") or
+                page.query_selector_all("tbody tr, table tr")
+            )
+
             clickable = []
             for li in list_items:
                 txt = li.inner_text().strip()
-                # Items válidos tienen texto sustancial y no son solo labels de campo
                 if len(txt) > 20 and not any(x in txt for x in ['Categoría', 'Ciudad', 'Fecha de', 'Monto']):
                     clickable.append(li)
 
