@@ -17,13 +17,6 @@ def run_sea():
     except Exception as e:
         print(f"[sea] error: {e}")
 
-def run_mop():
-    try:
-        from connectors.mop import fetch_all as mop_fetch
-        ingest(mop_fetch(max_pages=15), "mop")
-    except Exception as e:
-        print(f"[mop] error: {e}")
-
 def run_rss():
     try:
         from connectors.rss import fetch_rss
@@ -84,7 +77,6 @@ if __name__ == "__main__":
     print("[ingest] Iniciando...")
     init_db_safe()
     run_sea()
-    run_mop()
     run_rss()
     run_mlp()
     run_lithium_chile()
