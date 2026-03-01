@@ -5,7 +5,7 @@ Estructura: tarjeta con fecha arriba y título/link abajo.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -150,6 +150,12 @@ def fetch_page(url: str) -> List[Dict[str, Any]]:
                     m = DATE_PATTERN.search(str(prev))
                     if m:
                         date_iso = parse_date(m.group(0))
+
+            # Solo últimos 3 meses
+            if date_iso:
+                cutoff = (datetime.now(tz=ZoneInfo("America/Santiago")) - timedelta(days=90)).isoformat()
+                if date_iso < cutoff:
+                    continue
 
             title_es = translate_title(title_en)
             display_title = title_es if title_es.lower() != title_en.lower() else title_en
