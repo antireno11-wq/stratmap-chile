@@ -520,7 +520,46 @@ function renderFiltered() {
 
 // ── Session state ─────────────────────────────────────────────────────────────
 let isLoggedIn = false;
-let currentSort = { by: null, dir: 'desc' }; // null = default (score if logged in, date if not)
+let currentSort = { by: null, dir: 'desc' };
+
+function updateSortArrows() {
+  ['score','title','company','region','date'].forEach(f => {
+    const el = document.getElementById('arr-' + f);
+    if (!el) return;
+    el.textContent = (currentSort.by === f) ? (currentSort.dir === 'desc' ? ' ↓' : ' ↑') : '';
+  });
+}
+
+function setSortBy(field) {
+  if (currentSort.by === field) {
+    currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    currentSort.by = field;
+    currentSort.dir = 'desc';
+  }
+  updateSortArrows();
+  allItems = sortItems(allItems);
+  renderFiltered();
+}
+
+function sortItems(items) {
+  const sortBy = currentSort.by || (isLoggedIn ? 'score' : 'date');
+  const dir = currentSort.dir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    if (sortBy === 'score') {
+      const sa = isLoggedIn ? (a.radar_score || a.score || 0) : (a.score || 0);
+      const sb = isLoggedIn ? (b.radar_score || b.score || 0) : (b.score || 0);
+      return dir * (sb - sa);
+    }
+    if (sortBy === 'date') {
+      return dir * (new Date(itemDate(b)||0) - new Date(itemDate(a)||0));
+    }
+    if (sortBy === 'company') return dir * (a.company||'').localeCompare(b.company||'', 'es');
+    if (sortBy === 'region')  return dir * (a.region||'').localeCompare(b.region||'', 'es');
+    if (sortBy === 'title')   return dir * (a.title||'').localeCompare(b.title||'', 'es');
+    return 0;
+  });
+}
 
 async function checkSession() {
   const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
