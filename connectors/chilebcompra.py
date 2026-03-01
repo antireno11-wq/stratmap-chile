@@ -190,7 +190,7 @@ def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
                     "organismo": organismo,
                     "region": region,
                     "estado": estado,
-                    "keyword": kw,
+                    "keyword": date_str,
                     "tipo": "chilebcompra_api"
                 }
             })
