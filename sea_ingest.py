@@ -52,13 +52,6 @@ def run_sicep():
     except Exception as e:
         print(f"[sicep] error: {e}")
 
-def run_ariba():
-    try:
-        from connectors.ariba import fetch_ariba
-        ingest(fetch_ariba(limit=200), "ariba")
-    except Exception as e:
-        print(f"[ariba] error: {e}")
-
 def run_codelco():
     try:
         from connectors.codelco import fetch_codelco
@@ -89,7 +82,6 @@ if __name__ == "__main__":
     run_mlp()
     run_lithium_chile()
     run_sicep()
-    run_ariba()
     run_codelco()
     run_infomineria()
     run_signals()
