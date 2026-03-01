@@ -82,10 +82,14 @@ def fetch_ariba(limit: int = 200) -> List[Dict[str, Any]]:
 
             # Login
             user_input = (
+                page.query_selector("input[name='UserName']") or
                 page.query_selector("input[type='text']") or
                 page.query_selector("input[type='email']")
             )
-            pass_input = page.query_selector("input[type='password']")
+            pass_input = (
+                page.query_selector("input[name='Password']") or
+                page.query_selector("input[type='password']")
+            )
 
             if not user_input or not pass_input:
                 try:
@@ -104,8 +108,8 @@ def fetch_ariba(limit: int = 200) -> List[Dict[str, Any]]:
             pass_input.fill(password)
 
             login_btn = (
-                page.query_selector("button[type='submit']") or
                 page.query_selector("input[type='submit']") or
+                page.query_selector("button[type='submit']") or
                 page.query_selector("button:has-text('Inicio de sesión')")
             )
             if login_btn:
