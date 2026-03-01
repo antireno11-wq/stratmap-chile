@@ -407,7 +407,7 @@ function projectRow(item) {
     : "—";
 
   return `<tr>
-    <td class="col-score" style="display:${isLoggedIn?'':'none'}"><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>
+    ${isLoggedIn ? `<td class="col-score"><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>` : ''}
     <td><span class="proj-title clickable-link" onclick="openOppDrawer(${item.id})">${escapeHTML(item.title||"")}</span>
         <span class="proj-industry">${escapeHTML(item.industry||"")}</span></td>
     <td>${sourceChip(item.source||"")}</td>
