@@ -407,7 +407,7 @@ function projectRow(item) {
     : "—";
 
   return `<tr>
-    <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>
+    <td class="col-score" style="display:${isLoggedIn?'':'none'}"><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>
     <td><span class="proj-title clickable-link" onclick="openOppDrawer(${item.id})">${escapeHTML(item.title||"")}</span>
         <span class="proj-industry">${escapeHTML(item.industry||"")}</span></td>
     <td>${sourceChip(item.source||"")}</td>
@@ -585,7 +585,7 @@ function updateScoreVisibility() {
     currentSort.by = isLoggedIn ? 'score' : 'date';
     updateSortArrows();
   }
-  document.querySelectorAll('.col-score, .col-aifit').forEach(el => {
+  document.querySelectorAll('.col-score, .col-aifit, th.col-score').forEach(el => {
     el.style.display = show ? '' : 'none';
   });
   const banner = document.getElementById('no-session-banner');
@@ -711,6 +711,8 @@ function resetSession() {
   localStorage.removeItem('stratmap_prefs');
   localStorage.removeItem('stratmap_services');
   isLoggedIn = false;
+  currentSort.by = 'date';
+  currentSort.dir = 'desc';
   updateScoreVisibility();
   updateUserMenuState();
   toggleUserMenu();
