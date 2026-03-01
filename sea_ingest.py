@@ -59,6 +59,13 @@ def run_ariba():
     except Exception as e:
         print(f"[ariba] error: {e}")
 
+def run_codelco():
+    try:
+        from connectors.codelco import fetch_codelco
+        ingest(fetch_codelco(limit=200), "codelco")
+    except Exception as e:
+        print(f"[codelco] error: {e}")
+
 def run_infomineria():
     try:
         from connectors.infomineria import fetch_infomineria
@@ -83,6 +90,7 @@ if __name__ == "__main__":
     run_lithium_chile()
     run_sicep()
     run_ariba()
+    run_codelco()
     run_infomineria()
     run_signals()
     print("[ingest] Listo")
