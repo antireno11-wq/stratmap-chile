@@ -518,6 +518,10 @@ def delete_ariba_junk():
                         title ILIKE '%loading content%' OR
                         title ILIKE '%DUNS number%' OR
                         title ILIKE '%enter your%' OR
+                        title ILIKE '%bienvenid%' OR
+                        title ILIKE '%view customer%' OR
+                        title ILIKE '%customer requested%' OR
+                        title ILIKE '%perfil solicitado%' OR
                         length(title) < 10
                     )
                 """)
@@ -534,6 +538,19 @@ def delete_lithium():
         with db.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM opportunities WHERE source = 'Lithium Chile'")
+                deleted = cur.rowcount
+            conn.commit()
+        return {"deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/delete-ariba")
+def delete_ariba():
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'Ariba Codelco'")
                 deleted = cur.rowcount
             conn.commit()
         return {"deleted": deleted}
