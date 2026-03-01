@@ -520,6 +520,7 @@ function renderFiltered() {
 
 // ── Session state ─────────────────────────────────────────────────────────────
 let isLoggedIn = false;
+let currentSort = { by: null, dir: 'desc' }; // null = default (score if logged in, date if not)
 
 async function checkSession() {
   const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
@@ -540,6 +541,11 @@ async function checkSession() {
 
 function updateScoreVisibility() {
   const show = isLoggedIn;
+  // Reset sort to default when session changes
+  if (!currentSort.by) {
+    currentSort.by = isLoggedIn ? 'score' : 'date';
+    updateSortArrows();
+  }
   document.querySelectorAll('.col-score, .col-aifit').forEach(el => {
     el.style.display = show ? '' : 'none';
   });
@@ -558,7 +564,9 @@ async function load() {
     await checkSession();
     loadAiFits();
     const scored = applyPrefsScoring(data.items || []);
+    currentSort.by = currentSort.by || (isLoggedIn ? 'score' : 'date');
     allItems = sortItems(scored);
+    updateSortArrows();
     buildFilters(allItems);
     syncFilterUI();
     renderFiltered();
@@ -599,40 +607,7 @@ function getPrefs() {
   } catch(e) { return {}; }
 }
 
-function sortItems(items) {
-  if (isLoggedIn) {
-    // Con sesión: ordenar por score personalizado
-    return [...items].sort((a, b) => (b.radar_score || 0) - (a.radar_score || 0));
-  } else {
-    // Sin sesión: ordenar por fecha pero con cap de 5 por fuente
-    // para evitar que una fuente domine el top
-    const sourceCount = {};
-    const MAX_PER_SOURCE = 5;
 
-    // Separar noticias (phase=Noticia) de proyectos
-    const byDate = [...items].sort((a, b) => {
-      const da = new Date(itemDate(b) || 0);
-      const db = new Date(itemDate(a) || 0);
-      return da - db;
-    });
-
-    const result = [];
-    const overflow = [];
-
-    for (const item of byDate) {
-      const src = item.source || 'unknown';
-      sourceCount[src] = (sourceCount[src] || 0) + 1;
-      if (sourceCount[src] <= MAX_PER_SOURCE) {
-        result.push(item);
-      } else {
-        overflow.push(item);
-      }
-    }
-
-    // Agregar los overflow al final
-    return [...result, ...overflow];
-  }
-}
 
 function applyPrefsScoring(items) {
   const prefs = getPrefs();
