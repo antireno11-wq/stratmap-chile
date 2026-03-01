@@ -1,311 +1,225 @@
 """
-connectors/sicep.py
-Scraper autenticado de SICEP usando Playwright.
-Requiere variables de entorno: SICEP_USER, SICEP_PASS
+connectors/ariba.py
+Scraper autenticado de SAP Ariba (portal Codelco).
+Requiere: ARIBA_USER, ARIBA_PASS
 """
 
 import os
 import re
-import time
 from typing import Any, Dict, List, Optional
 
-LOGIN_URL = "https://www.sistemasicep.cl/app/colaboradora/listaPublicacion"
+ARIBA_URL = "https://service.ariba.com/Sourcing.aw/109578011/aw?awh=r&awssk=aBlATlgm&dard=1"
 
-CATEGORY_INDUSTRY = {
-    "maquinaria": "Minería",
-    "minería": "Minería",
-    "minero": "Minería",
-    "perforación": "Minería",
-    "explosivos": "Minería",
-    "chancado": "Minería",
-    "concentradora": "Minería",
-    "ingeniería eléctrica": "Energía",
-    "eléctric": "Energía",
-    "subestación": "Energía",
-    "obras civiles": "Infraestructura",
-    "construcción": "Infraestructura",
-    "transporte": "Infraestructura",
-    "logística": "Infraestructura",
+# Mapa de divisiones Codelco a regiones
+DIVISION_REGION = {
+    "rt01": "Antofagasta", "radomiro": "Antofagasta",
+    "gobm": "Antofagasta", "gabriela mistral": "Antofagasta",
+    "chuqui": "Antofagasta", "chuquicamata": "Antofagasta",
+    "norte": "Antofagasta",
+    "el teniente": "O'Higgins", "det": "O'Higgins",
+    "ventanas": "Valparaíso", "barquito": "Atacama",
+    "andina": "Valparaíso",
+    "salvador": "Atacama",
+    "vpzn": "Antofagasta",
 }
 
-MANDANTES_CONOCIDOS = {
-    "sierra gorda": "Sierra Gorda SCM",
-    "amsa": "Antofagasta Minerals",
-    "antofagasta minerals": "Antofagasta Minerals",
-    "centinela": "Minera Centinela",
-    "escondida": "Minera Escondida",
-    "bhp": "BHP",
-    "collahuasi": "Compañía Minera Doña Inés de Collahuasi",
-    "teck": "Teck Resources",
-    "sqm": "SQM",
-    "codelco": "Codelco",
-    "pelambres": "Minera Los Pelambres",
-    "zaldivar": "Minera Zaldívar",
-    "kinross": "Kinross",
-    "goldfields": "Gold Fields",
-    "albemarle": "Albemarle",
-    "engie": "Engie",
-    "kghm": "KGHM",
-}
-
-
-def normalize_mandante(raw: str) -> str:
-    if not raw:
-        return raw
-    lower = raw.lower().strip()
-    for key, val in MANDANTES_CONOCIDOS.items():
-        if key in lower:
-            return val
-    return raw.strip()
-
-
-def classify_industry(category: str, title: str) -> str:
-    text = f"{category} {title}".lower()
-    for kw, ind in CATEGORY_INDUSTRY.items():
-        if kw in text:
-            return ind
-    return "Minería"  # SICEP es 100% minería/industria
-
-
-def score_sicep(title: str, category: str, phase: str, dias_restantes: Optional[int]) -> int:
-    base = 60  # SICEP es fuente premium — licitaciones directas de mineras
-
-    # Tipo
-    if "licitación" in phase.lower():
-        base += 15
-    elif "oportunidad" in phase.lower():
-        base += 10
-
-    # Urgencia
-    if dias_restantes is not None:
-        if dias_restantes <= 3:
-            base += 10
-        elif dias_restantes <= 7:
-            base += 5
-
-    # Keywords de alto valor
-    t = f"{title} {category}".lower()
-    if any(k in t for k in ["adquisición", "compra", "suministro", "contrato"]):
-        base += 8
-    if any(k in t for k in ["nuevo", "ampliación", "nueva planta"]):
-        base += 5
-
-    return min(base, 95)
-
-
-def parse_dias(texto: str) -> Optional[int]:
-    """Extrae días restantes de texto como 'Finaliza en 3 días'."""
-    m = re.search(r'finaliza en (\d+) día', texto, re.IGNORECASE)
-    if m:
-        return int(m.group(1))
-    if "finalizado" in texto.lower():
-        return -1
+def parse_region(text: str) -> Optional[str]:
+    t = text.lower()
+    for kw, region in DIVISION_REGION.items():
+        if kw in t:
+            return region
+    # Regiones directas
+    for r in ["Antofagasta","Atacama","Coquimbo","Valparaíso","O'Higgins","Maule","Biobío","Metropolitana"]:
+        if r.lower() in t:
+            return r
     return None
 
+def score_ariba(title: str, mercancia: str, dias: Optional[int]) -> int:
+    base = 70
+    t = f"{title} {mercancia}".lower()
+    if any(k in t for k in ["construcción", "montaje", "obras", "planta", "ampliación", "infraestructura"]):
+        base += 10
+    if any(k in t for k in ["servicio", "mantención", "operación", "reparación"]):
+        base += 5
+    if dias is not None and dias <= 14:
+        base += 8  # urgente
+    return min(base, 95)
 
-def fetch_sicep(limit: int = 200) -> List[Dict[str, Any]]:
-    user = os.getenv("SICEP_USER", "")
-    password = os.getenv("SICEP_PASS", "")
+def parse_dias(texto: str) -> Optional[int]:
+    m = re.search(r'(\d+)\s*días?', texto, re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+def fetch_ariba(limit: int = 200) -> List[Dict[str, Any]]:
+    user = os.getenv("ARIBA_USER", "")
+    password = os.getenv("ARIBA_PASS", "")
+    url = os.getenv("ARIBA_URL", ARIBA_URL)
 
     if not user or not password:
-        print("[sicep] SICEP_USER o SICEP_PASS no configurados — saltando")
+        print("[ariba] ARIBA_USER o ARIBA_PASS no configurados — saltando")
         return []
 
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("[sicep] Playwright no instalado — saltando")
+        print("[ariba] Playwright no instalado — saltando")
         return []
 
     items = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"])
-        context = browser.new_context(
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        )
+        page = browser.new_page(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         )
-        page = context.new_page()
 
         try:
-            print("[sicep] Abriendo página de login...")
-            page.goto(LOGIN_URL, wait_until="networkidle", timeout=30000)
+            print("[ariba] Abriendo login...")
+            page.goto(url, wait_until="networkidle", timeout=40000)
             page.wait_for_timeout(2000)
 
-            # Login — buscar campos de usuario y contraseña
-            # SICEP usa inputs con name="j_username" y "j_password" o similar
+            # Login
             user_input = (
-                page.query_selector("input[name='j_username']") or
+                page.query_selector("input[name='UserName']") or
                 page.query_selector("input[type='text']") or
-                page.query_selector("input[placeholder*='suar' i]") or
-                page.query_selector("input[placeholder*='user' i]")
+                page.query_selector("input[type='email']")
             )
             pass_input = (
-                page.query_selector("input[name='j_password']") or
+                page.query_selector("input[name='Password']") or
                 page.query_selector("input[type='password']")
             )
 
             if not user_input or not pass_input:
-                print("[sicep] No se encontraron campos de login")
+                try:
+                    html = page.evaluate("document.body.innerHTML")
+                    print(f"[ariba] DEBUG HTML login: {html[:2000]}")
+                    # También listar todos los inputs
+                    inputs = page.evaluate("Array.from(document.querySelectorAll('input')).map(i => i.type + ':' + i.name + ':' + i.id + ':' + i.placeholder)")
+                    print(f"[ariba] DEBUG inputs: {inputs}")
+                except Exception as de:
+                    print(f"[ariba] DEBUG error: {de}")
+                print("[ariba] No se encontraron campos de login")
                 browser.close()
                 return []
 
             user_input.fill(user)
             pass_input.fill(password)
 
-            # Buscar botón de login
             login_btn = (
-                page.query_selector("button[type='submit']") or
                 page.query_selector("input[type='submit']") or
-                page.query_selector("a:has-text('Ingresar')") or
-                page.query_selector("button:has-text('Ingresar')")
+                page.query_selector("button[type='submit']") or
+                page.query_selector("button:has-text('Inicio de sesión')")
             )
             if login_btn:
                 login_btn.click()
             else:
                 page.keyboard.press("Enter")
 
-            page.wait_for_timeout(3000)
-            page.wait_for_load_state("networkidle", timeout=20000)
-
-            print(f"[sicep] Logueado, URL actual: {page.url}")
-
-            # Navegar a la página de licitaciones via menú
-            print(f"[sicep] Navegando a lista de publicaciones...")
-            # Intentar ir directamente a la URL de lista
-            list_urls = [
-                "https://www.sistemasicep.cl/app/colaboradora/listaPublicacion",
-                "https://www.sistemasicep.cl/app/colaboradora/licitaciones",
-                "https://www.sistemasicep.cl/app/colaboradora/informacionLicitaciones",
-            ]
-            navigated = False
-            for list_url in list_urls:
-                try:
-                    page.goto(list_url, wait_until="networkidle", timeout=20000)
-                    page.wait_for_timeout(2000)
-                    print(f"[sicep] URL actual: {page.url}")
-                    if "404" not in page.url and page.url != "about:blank":
-                        navigated = True
-                        break
-                except:
-                    continue
-            
-            if not navigated:
-                # Click en el menú LICITACIONES → Información de Licitaciones
-                try:
-                    lic_menu = page.query_selector("a:has-text('LICITACIONES'), a:has-text('Información de Licitaciones')")
-                    if lic_menu:
-                        lic_menu.click()
-                        page.wait_for_timeout(2000)
-                        print(f"[sicep] URL tras click menú: {page.url}")
-                except Exception as me:
-                    print(f"[sicep] error menú: {me}")
-
-            # SICEP es una SPA — la lista de licitaciones está en el sidebar izquierdo
-            # Al hacer click en cada item, el detalle aparece en el panel derecho
-            print("[sicep] Cargando lista de publicaciones...")
+            page.wait_for_timeout(5000)
+            page.wait_for_load_state("networkidle", timeout=30000)
+            print(f"[ariba] URL post-login: {page.url}")
             page.wait_for_timeout(3000)
 
-            page.wait_for_timeout(3000)
-            
-            # DEBUG — ver URL actual y estructura
-            print(f"[sicep] URL de lista: {page.url}")
-            try:
-                # Ver todos los links en la página
-                links = page.evaluate("Array.from(document.querySelectorAll('a[href]')).map(a => a.href + ' | ' + a.innerText.trim().substring(0,50)).filter(s => s.length > 5)")
-                print(f"[sicep] Links encontrados: {links[:15]}")
-                
-                # Ver tablas
-                tables = page.query_selector_all("table")
-                print(f"[sicep] Tablas: {len(tables)}")
-                if tables:
-                    html = tables[0].evaluate("el => el.outerHTML")
-                    print(f"[sicep] Primera tabla: {html[:500]}")
-            except Exception as de:
-                print(f"[sicep] debug error: {de}")
+            # ── Extraer lista principal ────────────────────────────────────────
+            rows = (
+                page.query_selector_all("tbody tr") or
+                page.query_selector_all("tr[class*='Row']")
+            )
+            print(f"[ariba] {len(rows)} filas en lista")
 
-            # Buscar filas de tabla (estructura más común en portales gubernamentales)
-            rows = page.query_selector_all("table tbody tr, table tr")
-            clickable = [r for r in rows if len(r.inner_text().strip()) > 20]
-            print(f"[sicep] {len(clickable)} licitaciones en lista")
-
-            seen_titles = set()
-            for item in clickable[:limit]:
+            # Recolectar links y datos básicos de la lista
+            list_items = []
+            for row in rows[:limit]:
                 try:
-                    # Click en el item para cargar su detalle
-                    item.click()
-                    page.wait_for_timeout(1500)
-
-                    # Leer el panel de detalle (IDs fijos del HTML)
-                    title = page.evaluate("document.getElementById('lblTituloOperacionDetallePublicacion')?.innerText || ''")
-                    if not title:
-                        # Fallback — leer texto del item mismo
-                        title = item.inner_text().strip()[:200]
-                    title = title.strip()
-                    if not title or len(title) < 5 or title in seen_titles:
+                    cells = row.query_selector_all("td")
+                    if len(cells) < 2:
                         continue
-                    seen_titles.add(title)
+                    title_cell = cells[0]
+                    title_link = title_cell.query_selector("a")
+                    title = (title_link or title_cell).inner_text().strip()
+                    # Filtrar basura — elementos de UI capturados por error
+                    junk = ["loading content", "duns number", "enter your", "please wait",
+                            "loading...", "cargando", "click here", "sign in"]
+                    if any(j in title.lower() for j in junk):
+                        continue
+                    if not title or len(title) < 5:
+                        continue
+                    href = title_link.get_attribute("href") if title_link else None
+                    if href and not href.startswith("http"):
+                        href = f"https://service.ariba.com{href}"
+                    doc_id       = cells[1].inner_text().strip() if len(cells) > 1 else ""
+                    fecha_cierre = cells[2].inner_text().strip() if len(cells) > 2 else ""
+                    status       = cells[3].inner_text().strip() if len(cells) > 3 else "Abierto"
+                    event_type   = cells[4].inner_text().strip() if len(cells) > 4 else "RFP"
 
-                    categoria = page.evaluate("document.getElementById('lblCategoriaDetallePublicacion')?.innerText || ''")
-                    ciudad = page.evaluate("document.getElementById('lblCiudadDetallePublicacion')?.innerText || ''")
-                    fecha_cierre = page.evaluate("document.getElementById('lblFechaCierreDetallePublicacion')?.innerText || ''")
-                    fecha_pub = page.evaluate("document.getElementById('lblFechaPublicacionDetallePublicacion')?.innerText || ''")
-                    mandante_raw = page.evaluate("document.getElementById('lblOperacionDetallePublicacion')?.innerText || ''")
+                    if status.lower() in ["cerrado", "cancelado", "closed", "awarded"]:
+                        continue
 
-                    # URL del detalle
-                    url = page.url or LOGIN_URL
-
-                    mandante = normalize_mandante(mandante_raw)
-                    category = categoria.strip() if categoria else ""
-                    phase = "Licitación"
-
-                    full_text = f"{title} {ciudad} {categoria} {mandante_raw}"
-                    # Región
-                    region = None
-                    region_match = re.search(
-                        r'(Antofagasta|Atacama|Coquimbo|Valparaíso|O\'Higgins|Maule|Biobío|'
-                        r'Araucanía|Los Lagos|Aysén|Magallanes|Metropolitana|Tarapacá|'
-                        r'Arica|Los Ríos|Ñuble)',
-                        full_text, re.IGNORECASE
-                    )
-                    if region_match:
-                        region = region_match.group(1)
-
-                    # Días restantes
-                    dias = parse_dias(full_text)
-
-                    industry = classify_industry(category, title)
-                    score = score_sicep(title, category, phase, dias)
-
-                    items.append({
-                        "source": "SICEP",
-                        "title": title[:400],
-                        "url": url,
-                        "company": mandante or None,
-                        "contractor": None,
-                        "industry": industry,
-                        "region": region,
-                        "phase": phase,
-                        "score": score,
-                        "entry": description[:300] if description else None,
-                        "raw": {
-                            "category": category,
-                            "dias_restantes": dias,
-                            "is_new": is_new,
-                            "mandante_raw": mandante_raw,
-                            "tipo": "sicep"
-                        }
+                    list_items.append({
+                        "title": title, "href": href, "doc_id": doc_id,
+                        "fecha_cierre": fecha_cierre, "status": status,
+                        "event_type": event_type
                     })
+                except Exception:
+                    continue
+
+            print(f"[ariba] {len(list_items)} licitaciones abiertas, entrando a detalles...")
+
+            # ── Entrar al detalle de cada licitación ───────────────────────────
+            for li in list_items[:limit]:
+                try:
+                    if not li["href"]:
+                        # Sin link, usar datos básicos
+                        items.append(_build_item(li, {}, url))
+                        continue
+
+                    detail_page = browser.new_page(
+                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                    )
+                    detail_page.goto(li["href"], wait_until="networkidle", timeout=30000)
+                    detail_page.wait_for_timeout(2000)
+
+                    detail_text = detail_page.inner_text("body") or ""
+
+                    # Extraer campos del detalle
+                    detail = {}
+
+                    # Propietario / contacto
+                    m = re.search(r'Propietario[:\s]+([^\n]+)', detail_text)
+                    if m: detail["propietario"] = m.group(1).strip()
+
+                    # Mercancía / categoría
+                    m = re.search(r'Mercancía[:\s]+([^\n]+)', detail_text)
+                    if m: detail["mercancia"] = m.group(1).strip()
+
+                    # Región desde detalle
+                    m = re.search(r'Regiones?[:\s]+([^\n]+)', detail_text)
+                    if m: detail["region_raw"] = m.group(1).strip()
+
+                    # Tiempo restante
+                    m = re.search(r'Tiempo restante[:\s]*([\d]+)\s*días?', detail_text, re.IGNORECASE)
+                    if m: detail["dias_restantes"] = int(m.group(1))
+
+                    # Fecha vencimiento
+                    m = re.search(r'Fecha de vencimiento[:\s]+([^\n]+)', detail_text)
+                    if m: detail["fecha_vencimiento"] = m.group(1).strip()
+
+                    detail_page.close()
+                    items.append(_build_item(li, detail, li["href"]))
 
                 except Exception as e:
-                    print(f"[sicep] Error parseando tarjeta: {e}")
+                    print(f"[ariba] Error detalle '{li['title'][:40]}': {e}")
+                    items.append(_build_item(li, {}, li.get("href") or url))
                     continue
 
         except Exception as e:
-            print(f"[sicep] Error general: {e}")
+            print(f"[ariba] Error general: {e}")
         finally:
             browser.close()
 
-    # Deduplicar por título
+    # Deduplicar
     seen = set()
     unique = []
     for item in items:
@@ -315,11 +229,52 @@ def fetch_sicep(limit: int = 200) -> List[Dict[str, Any]]:
             unique.append(item)
 
     unique.sort(key=lambda x: x["score"], reverse=True)
-    print(f"[sicep] {len(unique)} licitaciones extraídas")
+    print(f"[ariba] {len(unique)} licitaciones extraídas")
     return unique[:limit]
 
 
+def _build_item(li: dict, detail: dict, url: str) -> dict:
+    title = li["title"]
+    mercancia = detail.get("mercancia", "")
+    region_raw = detail.get("region_raw", "") or li["title"]
+    region = parse_region(region_raw) or parse_region(title)
+    dias = detail.get("dias_restantes")
+    propietario = detail.get("propietario", "")
+    fecha_venc = detail.get("fecha_vencimiento", li.get("fecha_cierre", ""))
+
+    entry_parts = []
+    if propietario: entry_parts.append(f"Contacto: {propietario}")
+    if mercancia:   entry_parts.append(f"Categoría: {mercancia}")
+    if fecha_venc:  entry_parts.append(f"Cierre: {fecha_venc}")
+    if dias:        entry_parts.append(f"{dias} días restantes")
+
+    return {
+        "source": "Ariba Codelco",
+        "title": title[:400],
+        "url": url,
+        "company": "Codelco",
+        "contractor": propietario[:200] if propietario else None,
+        "industry": "Minería",
+        "region": region,
+        "phase": f"{li['event_type']} - {li['status']}",
+        "score": score_ariba(title, mercancia, dias),
+        "entry": " | ".join(entry_parts)[:500] if entry_parts else None,
+        "raw": {
+            "doc_id": li.get("doc_id", ""),
+            "fecha_cierre": li.get("fecha_cierre", ""),
+            "fecha_vencimiento": fecha_venc,
+            "dias_restantes": dias,
+            "mercancia": mercancia,
+            "region_raw": region_raw,
+            "propietario": propietario,
+            "status": li.get("status", ""),
+            "event_type": li.get("event_type", ""),
+            "tipo": "ariba_codelco"
+        }
+    }
+
+
 if __name__ == "__main__":
-    items = fetch_sicep(limit=50)
+    items = fetch_ariba(limit=20)
     for i in items[:10]:
-        print(f"  [{i['score']}] {i['title'][:70]} | {i['company']} | {i['region']}")
+        print(f"  [{i['score']}] {i['title'][:60]} | {i['region']} | {i['contractor']}")
