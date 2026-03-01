@@ -83,47 +83,52 @@ def fetch_enami(limit: int = 100) -> List[Dict[str, Any]]:
 
         try:
             print("[enami] Cargando página...")
-            page.goto(URL, wait_until="networkidle", timeout=40000)
-            page.wait_for_timeout(4000)
+            # Ir primero a la página base
+            page.goto("https://www.enami.cl/Contratistas-y-Proveedores/Pages/default.aspx", 
+                      wait_until="networkidle", timeout=40000)
+            page.wait_for_timeout(3000)
+
+            # Click en el tab LICITACIONES
+            try:
+                lic_tab = (
+                    page.query_selector("a:has-text('LICITACIONES')") or
+                    page.query_selector("[href*='tabs3']") or
+                    page.query_selector("a[href*='licitacion' i]")
+                )
+                if lic_tab:
+                    lic_tab.click()
+                    print("[enami] Click en tab LICITACIONES")
+                    page.wait_for_timeout(5000)
+                else:
+                    print("[enami] Tab no encontrado, intentando URL directa con hash")
+                    page.evaluate("window.location.hash = '#/tabs3'")
+                    page.wait_for_timeout(5000)
+            except Exception as ce:
+                print(f"[enami] error click tab: {ce}")
 
             print(f"[enami] URL actual: {page.url}")
 
-            # DEBUG — ver estructura
+            # Esperar que aparezca contenido de licitaciones
             try:
-                links = page.evaluate("""
-                    Array.from(document.querySelectorAll('a')).map(a => ({
-                        text: a.innerText.trim().substring(0, 80),
-                        href: a.href
-                    })).filter(l => l.text.length > 5).slice(0, 20)
-                """)
-                print(f"[enami] DEBUG links: {links}")
+                page.wait_for_selector("table, [class*='licit'], iframe", timeout=15000)
+            except:
+                pass
+            page.wait_for_timeout(3000)
 
-                tables = page.query_selector_all("table")
-                print(f"[enami] DEBUG tablas: {len(tables)}")
-                if tables:
-                    html = tables[0].evaluate("el => el.outerHTML")
-                    print(f"[enami] DEBUG primera tabla: {html[:500]}")
+            # Verificar si hay iframe con el contenido
+            iframes = page.query_selector_all("iframe")
+            print(f"[enami] iframes: {len(iframes)}")
 
-                rows_all = page.query_selector_all("tr")
-                print(f"[enami] DEBUG filas tr: {len(rows_all)}")
-                if rows_all:
-                    print(f"[enami] DEBUG primera fila: {rows_all[0].inner_text()[:200]}")
-
-                # Ver divs con contenido de licitación
-                divs = page.evaluate("""
-                    Array.from(document.querySelectorAll('[class*="licit"], [class*="tender"], [class*="item"], [class*="row"]'))
-                    .map(d => d.className + ': ' + d.innerText.trim().substring(0, 80))
-                    .slice(0, 10)
-                """)
-                print(f"[enami] DEBUG divs: {divs}")
-
+            # DEBUG
+            try:
+                html_snippet = page.evaluate("document.body.innerHTML.substring(0, 2000)")
+                print(f"[enami] DEBUG body: {html_snippet}")
             except Exception as de:
                 print(f"[enami] debug error: {de}")
 
             # Intentar extraer tabla de licitaciones
             rows = page.query_selector_all("table tr")
             if not rows:
-                # Fallback — buscar items en divs
                 rows = page.query_selector_all("[class*='licit'], [class*='item-licit']")
 
             print(f"[enami] {len(rows)} filas encontradas")
