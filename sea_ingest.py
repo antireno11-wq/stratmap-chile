@@ -59,6 +59,13 @@ def run_ariba():
     except Exception as e:
         print(f"[ariba] error: {e}")
 
+def run_infomineria():
+    try:
+        from connectors.infomineria import fetch_infomineria
+        ingest(fetch_infomineria(limit=100), "infomineria")
+    except Exception as e:
+        print(f"[infomineria] error: {e}")
+
 def run_signals():
     try:
         from signals.jobs import run as jobs_run
@@ -76,5 +83,6 @@ if __name__ == "__main__":
     run_lithium_chile()
     run_sicep()
     run_ariba()
+    run_infomineria()
     run_signals()
     print("[ingest] Listo")
