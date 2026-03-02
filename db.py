@@ -63,6 +63,7 @@ def init_db() -> None:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS raw JSONB NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS signals JSONB DEFAULT '[]';")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS signal_score INTEGER DEFAULT 0;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS signal_detail TEXT;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS jobs_count INTEGER DEFAULT 0;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS last_signal_at TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ NULL;")
@@ -228,7 +229,7 @@ def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
     limit = max(1, min(int(limit), 500))
     base = """
     SELECT o.id, o.source, o.title, o.url, o.company, o.contractor, o.industry, o.region, o.phase,
-           o.score, o.signal_score, o.jobs_count, o.signals, o.last_signal_at,
+           o.score, o.signal_score, o.signal_detail, o.jobs_count, o.signals, o.last_signal_at,
            o.entry, o.raw, o.created_at, o.updated_at,
            (o.score + COALESCE(o.signal_score, 0)) AS radar_score,
            p.status AS pipeline_status, p.assignee AS pipeline_assignee
