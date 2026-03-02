@@ -241,10 +241,11 @@
               <div style="font-weight:700;font-size:13px" id="dropdownStatus">Sin preferencias</div>
               <div style="font-size:11px;color:#64748b;margin-top:2px" id="dropdownSubtitle">Configura tu perfil para ver scores</div>
             </div>
-            <a class="user-dropdown-item" href="/preferences.html">⚙️ Preferencias</a>
-            <a class="user-dropdown-item" href="/preferences.html#services">🤖 Mis servicios (AI)</a>
-            <div class="user-dropdown-divider"></div>
-            <button class="user-dropdown-item user-dropdown-danger" onclick="resetSession()">🚪 Cerrar sesión</button>
+            <a class="user-dropdown-item" id="menu-login-link" href="/login.html">🔑 Ingresar</a>
+            <a class="user-dropdown-item" id="menu-prefs-link" href="/preferences.html">⚙️ Preferencias</a>
+            <a class="user-dropdown-item" id="menu-services-link" href="/preferences.html#services">🤖 Mis servicios (AI)</a>
+            <div class="user-dropdown-divider" id="menu-divider"></div>
+            <button class="user-dropdown-item user-dropdown-danger" id="menu-logout-btn" onclick="resetSession()">🚪 Cerrar sesión</button>
           </div>
         </div>
       </div>
@@ -252,6 +253,16 @@
 
     <div class="content">
       <div class="status-bar" id="status">Cargando…</div>
+
+      <!-- Banner sin sesión -->
+      <div id="no-session-banner" style="display:none;align-items:center;gap:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:13px 18px;margin-bottom:14px;">
+        <span style="font-size:20px">⛏️</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:#92400e">Bienvenido al Radar Minero de Chile</div>
+          <div style="font-size:12px;color:#b45309;margin-top:2px">Los proyectos están ordenados por fecha. Ingresa para ver scores personalizados según tus servicios.</div>
+        </div>
+        <a href="/login.html" style="padding:8px 16px;background:#e05a1e;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">Ingresar →</a>
+      </div>
 
       <div class="stats-row">
         <div class="stat-card blue">
