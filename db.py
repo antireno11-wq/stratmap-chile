@@ -729,17 +729,39 @@ def list_opportunities_for_ai_scoring(user_id: str = "default", limit: int = 500
     """Retorna oportunidades que aún no tienen AI fit score o fueron actualizadas después del último score."""
     sql = """
     SELECT o.id, o.title, o.source, o.company, o.industry, o.region, o.phase,
-           o.score, o.url, o.updated_at,
+           o.score, o.url, o.entry, o.raw, o.updated_at,
            f.fit_score, f.scored_at
     FROM opportunities o
     LEFT JOIN ai_opportunity_fits f ON f.opportunity_id = o.id AND f.user_id = %(user_id)s
-    WHERE f.id IS NULL OR o.updated_at > f.scored_at
+    WHERE o.source NOT IN ('Lithium Chile','Portal Minero','Revista EI',
+                           'Minería Chilena','Diario Financiero','COCHILCO Noticias',
+                           'InfoMineria','Mundo Minería')
+      AND (f.id IS NULL OR o.updated_at > f.scored_at)
     ORDER BY o.score DESC
     LIMIT %(limit)s;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {"user_id": user_id, "limit": limit})
+            return [dict(r) for r in cur.fetchall()]
+
+
+
+def get_ai_fits(user_id: str = "default", min_score: int = 0, limit: int = 500) -> List[Dict[str, Any]]:
+    """Retorna los scores IA calculados para la empresa, con datos del proyecto."""
+    sql = """
+    SELECT f.opportunity_id as id, f.fit_score, f.fit_reason,
+           f.service_applicable, f.contact_suggestion, f.scored_at,
+           o.title, o.source, o.company, o.region, o.phase, o.url, o.score
+    FROM ai_opportunity_fits f
+    JOIN opportunities o ON o.id = f.opportunity_id
+    WHERE f.user_id = %(user_id)s AND f.fit_score >= %(min_score)s
+    ORDER BY f.fit_score DESC, o.score DESC
+    LIMIT %(limit)s;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"user_id": user_id, "min_score": min_score, "limit": limit})
             return [dict(r) for r in cur.fetchall()]
 
 
