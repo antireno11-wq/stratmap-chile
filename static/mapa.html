@@ -24,6 +24,7 @@
     .sidebar { width: var(--sidebar); background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
     .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
     .sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
+    .sidebar-brand-logo { width: 140px; height: auto; object-fit: contain; }
     .sidebar-name { font-weight: 700; font-size: 14px; color: var(--text); }
     .sidebar-tagline { font-size: 10px; color: var(--muted); }
     .sidebar-section { padding: 16px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -105,8 +106,7 @@
 </head>
 <body>
   <aside class="sidebar">
-    <div class="sidebar-brand">
-      <div class="sidebar-logo">S</div>
+    <div class="sidebar-brand" style="background:#fff;justify-content:center;padding:14px 16px"><img src="/logo.png" alt="Stratmap" class="sidebar-brand-logo" onerror="this.style.display='none'"></div>
       <div>
         <div class="sidebar-name">Stratmap</div>
         <div class="sidebar-tagline">Inteligencia Minera Chile</div>
@@ -282,8 +282,14 @@
       markers.clearLayers();
       let shown = 0, exact = 0, approx = 0;
 
+      const NEWS_SOURCES = ["Lithium Chile","Portal Minero","Revista EI","Minería Chilena",
+        "Diario Financiero","COCHILCO Noticias","Radio Universidad de Chile","BioBioChile",
+        "Radio U. de Chile","InfoMineria"];
+
       allItems.forEach(item => {
         const score = item.radar_score || item.score || 0;
+        // Solo proyectos, no noticias
+        if (item.phase === "Noticia" || NEWS_SOURCES.includes(item.source)) return;
         if (industry && item.industry !== industry) return;
         if (source && !(item.source||"").toLowerCase().includes(source.toLowerCase())) return;
         if (score < minScore) return;
