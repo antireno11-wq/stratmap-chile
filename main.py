@@ -920,4 +920,71 @@ def get_mandante_detail(company_name: str):
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/admin/fix-lithium-dates")
+def fix_lithium_dates():
+    """
+    Elimina todos los registros de Lithium Chile que tienen published_at 
+    igual a la fecha de hoy (fechas de ingesta incorrectas) o NULL.
+    Luego el worker los re-ingesta con las fechas correctas.
+    """
+    try:
+        today = __import__('datetime').date.today().isoformat()
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                # Eliminar los que tienen fecha de hoy (ingesta) o NULL
+                cur.execute("""
+                    DELETE FROM opportunities
+                    WHERE source = 'Lithium Chile'
+                    AND (
+                        published_at IS NULL
+                        OR DATE(published_at) = CURRENT_DATE
+                        OR DATE(published_at) = CURRENT_DATE - INTERVAL '1 day'
+                    )
+                """)
+                deleted = cur.rowcount
+            conn.commit()
+        return {"deleted": deleted, "msg": "Re-corre el worker para re-ingestar con fechas correctas"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/fix-lithium-dates")
+def fix_lithium_dates():
+    """
+    Borra todas las noticias de Lithium Chile y las re-ingesta
+    para que el conector extraiga las fechas reales de las URLs.
+    """
+    import threading
+    def _run():
+        try:
+            # 1. Borrar noticias Lithium Chile existentes
+            with db.get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM opportunities WHERE source = 'Lithium Chile'")
+                    deleted = cur.rowcount
+                conn.commit()
+            print(f"[fix-lithium-dates] {deleted} noticias eliminadas")
+
+            # 2. Re-ingestar con el conector actualizado
+            from connectors.lithium_chile import fetch_lithium_chile
+            items = fetch_lithium_chile(limit=200)
+            print(f"[fix-lithium-dates] {len(items)} noticias con fecha extraída")
+
+            # 3. Mostrar cuántas tienen fecha real
+            with_date = [i for i in items if i.get("published_at")]
+            without = [i for i in items if not i.get("published_at")]
+            print(f"[fix-lithium-dates] con fecha: {len(with_date)}, sin fecha: {len(without)}")
+
+            # 4. Ingestar solo las que tienen fecha real
+            if with_date:
+                inserted, updated = db.upsert_opportunities(with_date)
+                print(f"[fix-lithium-dates] insertadas: {inserted}, actualizadas: {updated}")
+        except Exception as e:
+            print(f"[fix-lithium-dates] error: {e}")
+            import traceback; traceback.print_exc()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "Re-ingesta Lithium Chile iniciada en background"}
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
