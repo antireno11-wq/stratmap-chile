@@ -488,23 +488,47 @@ function applyFilters(items) {
   });
 }
 
+function renderPagination(containerId, total, currentPg, onPage) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) { const c = document.getElementById(containerId); if(c) c.innerHTML = ''; return; }
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    const active = i === currentPg;
+    pages.push(`<button onclick="(${onPage})(${i})" style="padding:4px 10px;margin:0 2px;border:1px solid ${active?'#1a56db':'#d1d5db'};background:${active?'#1a56db':'#fff'};color:${active?'#fff':'#374151'};border-radius:6px;font-size:12px;font-weight:${active?700:500};cursor:pointer">${i}</button>`);
+  }
+  const c = document.getElementById(containerId);
+  if (c) c.innerHTML = `<div style="display:flex;align-items:center;gap:4px;padding:10px 0;justify-content:center">${pages.join('')}</div>`;
+}
+
 function renderFiltered() {
   const filtered = applyFilters(allItems);
   const projects = filtered.filter(i => !isNews(i));
   const news = filtered.filter(i => isNews(i));
+
+  // Reset to page 1 if current page is out of range
+  if ((currentPage.projects - 1) * PAGE_SIZE >= projects.length) currentPage.projects = 1;
+  if ((currentPage.news - 1) * PAGE_SIZE >= news.length) currentPage.news = 1;
+
+  const projPage = projects.slice((currentPage.projects-1)*PAGE_SIZE, currentPage.projects*PAGE_SIZE);
+  const newsPage = news.slice((currentPage.news-1)*PAGE_SIZE, currentPage.news*PAGE_SIZE);
 
   el("badge-projects").textContent = projects.length;
   el("badge-news").textContent = news.length;
   el("sc-projects").textContent = projects.length;
   el("sc-news").textContent = news.length;
 
-  el("tbody-projects").innerHTML = projects.length
-    ? projects.map(projectRow).join("")
+  el("tbody-projects").innerHTML = projPage.length
+    ? projPage.map(projectRow).join("")
     : `<tr><td colspan="8" class="muted-row">Sin proyectos</td></tr>`;
 
-  el("tbody-news").innerHTML = news.length
-    ? news.map(newsRow).join("")
+  el("tbody-news").innerHTML = newsPage.length
+    ? newsPage.map(newsRow).join("")
     : `<tr><td colspan="5" class="muted-row">Sin noticias</td></tr>`;
+
+  renderPagination('pagination-projects', projects.length, currentPage.projects,
+    'function(p){currentPage.projects=p;renderFiltered()}');
+  renderPagination('pagination-news', news.length, currentPage.news,
+    'function(p){currentPage.news=p;renderFiltered()}');
 
   el("stat-projects").textContent = projects.length;
   el("stat-news").textContent = news.length;
@@ -521,6 +545,8 @@ function renderFiltered() {
 // ── Session state ─────────────────────────────────────────────────────────────
 let isLoggedIn = false;
 let currentSort = { by: null, dir: 'desc' };
+let currentPage = { projects: 1, news: 1 };
+const PAGE_SIZE = 20;
 
 function updateSortArrows() {
   ['score','title','company','region','date'].forEach(f => {
@@ -531,6 +557,8 @@ function updateSortArrows() {
 }
 
 function setSortBy(field) {
+  currentPage.projects = 1;
+  currentPage.news = 1;
   if (currentSort.by === field) {
     currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
   } else {
