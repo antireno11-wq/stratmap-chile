@@ -1,181 +1,157 @@
 """
-signals/empleos_signals.py
-Cruza ofertas de empleo mineras con proyectos en la BD
-y actualiza signal_score + signal_detail.
-
-Lógica:
-- Busca proyectos con misma empresa Y/O región
-- Agrupa empleos por empresa+región
-- Suma puntos según tipo de cargo y cantidad
-- Actualiza signal_score en la BD
+sea_ingest.py — orquestador principal de ingesta
 """
+from db import upsert_opportunities, init_db_safe
 
-from typing import Any, Dict, List, Optional
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+MINING_KEYWORDS = [
+    "mina","minera","minero","cobre","litio","codelco","bhp","sqm","escondida",
+    "collahuasi","relave","mineral","faena","concentradora","sernageomin",
+    "cochilco","antofagasta","atacama","oro","plata","hierro","molibdeno",
+    "exploración","yacimiento","planta","proyecto minero","licitación",
+    "contrato","inversión","ampliación"
+]
+NON_MINING_KEYWORDS = [
+    "fútbol","futbol","deporte","partido","gol","jugador","torneo","baleado",
+    "disparado","pelea","riña","ketamina","droga","detenido","imputado",
+    "alumbrado público","vertedero municipal","dólar cierra","bolsa de",
+    "premundi","sub-20","sede deportiva","concesionado hospital"
+]
 
-import db
+def is_mining_relevant(item: dict) -> bool:
+    """Filtra items claramente no relacionados con minería."""
+    title = (item.get("title") or "").lower()
+    # Rechazar si tiene keyword no minera
+    if any(kw in title for kw in NON_MINING_KEYWORDS):
+        return False
+    # Para noticias RSS (fuentes genéricas), exigir al menos un keyword minero
+    generic_sources = {"biobiochile","radio universidad de chile","radio u. de chile",
+                       "cooperativa","emol","diario financiero"}
+    src = (item.get("source") or "").lower()
+    if src in generic_sources:
+        return any(kw in title for kw in MINING_KEYWORDS)
+    return True
 
-# Cuántos puntos adicionales por volumen de empleos
-def volume_bonus(count: int) -> int:
-    if count >= 10: return 10
-    if count >= 5:  return 6
-    if count >= 3:  return 4
-    if count >= 2:  return 2
-    return 0
+def ingest(items, label):
+    if items:
+        ins, upd = upsert_opportunities(items)
+        print(f"[{label}] {ins} nuevos, {upd} actualizados")
+    else:
+        print(f"[{label}] sin items")
 
-def normalize(text: str) -> str:
-    return text.lower().strip() if text else ""
+def run_sea():
+    try:
+        from connectors.sea import fetch_sea
+        ingest(fetch_sea(), "sea")
+    except Exception as e:
+        print(f"[sea] error: {e}")
 
-def companies_match(job_company: str, proj_company: str) -> bool:
-    """True si el empleo y el proyecto son de la misma empresa."""
-    jc = normalize(job_company)
-    pc = normalize(proj_company)
-    if not jc or not pc: return False
+def run_rss():
+    try:
+        from connectors.rss import fetch_rss
+        items = fetch_rss()
+        filtered = [i for i in items if is_mining_relevant(i)]
+        print(f"[rss] {len(items)} items → {len(filtered)} relevantes tras filtro minero")
+        ingest(filtered, "rss")
+    except Exception as e:
+        print(f"[rss] error: {e}")
 
-    # Alias conocidos
-    ALIASES = {
-        "codelco": ["codelco", "corporación nacional del cobre"],
-        "bhp": ["bhp", "escondida", "minera escondida", "bhp billiton"],
-        "sqm": ["sqm", "soquimich", "sociedad química"],
-        "collahuasi": ["collahuasi", "compañía minera doña inés de collahuasi"],
-        "antofagasta minerals": ["antofagasta minerals", "antofagasta plc", "minera los pelambres",
-                                  "centinela", "zaldívar"],
-        "teck": ["teck", "quebrada blanca", "carmen de andacollo"],
-        "kinross": ["kinross", "la coipa", "maricunga"],
-    }
-    for canonical, variants in ALIASES.items():
-        if any(v in jc for v in variants) and any(v in pc for v in variants):
-            return True
+def run_mlp():
+    try:
+        from connectors.mlp_proveedores import fetch_mlp_proveedores
+        ingest(fetch_mlp_proveedores(limit=100), "mlp")
+    except Exception as e:
+        print(f"[mlp] error: {e}")
 
-    # Match directo parcial
-    return jc in pc or pc in jc or any(w in pc for w in jc.split() if len(w) > 4)
+def run_lithium_chile():
+    try:
+        from connectors.lithium_chile import fetch_lithium_chile
+        ingest(fetch_lithium_chile(limit=100), "lithium_chile")
+    except Exception as e:
+        print(f"[lithium_chile] error: {e}")
+
+def run_sicep():
+    try:
+        from connectors.sicep import fetch_sicep
+        ingest(fetch_sicep(limit=200), "sicep")
+    except Exception as e:
+        print(f"[sicep] error: {e}")
+
+def run_enami():
+    try:
+        from connectors.enami import fetch_enami
+        ingest(fetch_enami(limit=100), "enami")
+    except Exception as e:
+        print(f"[enami] error: {e}")
+
+def run_codelco():
+    try:
+        from connectors.codelco import fetch_codelco
+        ingest(fetch_codelco(limit=200), "codelco")
+    except Exception as e:
+        print(f"[codelco] error: {e}")
 
 
-def run_empleos_signals(job_items: List[Dict[str, Any]]) -> Dict[str, int]:
-    """
-    Recibe lista de empleos (output de fetch_indeed + fetch_portales),
-    cruza con proyectos en BD y actualiza signal_score.
-    Retorna dict {opp_id: puntos_sumados}
-    """
-    if not job_items:
-        print("[empleos_signals] Sin empleos para procesar")
-        return {}
+def run_empleos():
+    """Scrapea empleos mineros y cruza con proyectos para señales."""
+    try:
+        from connectors.empleos_indeed   import fetch_indeed
+        from connectors.empleos_portales import fetch_portales
+        from signals.empleos_signals     import run_empleos_signals
 
-    # Agrupar empleos por (empresa, región)
-    groups: Dict[str, Dict] = {}
-    for job in job_items:
-        company = normalize(job.get("company") or job.get("company_raw") or "")
-        region  = job.get("region") or ""
-        key = f"{company}|{region}"
-        if key not in groups:
-            groups[key] = {
-                "company": job.get("company") or job.get("company_raw"),
-                "region": region,
-                "jobs": [],
-                "max_pts": 0,
-            }
-        groups[key]["jobs"].append(job)
-        groups[key]["max_pts"] = max(groups[key]["max_pts"], job.get("signal_pts", 3))
+        print("[empleos] Iniciando scraping de empleos...")
+        jobs = []
 
-    print(f"[empleos_signals] {len(job_items)} empleos → {len(groups)} grupos empresa+región")
+        try:
+            jobs += fetch_indeed(limit=150)
+        except Exception as e:
+            print(f"[indeed] error: {e}")
 
-    # Obtener todos los proyectos activos de la BD
-    with db.get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, title, company, region, source, phase
-                FROM opportunities
-                WHERE phase != 'Noticia'
-                AND (published_at > NOW() - INTERVAL '18 months' OR published_at IS NULL)
-            """)
-            projects = cur.fetchall()
-            cols = [d[0] for d in cur.description]
-            projects = [dict(zip(cols, row)) for row in projects]
+        try:
+            jobs += fetch_portales(limit=100)
+        except Exception as e:
+            print(f"[portales] error: {e}")
 
-    print(f"[empleos_signals] {len(projects)} proyectos activos para cruzar")
+        print(f"[empleos] {len(jobs)} empleos totales recolectados")
+        if jobs:
+            run_empleos_signals(jobs)
 
-    updates: Dict[int, Dict] = {}  # opp_id → {pts, detail}
+    except Exception as e:
+        print(f"[empleos] error general: {e}")
+        import traceback; traceback.print_exc()
 
-    for group_key, group in groups.items():
-        g_company = group["company"] or ""
-        g_region  = group["region"]
-        g_count   = len(group["jobs"])
-        g_max_pts = group["max_pts"]
-        g_vol     = volume_bonus(g_count)
+def run_mundo_mineria():
+    try:
+        from connectors.mundo_mineria import fetch_mundo_mineria
+        ingest(fetch_mundo_mineria(limit=100), "mundo_mineria")
+    except Exception as e:
+        print(f"[mundo_mineria] error: {e}")
 
-        # Puntos base del grupo = max señal individual + bonus por volumen
-        group_pts = g_max_pts + g_vol
+def run_infomineria():
+    try:
+        from connectors.infomineria import fetch_infomineria
+        ingest(fetch_infomineria(limit=100), "infomineria")
+    except Exception as e:
+        print(f"[infomineria] error: {e}")
 
-        # Tipo de señal predominante
-        types = [j.get("signal_type","general") for j in group["jobs"]]
-        dominant_type = max(set(types), key=types.count)
-
-        detail = f"{g_count} empleo{'s' if g_count>1 else ''} {dominant_type}"
-        if g_company: detail += f" en {g_company}"
-        if g_region:  detail += f" ({g_region})"
-
-        for proj in projects:
-            proj_company = proj.get("company") or ""
-            proj_region  = proj.get("region") or ""
-
-            match_company = companies_match(g_company, proj_company)
-            match_region  = g_region and g_region == proj_region
-
-            if not match_company and not match_region:
-                continue
-
-            # Calcular puntos según tipo de match
-            pts = 0
-            if match_company and match_region:
-                pts = group_pts          # Match perfecto
-            elif match_company:
-                pts = int(group_pts * 0.8)   # Solo empresa
-            elif match_region:
-                pts = int(group_pts * 0.4)   # Solo región
-
-            if pts == 0:
-                continue
-
-            pid = proj["id"]
-            if pid not in updates:
-                updates[pid] = {"pts": 0, "details": []}
-            updates[pid]["pts"] = min(updates[pid]["pts"] + pts, 30)  # cap 30pts por proyecto
-            updates[pid]["details"].append(detail)
-
-    # Aplicar updates a la BD
-    applied = 0
-    with db.get_conn() as conn:
-        with conn.cursor() as cur:
-            for opp_id, update in updates.items():
-                pts = update["pts"]
-                detail_str = " | ".join(update["details"][:3])
-                cur.execute("""
-                    UPDATE opportunities
-                    SET signal_score = LEAST(COALESCE(signal_score, 0) + %s, 30),
-                        signal_detail = %s,
-                        updated_at = NOW()
-                    WHERE id = %s
-                """, (pts, detail_str, opp_id))
-                if cur.rowcount:
-                    applied += 1
-        conn.commit()
-
-    print(f"[empleos_signals] {applied} proyectos actualizados con señales de empleo")
-    return {oid: u["pts"] for oid, u in updates.items()}
-
+def run_signals():
+    try:
+        from signals.jobs import run as jobs_run
+        jobs_run()
+    except Exception as e:
+        print(f"[signals] error: {e}")
 
 if __name__ == "__main__":
-    # Test con datos dummy
-    test_jobs = [
-        {"company": "Codelco", "company_raw": "Codelco", "region": "Antofagasta",
-         "title": "Ingeniero de Proyecto Chuquicamata", "signal_type": "construcción/proyecto",
-         "signal_pts": 15},
-        {"company": "Codelco", "company_raw": "Codelco", "region": "Antofagasta",
-         "title": "Supervisor de Construcción", "signal_type": "construcción/proyecto",
-         "signal_pts": 15},
-        {"company": "BHP/Escondida", "company_raw": "BHP", "region": "Antofagasta",
-         "title": "Jefe de Operaciones", "signal_type": "operaciones", "signal_pts": 8},
-    ]
-    result = run_empleos_signals(test_jobs)
-    print(f"Proyectos actualizados: {result}")
+    print("[ingest] Iniciando...")
+    init_db_safe()
+    run_sea()
+    run_rss()
+    run_mlp()
+    run_lithium_chile()
+    run_sicep()
+    run_codelco()
+    run_enami()
+    run_infomineria()
+    run_mundo_mineria()
+    run_empleos()
+    run_signals()
+    print("[ingest] Listo")
