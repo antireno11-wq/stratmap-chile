@@ -650,4 +650,40 @@ def reset_signals():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/admin/delete-irrelevant-news")
+def delete_irrelevant_news():
+    """Elimina noticias claramente no relacionadas con minería."""
+    NON_MINING = [
+        "%fútbol%","%futbol%","%deporte%","%partido%","%jugador%","%torneo%",
+        "%baleado%","%disparado%","%pelea%","%riña%",
+        "%ketamina%","%droga%","%detenido%","%imputado%",
+        "%alumbrado público%","%vertedero municipal%",
+        "%dólar cierra%","%bolsa de%",
+        "%Premundi%","%sub-20%","%clasificatorio%",
+        "%concesionado%","%sede deportiva%",
+    ]
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                deleted = 0
+                for kw in NON_MINING:
+                    cur.execute(
+                        "DELETE FROM opportunities WHERE phase = 'Noticia' AND LOWER(title) LIKE LOWER(%s)",
+                        (kw,)
+                    )
+                    deleted += cur.rowcount
+                # También eliminar fuentes RSS genéricas que traen ruido
+                cur.execute("""
+                    DELETE FROM opportunities 
+                    WHERE source IN ('BioBioChile', 'Radio Universidad de Chile', 'Radio U. de Chile')
+                    AND phase = 'Noticia'
+                    AND title NOT ~* '(mina|minera|cobre|litio|codelco|bhp|sqm|relave|mineral|metal|oro|plata|hierro|molibdeno|faena)'
+                """)
+                deleted += cur.rowcount
+            conn.commit()
+        return {"deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
