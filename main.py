@@ -686,4 +686,59 @@ def delete_irrelevant_news():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/admin/run-sea-signals")
+def run_sea_signals_endpoint():
+    """Cruza SEA con proyectos activos y actualiza signal_score."""
+    import threading
+    def _run():
+        try:
+            from signals.sea_signals import run_sea_signals
+            result = run_sea_signals()
+            print(f"[run-sea-signals] {result}")
+        except Exception as e:
+            print(f"[run-sea-signals] {e}")
+            import traceback; traceback.print_exc()
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "SEA signals iniciadas en background"}
+
+@app.get("/admin/sea-stats")
+def sea_stats():
+    """Estadísticas de proyectos SEA en la BD."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        COUNT(*) as total,
+                        COUNT(DISTINCT company) as empresas,
+                        COUNT(DISTINCT region) as regiones,
+                        phase,
+                        COUNT(*) as count_by_phase
+                    FROM opportunities
+                    WHERE source = 'sea'
+                    GROUP BY phase
+                    ORDER BY count_by_phase DESC
+                """)
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                phases = [dict(zip(cols, r)) for r in rows]
+
+                cur.execute("SELECT COUNT(*) FROM opportunities WHERE source = 'sea'")
+                total = cur.fetchone()[0]
+
+                cur.execute("""
+                    SELECT COUNT(DISTINCT p.id)
+                    FROM opportunities p
+                    JOIN opportunities s ON s.source = 'sea'
+                        AND LOWER(s.company) LIKE '%' || LOWER(SPLIT_PART(p.company, ' ', 1)) || '%'
+                    WHERE p.source != 'sea'
+                    AND LENGTH(p.company) > 3
+                """)
+                matched = cur.fetchone()[0]
+
+        return {"total_sea": total, "matched_projects": matched, "phases": phases}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
