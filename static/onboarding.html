@@ -405,6 +405,8 @@ async function finishOnboarding() {
 
   // Save profile
   try {
+    // Ensure onboarding_done is set before saving
+    profile.onboarding_done = true;
     await fetch('/me/service-profile', {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
@@ -427,7 +429,7 @@ async function finishOnboarding() {
     await delay(800);
     addMsg('✅ Listo. Tus scores personalizados se están calculando (tarda ~30 segundos).\n\nTe llevo al radar ahora...');
     document.getElementById('footer').innerHTML = `
-      <div class="input-row"><button class="btn" onclick="window.location.href='/'">Ir al Radar →</button></div>`;
+      <div class="input-row"><button class="btn" onclick="window.location.href='/?from=onboarding'">Ir al Radar →</button></div>`;
     setProgress(TOTAL_STEPS);
 
   } catch(e) {
