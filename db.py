@@ -596,12 +596,23 @@ def init_ai_db() -> None:
     CREATE TABLE IF NOT EXISTS service_profiles (
         id SERIAL PRIMARY KEY,
         user_id TEXT NOT NULL DEFAULT 'default',
+        company_key TEXT,          -- clave compartida por empresa (ej: "constructora_abc")
         company_name TEXT,
         services JSONB NOT NULL DEFAULT '[]',
+        regions JSONB NOT NULL DEFAULT '[]',
+        contract_sizes JSONB NOT NULL DEFAULT '[]',
+        known_mandantes JSONB NOT NULL DEFAULT '[]',
+        onboarding_done BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(user_id)
     );
+    -- Migrations for existing installs
+    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS company_key TEXT;
+    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS regions JSONB DEFAULT '[]';
+    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS contract_sizes JSONB DEFAULT '[]';
+    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS known_mandantes JSONB DEFAULT '[]';
+    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS onboarding_done BOOLEAN DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS ai_opportunity_fits (
         id SERIAL PRIMARY KEY,
@@ -624,22 +635,39 @@ def init_ai_db() -> None:
         conn.commit()
 
 
-def upsert_service_profile(user_id: str, company_name: str, services: list) -> Dict[str, Any]:
+def upsert_service_profile(user_id: str, company_name: str, services: list,
+                           regions: list = None, contract_sizes: list = None,
+                           known_mandantes: list = None, company_key: str = None,
+                           onboarding_done: bool = False) -> Dict[str, Any]:
     sql = """
-    INSERT INTO service_profiles (user_id, company_name, services, updated_at)
-    VALUES (%(user_id)s, %(company_name)s, %(services)s, NOW())
+    INSERT INTO service_profiles (user_id, company_key, company_name, services,
+                                   regions, contract_sizes, known_mandantes,
+                                   onboarding_done, updated_at)
+    VALUES (%(user_id)s, %(company_key)s, %(company_name)s, %(services)s,
+            %(regions)s, %(contract_sizes)s, %(known_mandantes)s,
+            %(onboarding_done)s, NOW())
     ON CONFLICT (user_id) DO UPDATE SET
-        company_name = EXCLUDED.company_name,
-        services = EXCLUDED.services,
-        updated_at = NOW()
+        company_key       = COALESCE(EXCLUDED.company_key, service_profiles.company_key),
+        company_name      = EXCLUDED.company_name,
+        services          = EXCLUDED.services,
+        regions           = EXCLUDED.regions,
+        contract_sizes    = EXCLUDED.contract_sizes,
+        known_mandantes   = EXCLUDED.known_mandantes,
+        onboarding_done   = EXCLUDED.onboarding_done,
+        updated_at        = NOW()
     RETURNING *;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {
                 "user_id": user_id,
+                "company_key": company_key,
                 "company_name": company_name,
-                "services": Json(services)
+                "services": Json(services or []),
+                "regions": Json(regions or []),
+                "contract_sizes": Json(contract_sizes or []),
+                "known_mandantes": Json(known_mandantes or []),
+                "onboarding_done": onboarding_done,
             })
             row = cur.fetchone()
         conn.commit()
@@ -647,7 +675,13 @@ def upsert_service_profile(user_id: str, company_name: str, services: list) -> D
 
 
 def get_service_profile(user_id: str = "default") -> Optional[Dict[str, Any]]:
-    sql = "SELECT * FROM service_profiles WHERE user_id = %(user_id)s;"
+    # Search by user_id OR company_key (shared profile for whole company)
+    sql = """
+    SELECT * FROM service_profiles
+    WHERE user_id = %(user_id)s OR company_key = %(user_id)s
+    ORDER BY onboarding_done DESC, updated_at DESC
+    LIMIT 1;
+    """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {"user_id": user_id})
