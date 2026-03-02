@@ -6,7 +6,9 @@ const NEWS_SOURCES = new Set([
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
-const PROJECT_SOURCES = new Set(["sea","SEA","MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","manual"]);
+const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","manual"]);
+// SEA aparece solo como señal (⚡), no como proyecto en la tabla
+const SEA_SOURCES = new Set(["sea","SEA"]);
 
 const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
 
@@ -30,8 +32,14 @@ const NON_MINING_KEYWORDS = [
   "premundi","nómina sub","clasificatorio"
 ];
 
+function isSea(item) {
+  const src = (item.source || "").toLowerCase();
+  return src === "sea";
+}
+
 function isNews(item) {
   const src = item.source || "";
+  if (isSea(item)) return false;       // SEA no es noticia
   if (PROJECT_SOURCES.has(src)) return false;
   if (item.phase === "Noticia") return true;
   return NEWS_SOURCES.has(src);
@@ -520,7 +528,7 @@ function renderPagination(containerId, total, currentPg, onPage) {
 
 function renderFiltered() {
   const filtered = applyFilters(allItems);
-  const projects = filtered.filter(i => !isNews(i));
+  const projects = filtered.filter(i => !isNews(i) && !isSea(i));
   const news = filtered.filter(i => isRelevantNews(i)).sort((a,b) => new Date(itemDate(b)||0) - new Date(itemDate(a)||0));
 
   // Reset to page 1 if current page is out of range
