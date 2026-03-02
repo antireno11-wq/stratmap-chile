@@ -741,4 +741,23 @@ def sea_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/admin/sources-summary")
+def sources_summary():
+    """Lista todas las fuentes y cuántos items tiene cada una."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT source, COUNT(*) as total,
+                           COUNT(CASE WHEN phase = 'Noticia' THEN 1 END) as noticias
+                    FROM opportunities
+                    GROUP BY source
+                    ORDER BY total DESC
+                """)
+                rows = cur.fetchall()
+        return [{"source": r[0], "total": r[1], "noticias": r[2]} for r in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
