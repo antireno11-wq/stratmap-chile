@@ -92,11 +92,72 @@ const TOTAL_STEPS = 5;
 
 // ── Opciones predefinidas ──────────────────────────────────────────────────
 const SERVICE_OPTIONS = [
-  'Perforación y tronadura','Movimiento de tierras','Montaje electromecánico',
-  'Construcción civil','Ingeniería y diseño','Mantención industrial',
-  'Transporte y logística','Suministro de equipos','Servicios ambientales',
-  'Topografía y geotecnia','Automatización y control','Obras eléctricas',
-  'Suministro de materiales','Consultoría minera','Ventilación y climatización',
+  // Operaciones mineras
+  'Perforación y tronadura',
+  'Movimiento de tierras',
+  'Chancado y molienda',
+  'Flotación y procesamiento',
+  'Hidrometalurgia / Lixiviación',
+  'Relaves y gestión de residuos',
+
+  // Construcción e infraestructura
+  'Construcción civil',
+  'Montaje electromecánico',
+  'Obras eléctricas de alta tensión',
+  'Tuberías y piping',
+  'Estructuras metálicas',
+  'Obras viales y accesos',
+
+  // Campamentos y servicios de vida
+  'Campamentos y módulos habitacionales',
+  'Catering y alimentación',
+  'Lavandería y aseo industrial',
+  'Gestión de residuos domésticos',
+
+  // Equipos y maquinaria
+  'Arriendo de maquinaria pesada',
+  'Suministro de equipos mineros',
+  'Mantención de equipos',
+  'Repuestos y partes',
+
+  // Tecnología y sistemas
+  'Tecnología y software minero',
+  'Automatización y control SCADA',
+  'Telecomunicaciones y redes',
+  'Drones y topografía geoespacial',
+  'Geomática y SIG',
+  'Ciberseguridad industrial',
+
+  // Ingeniería y consultoría
+  'Ingeniería de detalle y básica',
+  'Consultoría geológica',
+  'Gestión de proyectos (PMC)',
+  'Estudios de factibilidad',
+  'Due diligence minero',
+
+  // Seguridad y medio ambiente
+  'Seguridad industrial (HSEC)',
+  'Servicios ambientales y EIA',
+  'Monitoreo ambiental',
+  'Gestión de comunidades',
+
+  // Logística
+  'Transporte de carga pesada',
+  'Transporte de personal',
+  'Logística y cadena de suministro',
+  'Almacenamiento y bodegaje',
+
+  // Energía
+  'Generación eléctrica',
+  'Energías renovables (ERNC)',
+  'Ventilación y climatización',
+
+  // Insumos
+  'Explosivos y accesorios',
+  'Reactivos químicos',
+  'Combustibles y lubricantes',
+  'Ropa de trabajo y EPP',
+  'Acero y materiales de construcción',
 ];
 
 const REGION_OPTIONS = [
@@ -128,9 +189,21 @@ const STEPS = [
   },
   {
     id: 'services',
-    bot: '¿Qué servicios o especialidades ofrece tu empresa? Selecciona todos los que aplican.',
+    bot: '¿Qué servicios o especialidades ofrece tu empresa?\n\nSelecciona todas las categorías donde pueden participar.',
     type: 'chips_multi',
     options: SERVICE_OPTIONS,
+    groups: [
+      { label: '⛏ Operaciones mineras', options: ['Perforación y tronadura','Movimiento de tierras','Chancado y molienda','Flotación y procesamiento','Hidrometalurgia / Lixiviación','Relaves y gestión de residuos'] },
+      { label: '🏗 Construcción e infraestructura', options: ['Construcción civil','Montaje electromecánico','Obras eléctricas de alta tensión','Tuberías y piping','Estructuras metálicas','Obras viales y accesos'] },
+      { label: '🏕 Campamentos y servicios de vida', options: ['Campamentos y módulos habitacionales','Catering y alimentación','Lavandería y aseo industrial','Gestión de residuos domésticos'] },
+      { label: '🚜 Equipos y maquinaria', options: ['Arriendo de maquinaria pesada','Suministro de equipos mineros','Mantención de equipos','Repuestos y partes'] },
+      { label: '💻 Tecnología y sistemas', options: ['Tecnología y software minero','Automatización y control SCADA','Telecomunicaciones y redes','Drones y topografía geoespacial','Geomática y SIG','Ciberseguridad industrial'] },
+      { label: '📐 Ingeniería y consultoría', options: ['Ingeniería de detalle y básica','Consultoría geológica','Gestión de proyectos (PMC)','Estudios de factibilidad','Due diligence minero'] },
+      { label: '🛡 Seguridad y medio ambiente', options: ['Seguridad industrial (HSEC)','Servicios ambientales y EIA','Monitoreo ambiental','Gestión de comunidades'] },
+      { label: '🚛 Logística', options: ['Transporte de carga pesada','Transporte de personal','Logística y cadena de suministro','Almacenamiento y bodegaje'] },
+      { label: '⚡ Energía', options: ['Generación eléctrica','Energías renovables (ERNC)','Ventilación y climatización'] },
+      { label: '📦 Insumos y suministros', options: ['Explosivos y accesorios','Reactivos químicos','Combustibles y lubricantes','Ropa de trabajo y EPP','Acero y materiales de construcción'] },
+    ],
     key: 'services',
     min: 1,
   },
@@ -218,21 +291,45 @@ function renderStep(s) {
 
   } else if (s.type === 'chips_multi') {
     footer.innerHTML = `
-      <div class="chips" id="chips-wrap"></div>
-      <div class="input-row" style="margin-top:16px">
+      <div id="chips-wrap" style="max-height:320px;overflow-y:auto;padding-right:4px"></div>
+      <div class="input-row" style="margin-top:12px">
         ${s.skippable ? `<button class="btn btn-skip" onclick="skipStep()">Omitir</button>` : ''}
         <button class="btn" id="next-btn" onclick="submitChips()" disabled>Continuar →</button>
       </div>
       <div class="step-hint">Selecciona uno o más · Paso ${step+1} de ${TOTAL_STEPS}</div>`;
 
     const wrap = document.getElementById('chips-wrap');
-    s.options.forEach(opt => {
-      const chip = document.createElement('div');
-      chip.className = 'chip';
-      chip.textContent = opt;
-      chip.onclick = () => toggleChip(chip, opt, s.min);
-      wrap.appendChild(chip);
-    });
+
+    if (s.groups) {
+      // Render with category headers
+      s.groups.forEach(group => {
+        const header = document.createElement('div');
+        header.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin:12px 0 6px;';
+        header.textContent = group.label;
+        wrap.appendChild(header);
+        const row = document.createElement('div');
+        row.className = 'chips';
+        group.options.forEach(opt => {
+          const chip = document.createElement('div');
+          chip.className = 'chip';
+          chip.textContent = opt;
+          chip.onclick = () => toggleChip(chip, opt, s.min);
+          row.appendChild(chip);
+        });
+        wrap.appendChild(row);
+      });
+    } else {
+      const chipsDiv = document.createElement('div');
+      chipsDiv.className = 'chips';
+      s.options.forEach(opt => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.textContent = opt;
+        chip.onclick = () => toggleChip(chip, opt, s.min);
+        chipsDiv.appendChild(chip);
+      });
+      wrap.appendChild(chipsDiv);
+    }
   }
 }
 
