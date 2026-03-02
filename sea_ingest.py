@@ -45,6 +45,16 @@ def run_sea():
     except Exception as e:
         print(f"[sea] error: {e}")
 
+def run_sea_signals():
+    """Cruza proyectos SEA con licitaciones activas del mismo titular y sube signal_score."""
+    try:
+        from signals.sea_signals import run_sea_signals as _run
+        result = _run()
+        print(f"[sea_signals] {result}")
+    except Exception as e:
+        print(f"[sea_signals] error: {e}")
+        import traceback; traceback.print_exc()
+
 def run_rss():
     try:
         from connectors.rss import fetch_rss
@@ -144,6 +154,7 @@ if __name__ == "__main__":
     print("[ingest] Iniciando...")
     init_db_safe()
     run_sea()
+    run_sea_signals()
     run_rss()
     run_mlp()
     run_lithium_chile()
