@@ -685,25 +685,68 @@ function sortItems(items) {
 }
 
 async function checkSession() {
-  // Verificar sesión activa
   const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
   const hasSession = !!(session.username);
+  isLoggedIn = hasSession;
 
-  const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
-  const hasLocalPrefs = !!(prefs.industries?.length || prefs.keywords?.length || prefs.preferred_regions?.length);
-  
-  // También verificar si tiene perfil de servicios configurado en backend
-  let hasServices = false;
-  try {
-    const res = await fetch('/me/service-profile');
-    const data = await res.json();
-    hasServices = !!(data.services?.length);
-  } catch(e) {}
-  
-  isLoggedIn = hasSession; // sesión activa = tener sesión válida
+  if (hasSession) {
+    // Verificar si tiene perfil configurado — si no, redirigir a onboarding
+    const companyKey = session.company_key || 'default';
+    try {
+      const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
+      const data = await res.json();
+      if (!data.onboarding_done && window.location.pathname === '/') {
+        window.location.href = '/onboarding.html';
+        return;
+      }
+      // Guardar company_key en sesión si viene del perfil
+      if (data.company_key && !session.company_key) {
+        session.company_key = data.company_key;
+        localStorage.setItem('stratmap_session', JSON.stringify(session));
+      }
+    } catch(e) {}
+  }
+
   updateScoreVisibility();
   updateUserMenuState();
   loadMandantes();
+  if (isLoggedIn) loadPersonalizedScores();
+}
+
+async function loadPersonalizedScores() {
+  // Cargar fits personalizados para esta empresa y mezclarlos con radar_score
+  const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+  const companyKey = session.company_key || 'default';
+  try {
+    const res = await fetch(`/ai/fits?company_key=${encodeURIComponent(companyKey)}&min_score=1&limit=500`);
+    const data = await res.json();
+    const fits = data.items || [];
+    if (!fits.length) return;
+
+    // Build lookup id → fit_score
+    const fitMap = {};
+    fits.forEach(f => { fitMap[f.id || f.opportunity_id] = f; });
+
+    // Enrich allItems with personalized scores
+    allItems = allItems.map(item => {
+      const fit = fitMap[item.id];
+      if (fit && fit.fit_score > 0) {
+        return {
+          ...item,
+          radar_score: fit.fit_score,
+          fit_reason: fit.fit_reason,
+          fit_score: fit.fit_score,
+        };
+      }
+      return item;
+    });
+
+    // Re-sort and re-render with new scores
+    allItems = sortItems(allItems);
+    renderFiltered();
+  } catch(e) {
+    console.log('[fits] error:', e);
+  }
 }
 
 function updateScoreVisibility() {
