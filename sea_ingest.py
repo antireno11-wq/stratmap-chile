@@ -129,6 +129,15 @@ def run_empleos():
         print(f"[empleos] error general: {e}")
         import traceback; traceback.print_exc()
 
+
+def run_sigex():
+    try:
+        from connectors.sigex_sernageomin import fetch_sigex
+        ingest(fetch_sigex(limit=5000), "sigex")
+    except Exception as e:
+        print(f"[sigex] error: {e}")
+        import traceback; traceback.print_exc()
+
 def run_mundo_mineria():
     try:
         from connectors.mundo_mineria import fetch_mundo_mineria
@@ -161,6 +170,7 @@ if __name__ == "__main__":
     run_sicep()
     run_codelco()
     run_enami()
+    run_sigex()
     run_infomineria()
     run_mundo_mineria()
     run_empleos()
