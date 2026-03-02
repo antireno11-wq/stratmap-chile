@@ -59,6 +59,13 @@ def run_codelco():
     except Exception as e:
         print(f"[codelco] error: {e}")
 
+def run_mundo_mineria():
+    try:
+        from connectors.mundo_mineria import fetch_mundo_mineria
+        ingest(fetch_mundo_mineria(limit=100), "mundo_mineria")
+    except Exception as e:
+        print(f"[mundo_mineria] error: {e}")
+
 def run_infomineria():
     try:
         from connectors.infomineria import fetch_infomineria
@@ -84,5 +91,6 @@ if __name__ == "__main__":
     run_codelco()
     run_enami()
     run_infomineria()
+    run_mundo_mineria()
     run_signals()
     print("[ingest] Listo")
