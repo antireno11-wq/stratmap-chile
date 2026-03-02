@@ -690,21 +690,24 @@ async function checkSession() {
   isLoggedIn = hasSession;
 
   if (hasSession) {
-    // Verificar si tiene perfil configurado — si no, redirigir a onboarding
     const companyKey = session.company_key || 'default';
-    try {
-      const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
-      const data = await res.json();
-      if (!data.onboarding_done && window.location.pathname === '/') {
-        window.location.href = '/onboarding.html';
-        return;
-      }
-      // Guardar company_key en sesión si viene del perfil
-      if (data.company_key && !session.company_key) {
-        session.company_key = data.company_key;
-        localStorage.setItem('stratmap_session', JSON.stringify(session));
-      }
-    } catch(e) {}
+    // No redirigir si venimos del onboarding (evita loop)
+    const fromOnboarding = new URLSearchParams(window.location.search).get('from') === 'onboarding';
+
+    if (!fromOnboarding && companyKey !== 'default') {
+      try {
+        const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
+        const data = await res.json();
+        if (!data.onboarding_done && window.location.pathname === '/') {
+          window.location.href = '/onboarding.html';
+          return;
+        }
+        if (data.company_key && !session.company_key) {
+          session.company_key = data.company_key;
+          localStorage.setItem('stratmap_session', JSON.stringify(session));
+        }
+      } catch(e) {}
+    }
   }
 
   updateScoreVisibility();
@@ -720,7 +723,7 @@ async function loadPersonalizedScores() {
   try {
     const res = await fetch(`/ai/fits?company_key=${encodeURIComponent(companyKey)}&min_score=1&limit=500`);
     const data = await res.json();
-    const fits = data.items || [];
+    const fits = data.fits || data.items || [];
     if (!fits.length) return;
 
     // Build lookup id → fit_score
