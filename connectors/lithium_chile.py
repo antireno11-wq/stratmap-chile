@@ -127,23 +127,56 @@ def fetch_page(url: str) -> List[Dict[str, Any]]:
 
             url_final = href if href.startswith("http") else BASE_URL + href
 
-            # Buscar fecha: subir en el árbol hasta encontrar un contenedor
-            # que tenga texto con fecha (la fecha está ANTES del link en la tarjeta)
+            # Método 1: buscar fecha en URL /YYYY/MM/DD/
             date_iso = None
-            node = a_tag.parent
-            for _ in range(5):  # subir hasta 5 niveles
-                if node is None:
-                    break
-                # Buscar en todos los elementos hijo de este contenedor
-                full_text = node.get_text(" ", strip=True)
-                m = DATE_PATTERN.search(full_text)
-                if m:
-                    date_iso = parse_date(m.group(0))
-                    if date_iso:
-                        break
-                node = node.parent
+            url_date_m = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', url_final)
+            if url_date_m:
+                try:
+                    from datetime import timezone as tz
+                    dt = datetime(int(url_date_m.group(1)), int(url_date_m.group(2)), int(url_date_m.group(3)), tzinfo=tz.utc)
+                    date_iso = dt.isoformat()
+                except Exception:
+                    pass
 
-            # Si aún no hay fecha, buscar en elemento anterior sibling
+            # Método 2: subir en el árbol hasta encontrar fecha en texto
+            if not date_iso:
+                node = a_tag.parent
+                for _ in range(6):
+                    if node is None:
+                        break
+                    full_text = node.get_text(" ", strip=True)
+                    m = DATE_PATTERN.search(full_text)
+                    if m:
+                        date_iso = parse_date(m.group(0))
+                        if date_iso:
+                            break
+                    node = node.parent
+
+            # Método 3: buscar en meta tags o time elements cercanos
+            if not date_iso:
+                # Buscar <time> o meta[property=article:published_time] en el contexto
+                parent = a_tag.parent
+                for _ in range(4):
+                    if parent is None: break
+                    time_el = parent.find("time")
+                    if time_el:
+                        dt_attr = time_el.get("datetime") or time_el.get_text(strip=True)
+                        m = DATE_PATTERN.search(dt_attr)
+                        if m:
+                            date_iso = parse_date(m.group(0))
+                            break
+                        url_m = re.search(r'(\d{4})-(\d{2})-(\d{2})', dt_attr)
+                        if url_m:
+                            try:
+                                from datetime import timezone as tz
+                                dt = datetime(int(url_m.group(1)), int(url_m.group(2)), int(url_m.group(3)), tzinfo=tz.utc)
+                                date_iso = dt.isoformat()
+                                break
+                            except Exception:
+                                pass
+                    parent = parent.parent
+
+            # Método 4: buscar sibling con fecha
             if not date_iso:
                 prev = a_tag.find_previous(string=DATE_PATTERN)
                 if prev:
@@ -159,6 +192,11 @@ def fetch_page(url: str) -> List[Dict[str, Any]]:
 
             title_es = translate_title(title_en)
             display_title = title_es if title_es.lower() != title_en.lower() else title_en
+
+            # Solo ingestar si tenemos fecha real — sin fecha, skippear
+            if not date_iso:
+                print(f"[lithium_chile] sin fecha, saltando: {title_en[:60]}")
+                continue
 
             items.append({
                 "source": "Lithium Chile",
@@ -186,10 +224,15 @@ def fetch_page(url: str) -> List[Dict[str, Any]]:
     return items
 
 
-def fetch_lithium_chile(limit: int = 100) -> List[Dict[str, Any]]:
+def fetch_lithium_chile(limit: int = 20) -> List[Dict[str, Any]]:
+    """Máximo 20 noticias para no dominar el feed."""
     items = []
+    seen_urls = set()
     for url in NEWS_URLS:
-        items.extend(fetch_page(url))
+        for item in fetch_page(url):
+            if item["url"] not in seen_urls:
+                seen_urls.add(item["url"])
+                items.append(item)
 
     # Deduplicar por URL
     seen = set()
