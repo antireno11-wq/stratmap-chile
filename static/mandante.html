@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mandante — Stratmap Chile</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    :root {
+      --sidebar: 230px; --blue: #2563eb; --blue-light: #eff6ff;
+      --orange: #f97316; --border: #f0f2f5; --bg: #f7f8fc;
+      --card: #ffffff; --text: #0d1117; --muted: #6b7280;
+      --green: #10b981; --yellow: #f59e0b;
+      --sidebar-bg: #1a1f2e; --sidebar-hover: #232940; --sidebar-active: #2a3355;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100; }
+    .sidebar-logo { padding: 20px 16px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .sidebar-logo img { height: 36px; display: block; }
+    .sidebar-nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; color: rgba(255,255,255,0.65); font-size: 13px; font-weight: 500; text-decoration: none; transition: all 0.15s; }
+    .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
+    .nav-item.active { background: var(--sidebar-active); color: #fff; font-weight: 700; }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+
+    /* Main */
+    .main { margin-left: var(--sidebar); flex: 1; padding: 32px 40px; max-width: 1100px; }
+
+    /* Back */
+    .back-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; margin-bottom: 24px; text-decoration: none; font-weight: 500; }
+    .back-btn:hover { color: var(--blue); }
+
+    /* Header */
+    .mandante-header { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; padding: 28px 32px; margin-bottom: 24px; }
+    .mandante-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .mandante-name { font-size: 28px; font-weight: 900; letter-spacing: -1px; }
+    .score-big { text-align: right; }
+    .score-big-val { font-size: 52px; font-weight: 900; letter-spacing: -3px; line-height: 1; }
+    .score-big-lbl { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+    .mandante-stats { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }
+    .mstat { display: flex; flex-direction: column; gap: 2px; }
+    .mstat-val { font-size: 22px; font-weight: 800; }
+    .mstat-lbl { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .signal-badge { display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#fef9c3;color:#92400e; }
+
+    /* Sections */
+    .section-card { background: var(--card); border: 1.5px solid var(--border); border-radius: 14px; padding: 20px 24px; margin-bottom: 20px; }
+    .section-title { font-size: 14px; font-weight: 800; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .section-badge { background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .empty-state { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px; text-align: left; border-bottom: 1.5px solid var(--border); }
+    td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbff; }
+    .score-badge { display:inline-flex;align-items:center;padding:2px 8px;font-size:11px;font-weight:800;border-radius:6px; }
+    .phase-badge { display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;background:#f3f4f6;color:#6b7280; }
+    .phase-aprobado { background:#f0fdf4;color:#15803d; }
+    .phase-calificacion { background:#eff6ff;color:#1a56db; }
+    a.row-link { color: var(--blue); text-decoration: none; font-weight: 600; }
+    a.row-link:hover { text-decoration: underline; }
+
+    /* SEA cards */
+    .sea-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 12px; }
+    .sea-card { border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .sea-card-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; line-height: 1.4; }
+    .sea-card-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .login-wall { text-align: center; padding: 60px 0; color: var(--muted); }
+    .login-wall a { color: var(--blue); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/logo.png" alt="Stratmap" onerror="this.style.display='none'" />
+    </div>
+    <div class="sidebar-nav">
+      <a class="nav-item" href="/"><span class="nav-icon">📡</span>Radar</a>
+      <a class="nav-item active" href="/"><span class="nav-icon">🏢</span>Mandantes</a>
+      <a class="nav-item" href="/mapa.html"><span class="nav-icon">🗺</span>Mapa</a>
+      <a class="nav-item" href="/kanban.html"><span class="nav-icon">📋</span>Pipeline</a>
+      <a class="nav-item" href="/preferences.html"><span class="nav-icon">⚙️</span>Preferencias</a>
+    </div>
+  </nav>
+
+  <main class="main">
+    <a class="back-btn" href="/">← Volver al Radar</a>
+
+    <div id="content">
+      <div style="color:var(--muted);padding:40px 0;text-align:center">Cargando...</div>
+    </div>
+  </main>
+
+  <script>
+    function escapeHTML(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return isNaN(d) ? '—' : d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    }
+
+    function scoreColor(s) {
+      if (s >= 90) return ['#15803d','#f0fdf4'];
+      if (s >= 70) return ['#1a56db','#eff6ff'];
+      if (s >= 50) return ['#92400e','#fef3c7'];
+      return ['#6b7280','#f9fafb'];
+    }
+
+    function phaseBadge(phase) {
+      if (!phase) return '';
+      const p = phase.toLowerCase();
+      let cls = 'phase-badge';
+      if (p.includes('aprobado') || p.includes('favorable')) cls += ' phase-aprobado';
+      else if (p.includes('calificaci')) cls += ' phase-calificacion';
+      return `<span class="${cls}">${escapeHTML(phase)}</span>`;
+    }
+
+    function calcConsolidado(proyectos, sea, noticias) {
+      if (!proyectos.length && !sea.length) return 0;
+      const avgProj = proyectos.length
+        ? proyectos.reduce((s,p) => s + ((p.score||0) + (p.signal_score||0)), 0) / proyectos.length
+        : 0;
+      const seaPts = sea.reduce((s, item) => {
+        const ph = (item.phase||'').toLowerCase();
+        if (ph.includes('aprobado') || ph.includes('favorable')) return s + 20;
+        if (ph.includes('desistido') || ph.includes('rechazado') || ph.includes('caducado')) return s;
+        return s + 10;
+      }, 0);
+      const notPts = Math.min(noticias.length * 5, 15);
+      const signals = proyectos.reduce((s,p) => s + (p.signal_score||0), 0);
+      return Math.round(avgProj + seaPts + notPts + signals);
+    }
+
+    async function loadMandante() {
+      // Check session
+      const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+      if (!session.username) {
+        document.getElementById('content').innerHTML = `
+          <div class="login-wall">
+            <div style="font-size:40px;margin-bottom:16px">🔒</div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:8px">Acceso restringido</div>
+            <div style="margin-bottom:20px">Inicia sesión para ver el perfil de este mandante</div>
+            <a href="/login.html">→ Ingresar</a>
+          </div>`;
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const empresa = params.get('empresa') || '';
+      if (!empresa) { window.location.href = '/'; return; }
+
+      try {
+        const res = await fetch(`/mandantes/${encodeURIComponent(empresa)}`);
+        const data = await res.json();
+        renderMandante(empresa, data);
+      } catch(e) {
+        document.getElementById('content').innerHTML = '<div style="color:red;padding:20px">Error cargando datos del mandante.</div>';
+      }
+    }
+
+    function renderMandante(empresa, data) {
+      const proyectos = data.proyectos || [];
+      const sea = data.sea_prospectos || [];
+      const noticias = data.noticias || [];
+      const score = calcConsolidado(proyectos, sea, noticias);
+      const [sc, sbg] = scoreColor(score);
+      const totalSignal = proyectos.reduce((s,p) => s + (p.signal_score||0), 0);
+
+      // Header
+      let html = `
+        <div class="mandante-header">
+          <div class="mandante-header-top">
+            <div>
+              <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Mandante</div>
+              <div class="mandante-name">${escapeHTML(decodeURIComponent(empresa))}</div>
+            </div>
+            <div class="score-big">
+              <div class="score-big-val" style="color:${sc}">${score}</div>
+              <div class="score-big-lbl">Score consolidado</div>
+            </div>
+          </div>
+          <div class="mandante-stats">
+            <div class="mstat">
+              <div class="mstat-val" style="color:var(--blue)">${proyectos.length}</div>
+              <div class="mstat-lbl">Proyectos activos</div>
+            </div>
+            <div class="mstat">
+              <div class="mstat-val" style="color:#7c3aed">${sea.length}</div>
+              <div class="mstat-lbl">Prospectos SEA</div>
+            </div>
+            <div class="mstat">
+              <div class="mstat-val" style="color:var(--muted)">${noticias.length}</div>
+              <div class="mstat-lbl">Noticias recientes</div>
+            </div>
+            ${totalSignal > 0 ? `<div class="mstat">
+              <span class="signal-badge">⚡ +${totalSignal} señales</span>
+            </div>` : ''}
+          </div>
+        </div>`;
+
+      // Proyectos activos
+      html += `<div class="section-card">
+        <div class="section-title">🏗 Proyectos activos <span class="section-badge">${proyectos.length}</span></div>`;
+      if (proyectos.length) {
+        html += `<table><thead><tr><th>Score</th><th>Proyecto</th><th>Región</th><th>Fase</th><th>Señales</th><th>Fecha</th></tr></thead><tbody>`;
+        proyectos.forEach(p => {
+          const radar = (p.score||0) + (p.signal_score||0);
+          const [c,bg] = scoreColor(radar);
+          const sig = p.signal_score > 0
+            ? `<span class="signal-badge" title="${escapeHTML(p.signal_detail||'')}">⚡ +${p.signal_score}</span>` : '—';
+          html += `<tr>
+            <td><span class="score-badge" style="color:${c};background:${bg}">${radar}</span></td>
+            <td><a class="row-link" href="${escapeHTML(p.url||'#')}" target="_blank">${escapeHTML(p.title)}</a></td>
+            <td>${escapeHTML(p.region||'—')}</td>
+            <td>${phaseBadge(p.phase)}</td>
+            <td>${sig}</td>
+            <td style="color:var(--muted);font-size:12px">${formatDate(p.published_at)}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      } else {
+        html += '<div class="empty-state">Sin proyectos activos registrados aún</div>';
+      }
+      html += '</div>';
+
+      // Prospectos SEA
+      html += `<div class="section-card">
+        <div class="section-title">📋 Prospectos SEA <span class="section-badge">${sea.length}</span>
+          <span style="font-size:11px;color:var(--muted);font-weight:400">— evaluación ambiental en curso o aprobada</span>
+        </div>`;
+      if (sea.length) {
+        html += '<div class="sea-grid">';
+        sea.forEach(s => {
+          const ph = (s.phase||'').toLowerCase();
+          let borderColor = 'var(--border)';
+          if (ph.includes('aprobado') || ph.includes('favorable')) borderColor = '#86efac';
+          else if (ph.includes('calificaci')) borderColor = '#93c5fd';
+          html += `<div class="sea-card" style="border-color:${borderColor}">
+            <div class="sea-card-title">
+              <a class="row-link" href="${escapeHTML(s.url||'#')}" target="_blank">${escapeHTML(s.title)}</a>
+            </div>
+            <div class="sea-card-meta">
+              ${phaseBadge(s.phase)}
+              <span style="font-size:11px;color:var(--muted)">${escapeHTML(s.region||'')}</span>
+            </div>
+          </div>`;
+        });
+        html += '</div>';
+      } else {
+        html += '<div class="empty-state">Sin prospectos SEA registrados</div>';
+      }
+      html += '</div>';
+
+      // Noticias recientes
+      if (noticias.length) {
+        html += `<div class="section-card">
+          <div class="section-title">📰 Noticias recientes <span class="section-badge">${noticias.length}</span></div>
+          <table><thead><tr><th>Titular</th><th>Fuente</th><th>Fecha</th></tr></thead><tbody>`;
+        noticias.forEach(n => {
+          html += `<tr>
+            <td><a class="row-link" href="${escapeHTML(n.url||'#')}" target="_blank">${escapeHTML(n.title)}</a></td>
+            <td style="color:var(--muted);font-size:12px">${escapeHTML(n.source||'')}</td>
+            <td style="color:var(--muted);font-size:12px">${formatDate(n.published_at)}</td>
+          </tr>`;
+        });
+        html += '</tbody></table></div>';
+      }
+
+      document.getElementById('content').innerHTML = html;
+      document.title = `${decodeURIComponent(empresa)} — Stratmap`;
+    }
+
+    loadMandante();
+  </script>
+</body>
+</html>
