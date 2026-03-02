@@ -562,6 +562,10 @@ function sortItems(items) {
 }
 
 async function checkSession() {
+  // Verificar sesión activa
+  const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+  const hasSession = !!(session.username);
+
   const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
   const hasLocalPrefs = !!(prefs.industries?.length || prefs.keywords?.length || prefs.preferred_regions?.length);
   
@@ -573,7 +577,7 @@ async function checkSession() {
     hasServices = !!(data.services?.length);
   } catch(e) {}
   
-  isLoggedIn = hasLocalPrefs || hasServices;
+  isLoggedIn = hasSession && (hasLocalPrefs || hasServices || true); // sesión activa = logueado
   updateScoreVisibility();
   updateUserMenuState();
 }
@@ -710,6 +714,7 @@ function resetSession() {
   if (!confirm('¿Cerrar sesión? Se borrarán tus preferencias guardadas localmente.')) return;
   localStorage.removeItem('stratmap_prefs');
   localStorage.removeItem('stratmap_services');
+  localStorage.removeItem('stratmap_session');
   isLoggedIn = false;
   currentSort.by = 'date';
   currentSort.dir = 'desc';
@@ -720,23 +725,41 @@ function resetSession() {
 }
 
 function updateUserMenuState() {
+  const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
   const icon = document.getElementById('userAvatarIcon');
   const label = document.getElementById('userAvatarLabel');
   const status = document.getElementById('dropdownStatus');
   const subtitle = document.getElementById('dropdownSubtitle');
   const dot = document.querySelector('.user-avatar-dot');
 
+  // Mostrar/ocultar items del menú según sesión
+  const loginLink    = document.getElementById('menu-login-link');
+  const prefsLink    = document.getElementById('menu-prefs-link');
+  const servicesLink = document.getElementById('menu-services-link');
+  const divider      = document.getElementById('menu-divider');
+  const logoutBtn    = document.getElementById('menu-logout-btn');
+
   if (isLoggedIn) {
-    if (icon) icon.textContent = '✅';
-    if (label) label.textContent = 'Mi perfil';
-    if (status) status.textContent = 'Perfil configurado';
+    if (icon)  icon.textContent  = '✅';
+    if (label) label.textContent = session.name || 'Mi perfil';
+    if (status)   status.textContent   = session.name || 'Perfil activo';
     if (subtitle) subtitle.textContent = 'Score personalizado activo';
     if (dot) dot.classList.add('active');
+    if (loginLink)    loginLink.style.display    = 'none';
+    if (prefsLink)    prefsLink.style.display     = '';
+    if (servicesLink) servicesLink.style.display  = '';
+    if (divider)      divider.style.display       = '';
+    if (logoutBtn)    logoutBtn.style.display      = '';
   } else {
-    if (icon) icon.textContent = '👤';
+    if (icon)  icon.textContent  = '👤';
     if (label) label.textContent = 'Mi cuenta';
-    if (status) status.textContent = 'Sin preferencias';
-    if (subtitle) subtitle.textContent = 'Configura tu perfil para ver scores';
+    if (status)   status.textContent   = 'Sin sesión';
+    if (subtitle) subtitle.textContent = 'Ingresa para ver scores';
     if (dot) dot.classList.remove('active');
+    if (loginLink)    loginLink.style.display    = '';
+    if (prefsLink)    prefsLink.style.display     = 'none';
+    if (servicesLink) servicesLink.style.display  = 'none';
+    if (divider)      divider.style.display       = 'none';
+    if (logoutBtn)    logoutBtn.style.display      = 'none';
   }
 }
