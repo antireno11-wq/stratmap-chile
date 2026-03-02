@@ -1,8 +1,8 @@
 const NEWS_SOURCES = new Set([
   "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
-  "Revista EI","Radio U. de Chile","RSS",
-  "MLP Proveedores","Lithium Chile"
+  "Revista EI","Radio U. de Chile","Radio Universidad de Chile","RSS",
+  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores"
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
@@ -20,11 +20,29 @@ const STATUS_COLORS = {
   "Perdida":      ["#dc2626","#fef2f2"],
 };
 
+// Keywords that indicate an item is NOT mining-related news
+const NON_MINING_KEYWORDS = [
+  "fútbol","futbol","deporte","partido","gol","jugador","club","torneo",
+  "baleado","disparado","pelea","riña","accidente vial","tránsito",
+  "ketamina","droga","detenido","imputado","tribunal",
+  "alumbrado público","vertedero municipal","hospital concesionado",
+  "dólar cierra","tipo de cambio","bolsa de","mercado financiero",
+  "premundi","nómina sub","clasificatorio"
+];
+
 function isNews(item) {
   const src = item.source || "";
   if (PROJECT_SOURCES.has(src)) return false;
   if (item.phase === "Noticia") return true;
   return NEWS_SOURCES.has(src);
+}
+
+function isRelevantNews(item) {
+  if (!isNews(item)) return false;
+  const title = (item.title || "").toLowerCase();
+  // Filtrar noticias claramente no mineras
+  if (NON_MINING_KEYWORDS.some(kw => title.includes(kw))) return false;
+  return true;
 }
 
 function el(id) { return document.getElementById(id); }
@@ -503,7 +521,7 @@ function renderPagination(containerId, total, currentPg, onPage) {
 function renderFiltered() {
   const filtered = applyFilters(allItems);
   const projects = filtered.filter(i => !isNews(i));
-  const news = filtered.filter(i => isNews(i));
+  const news = filtered.filter(i => isRelevantNews(i)).sort((a,b) => new Date(itemDate(b)||0) - new Date(itemDate(a)||0));
 
   // Reset to page 1 if current page is out of range
   if ((currentPage.projects - 1) * PAGE_SIZE >= projects.length) currentPage.projects = 1;
