@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Configura tu perfil — Stratmap</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    :root {
+      --blue:#2563eb; --blue-light:#eff6ff; --border:#e5e7eb;
+      --bg:#f7f8fc; --card:#fff; --text:#0d1117; --muted:#6b7280;
+      --green:#10b981; --sidebar-bg:#1a1f2e;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+
+    .onboarding-wrap{width:100%;max-width:560px;}
+    .logo{text-align:center;margin-bottom:32px;}
+    .logo img{height:40px;}
+
+    .chat-card{background:var(--card);border:1.5px solid var(--border);border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.08);}
+
+    /* Progress bar */
+    .progress-bar{height:4px;background:var(--border);}
+    .progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),#60a5fa);transition:width 0.4s ease;}
+
+    /* Chat area */
+    .chat-body{padding:28px 28px 0;min-height:320px;display:flex;flex-direction:column;gap:16px;}
+
+    .msg{display:flex;gap:12px;align-items:flex-start;}
+    .msg.bot .bubble{background:var(--blue-light);color:#1e3a5f;border-radius:4px 18px 18px 18px;}
+    .msg.user .bubble{background:#f3f4f6;color:var(--text);border-radius:18px 4px 18px 18px;margin-left:auto;}
+    .bubble{padding:12px 16px;font-size:14px;line-height:1.6;max-width:440px;}
+    .bot-avatar{width:32px;height:32px;background:var(--blue);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px;}
+
+    /* Options chips */
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+    .chip{padding:7px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;background:var(--card);}
+    .chip:hover{border-color:var(--blue);color:var(--blue);}
+    .chip.selected{border-color:var(--blue);background:var(--blue-light);color:var(--blue);font-weight:700;}
+
+    /* Input area */
+    .chat-footer{padding:16px 28px 24px;}
+    .input-row{display:flex;gap:10px;margin-top:12px;}
+    .chat-input{flex:1;padding:11px 16px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;outline:none;transition:border 0.15s;}
+    .chat-input:focus{border-color:var(--blue);}
+    .btn{padding:11px 20px;background:var(--blue);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:background 0.15s;white-space:nowrap;}
+    .btn:hover{background:#1d4ed8;}
+    .btn:disabled{background:#93c5fd;cursor:not-allowed;}
+    .btn-skip{background:transparent;color:var(--muted);border:1.5px solid var(--border);font-weight:500;}
+    .btn-skip:hover{background:var(--bg);color:var(--text);}
+
+    .step-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:8px;}
+
+    .typing{display:flex;gap:4px;align-items:center;padding:12px 16px;}
+    .dot{width:7px;height:7px;border-radius:50%;background:#93c5fd;animation:bounce 1.2s infinite;}
+    .dot:nth-child(2){animation-delay:0.2s;}
+    .dot:nth-child(3){animation-delay:0.4s;}
+    @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+  </style>
+</head>
+<body>
+<div class="onboarding-wrap">
+  <div class="logo">
+    <img src="/logo.png" alt="Stratmap" onerror="this.style.display='none'"/>
+  </div>
+
+  <div class="chat-card">
+    <div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+    <div class="chat-body" id="chat"></div>
+    <div class="chat-footer" id="footer"></div>
+  </div>
+</div>
+
+<script>
+// ── Estado ─────────────────────────────────────────────────────────────────
+const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+if (!session.username) { window.location.href = '/login.html'; }
+
+const profile = {
+  company_name: '',
+  company_key:  '',
+  services: [],
+  regions:  [],
+  contract_sizes: [],
+  known_mandantes: [],
+  onboarding_done: true,
+};
+
+let step = 0;
+const TOTAL_STEPS = 5;
+
+// ── Opciones predefinidas ──────────────────────────────────────────────────
+const SERVICE_OPTIONS = [
+  'Perforación y tronadura','Movimiento de tierras','Montaje electromecánico',
+  'Construcción civil','Ingeniería y diseño','Mantención industrial',
+  'Transporte y logística','Suministro de equipos','Servicios ambientales',
+  'Topografía y geotecnia','Automatización y control','Obras eléctricas',
+  'Suministro de materiales','Consultoría minera','Ventilación y climatización',
+];
+
+const REGION_OPTIONS = [
+  'Antofagasta','Atacama','Tarapacá','Arica y Parinacota',
+  'Coquimbo','Valparaíso','O\'Higgins','Metropolitana',
+  'Maule','Biobío','Araucanía','Los Lagos','Magallanes',
+  'Todo Chile',
+];
+
+const CONTRACT_OPTIONS = [
+  'Menos de UF 1.000','UF 1.000 – 10.000','UF 10.000 – 100.000',
+  'UF 100.000 – 500.000','Más de UF 500.000',
+];
+
+const MANDANTE_OPTIONS = [
+  'Codelco','BHP / Escondida','SQM','Collahuasi','Anglo American',
+  'Teck','Antofagasta Minerals','Kinross','Glencore','ENAMI',
+  'Barrick','Freeport','Otro',
+];
+
+// ── Steps ──────────────────────────────────────────────────────────────────
+const STEPS = [
+  {
+    id: 'company',
+    bot: '👋 Hola! Soy Stratmap. Para personalizar tu radar minero necesito conocer tu empresa.\n\n¿Cuál es el nombre de tu empresa o razón social?',
+    type: 'text',
+    placeholder: 'Ej: Constructora Andina S.A.',
+    key: 'company_name',
+  },
+  {
+    id: 'services',
+    bot: '¿Qué servicios o especialidades ofrece tu empresa? Selecciona todos los que aplican.',
+    type: 'chips_multi',
+    options: SERVICE_OPTIONS,
+    key: 'services',
+    min: 1,
+  },
+  {
+    id: 'regions',
+    bot: '¿En qué regiones de Chile pueden operar? Esto filtrará proyectos geográficamente relevantes.',
+    type: 'chips_multi',
+    options: REGION_OPTIONS,
+    key: 'regions',
+    min: 1,
+  },
+  {
+    id: 'contract_sizes',
+    bot: '¿En qué rango de montos normalmente participan en licitaciones?',
+    type: 'chips_multi',
+    options: CONTRACT_OPTIONS,
+    key: 'contract_sizes',
+    min: 1,
+  },
+  {
+    id: 'mandantes',
+    bot: '¿Con qué mandantes han trabajado antes? Esto ayuda a priorizar proyectos de empresas que ya los conocen.',
+    type: 'chips_multi',
+    options: MANDANTE_OPTIONS,
+    key: 'known_mandantes',
+    skippable: true,
+  },
+];
+
+// ── Render helpers ──────────────────────────────────────────────────────────
+function scrollBottom() {
+  const chat = document.getElementById('chat');
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addMsg(text, from='bot') {
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = `msg ${from}`;
+  if (from === 'bot') {
+    div.innerHTML = `<div class="bot-avatar">🤖</div><div class="bubble">${text.replace(/\n/g,'<br>')}</div>`;
+  } else {
+    div.innerHTML = `<div class="bubble" style="margin-left:auto">${text}</div>`;
+  }
+  chat.appendChild(div);
+  scrollBottom();
+}
+
+function showTyping() {
+  const chat = document.getElementById('chat');
+  const div = document.createElement('div');
+  div.className = 'msg bot'; div.id = 'typing';
+  div.innerHTML = `<div class="bot-avatar">🤖</div><div class="bubble"><div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+  chat.appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+function removeTyping() {
+  document.getElementById('typing')?.remove();
+}
+
+function setProgress(n) {
+  document.getElementById('progress').style.width = `${Math.round((n/TOTAL_STEPS)*100)}%`;
+}
+
+// ── Step renderer ──────────────────────────────────────────────────────────
+let selectedChips = [];
+
+function renderStep(s) {
+  selectedChips = [];
+  const footer = document.getElementById('footer');
+  footer.innerHTML = '';
+
+  if (s.type === 'text') {
+    footer.innerHTML = `
+      <div class="input-row">
+        <input class="chat-input" id="text-input" placeholder="${s.placeholder||''}" autocomplete="off"/>
+        <button class="btn" id="next-btn" onclick="submitText()">Continuar →</button>
+      </div>
+      <div class="step-hint">Paso ${step+1} de ${TOTAL_STEPS}</div>`;
+    const inp = document.getElementById('text-input');
+    inp.focus();
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitText(); });
+
+  } else if (s.type === 'chips_multi') {
+    footer.innerHTML = `
+      <div class="chips" id="chips-wrap"></div>
+      <div class="input-row" style="margin-top:16px">
+        ${s.skippable ? `<button class="btn btn-skip" onclick="skipStep()">Omitir</button>` : ''}
+        <button class="btn" id="next-btn" onclick="submitChips()" disabled>Continuar →</button>
+      </div>
+      <div class="step-hint">Selecciona uno o más · Paso ${step+1} de ${TOTAL_STEPS}</div>`;
+
+    const wrap = document.getElementById('chips-wrap');
+    s.options.forEach(opt => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.textContent = opt;
+      chip.onclick = () => toggleChip(chip, opt, s.min);
+      wrap.appendChild(chip);
+    });
+  }
+}
+
+function toggleChip(chip, val, min=1) {
+  const idx = selectedChips.indexOf(val);
+  if (idx >= 0) {
+    selectedChips.splice(idx, 1);
+    chip.classList.remove('selected');
+  } else {
+    selectedChips.push(val);
+    chip.classList.add('selected');
+  }
+  const btn = document.getElementById('next-btn');
+  if (btn) btn.disabled = selectedChips.length < (min||1);
+}
+
+// ── Submit handlers ────────────────────────────────────────────────────────
+function submitText() {
+  const inp = document.getElementById('text-input');
+  const val = inp?.value?.trim();
+  if (!val) return;
+
+  const s = STEPS[step];
+  profile[s.key] = val;
+  // Generate company_key from name
+  if (s.key === 'company_name') {
+    profile.company_key = val.toLowerCase()
+      .replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').substring(0,40)
+      || 'empresa_' + Date.now();
+  }
+  addMsg(val, 'user');
+  nextStep();
+}
+
+function submitChips() {
+  if (!selectedChips.length) return;
+  const s = STEPS[step];
+  profile[s.key] = [...selectedChips];
+  addMsg(selectedChips.join(', '), 'user');
+  nextStep();
+}
+
+function skipStep() {
+  const s = STEPS[step];
+  profile[s.key] = [];
+  nextStep();
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+async function nextStep() {
+  step++;
+  setProgress(step);
+  document.getElementById('footer').innerHTML = '';
+
+  if (step >= STEPS.length) {
+    await finishOnboarding();
+    return;
+  }
+
+  const t = showTyping();
+  await delay(800);
+  removeTyping();
+  addMsg(STEPS[step].bot);
+  renderStep(STEPS[step]);
+}
+
+async function finishOnboarding() {
+  const t = showTyping();
+  await delay(1000);
+  removeTyping();
+
+  addMsg(`¡Perfecto! Tengo todo lo que necesito. Ahora voy a calcular los scores personalizados para ${profile.company_name || 'tu empresa'}...`);
+
+  // Save profile
+  try {
+    await fetch('/me/service-profile', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(profile),
+    });
+
+    // Save company_key in session for this user
+    const sess = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+    sess.company_key = profile.company_key;
+    sess.company_name = profile.company_name;
+    localStorage.setItem('stratmap_session', JSON.stringify(sess));
+
+    // Trigger scoring in background
+    fetch('/me/score-projects', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ company_key: profile.company_key }),
+    }).catch(() => {});
+
+    await delay(800);
+    addMsg('✅ Listo. Tus scores personalizados se están calculando (tarda ~30 segundos).\n\nTe llevo al radar ahora...');
+    document.getElementById('footer').innerHTML = `
+      <div class="input-row"><button class="btn" onclick="window.location.href='/'">Ir al Radar →</button></div>`;
+    setProgress(TOTAL_STEPS);
+
+  } catch(e) {
+    addMsg('Hubo un error guardando tu perfil. Intenta de nuevo.');
+    document.getElementById('footer').innerHTML = `
+      <div class="input-row"><button class="btn" onclick="window.location.reload()">Reintentar</button></div>`;
+  }
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  // Check if already has profile
+  const sess = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+  const companyKey = sess.company_key || 'default';
+
+  try {
+    const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
+    const data = await res.json();
+    if (data.onboarding_done) {
+      // Already configured, go to radar
+      window.location.href = '/';
+      return;
+    }
+  } catch(e) {}
+
+  // Start onboarding
+  setProgress(0);
+  await delay(400);
+  addMsg(STEPS[0].bot);
+  renderStep(STEPS[0]);
+}
+
+init();
+</script>
+</body>
+</html>
