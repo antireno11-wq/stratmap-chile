@@ -575,6 +575,68 @@ function renderFiltered() {
   el("status").textContent = `${projects.length} proyectos · ${news.length} noticias`;
 }
 
+
+// ── Mandantes ──────────────────────────────────────────────────────────────
+let mandantesData = [];
+
+function scoreColorMandante(s) {
+  if (s >= 90) return ['#15803d', '#f0fdf4'];
+  if (s >= 70) return ['#1a56db', '#eff6ff'];
+  if (s >= 50) return ['#92400e', '#fef3c7'];
+  return ['#6b7280', '#f9fafb'];
+}
+
+async function loadMandantes() {
+  const section = document.getElementById('section-mandantes');
+  if (!isLoggedIn) { if (section) section.style.display = 'none'; return; }
+  if (section) section.style.display = '';
+
+  try {
+    const res = await fetch('/mandantes');
+    const data = await res.json();
+    mandantesData = data.mandantes || [];
+    renderMandantes();
+  } catch(e) {
+    const grid = document.getElementById('mandantes-grid');
+    if (grid) grid.innerHTML = '<div class="mandantes-login-hint">Error cargando mandantes</div>';
+  }
+}
+
+function renderMandantes() {
+  const grid = document.getElementById('mandantes-grid');
+  const badge = document.getElementById('badge-mandantes');
+  if (!grid) return;
+
+  if (!mandantesData.length) {
+    grid.innerHTML = '<div class="mandantes-login-hint">Sin datos de mandantes aún</div>';
+    return;
+  }
+
+  if (badge) badge.textContent = mandantesData.length;
+
+  const maxScore = Math.max(...mandantesData.map(m => m.score_consolidado || 0), 1);
+
+  grid.innerHTML = mandantesData.map(m => {
+    const score = m.score_consolidado || 0;
+    const [sc, sbg] = scoreColorMandante(score);
+    const pct = Math.round((score / maxScore) * 100);
+    const slug = encodeURIComponent(m.company);
+
+    const meta = [];
+    if (m.n_proyectos > 0) meta.push(`<span class="mandante-meta-item">🏗 ${m.n_proyectos} proyecto${m.n_proyectos>1?'s':''}</span>`);
+    if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">📋 ${m.n_sea} SEA</span>`);
+    if ((m.signal_score||0) > 0) meta.push(`<span class="mandante-meta-item">⚡ +${m.signal_score}</span>`);
+
+    return `
+      <div class="mandante-card" onclick="window.location.href='/mandante.html?empresa=${slug}'">
+        <div class="mandante-card-name">${escapeHTML(m.company)}</div>
+        <div class="mandante-card-score" style="color:${sc}">${score}</div>
+        <div class="mandante-card-meta">${meta.join('')}</div>
+        <div class="mandante-card-bar" style="width:${pct}%"></div>
+      </div>`;
+  }).join('');
+}
+
 // ── Session state ─────────────────────────────────────────────────────────────
 let isLoggedIn = false;
 let currentSort = { by: null, dir: 'desc' };
@@ -641,6 +703,7 @@ async function checkSession() {
   isLoggedIn = hasSession; // sesión activa = tener sesión válida
   updateScoreVisibility();
   updateUserMenuState();
+  loadMandantes();
 }
 
 function updateScoreVisibility() {
@@ -781,6 +844,7 @@ function resetSession() {
   currentSort.dir = 'desc';
   updateScoreVisibility();
   updateUserMenuState();
+  loadMandantes();
   toggleUserMenu();
   load();
 }
