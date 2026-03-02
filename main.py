@@ -322,7 +322,7 @@ class ServiceItem(BaseModel):
 class ServiceProfilePayload(BaseModel):
     company_name: Optional[str] = None
     company_key: Optional[str] = None
-    services: List[ServiceItem] = []
+    services: List[Any] = []        # acepta strings o {name, description}
     regions: List[str] = []
     contract_sizes: List[str] = []
     known_mandantes: List[str] = []
@@ -337,11 +337,18 @@ def get_service_profile_endpoint():
 def update_service_profile(payload: ServiceProfilePayload):
     db.init_ai_db()
     company_key = payload.company_key or "default"
+    # Normalizar services: strings → {"name": str}, objetos → mantener
+    def normalize_service(s):
+        if isinstance(s, str): return {"name": s, "description": ""}
+        if hasattr(s, "model_dump"): return s.model_dump()
+        if isinstance(s, dict): return s
+        return {"name": str(s), "description": ""}
+
     profile = db.upsert_service_profile(
         user_id=company_key,
         company_key=company_key,
         company_name=payload.company_name or "",
-        services=[s.model_dump() if hasattr(s, "model_dump") else s for s in payload.services],
+        services=[normalize_service(s) for s in payload.services],
         regions=payload.regions or [],
         contract_sizes=payload.contract_sizes or [],
         known_mandantes=payload.known_mandantes or [],
@@ -349,6 +356,71 @@ def update_service_profile(payload: ServiceProfilePayload):
     )
     return {"ok": True, "profile": profile}
 
+
+
+@app.post("/me/score-projects")
+def score_projects(payload: dict):
+    """
+    Dispara scoring IA personalizado para todos los proyectos contra el perfil de la empresa.
+    Corre en background — el frontend puede polling /ai/fits para ver cuando hay resultados.
+    """
+    import threading
+    company_key = payload.get("company_key", "default")
+
+    def _run():
+        try:
+            import ai_matcher
+            result = ai_matcher.run(company_key=company_key, limit=500)
+            print(f"[score-projects] {result}")
+        except Exception as e:
+            import traceback; traceback.print_exc()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "Scoring IA iniciado en background", "company_key": company_key}
+
+
+@app.get("/me/profile")
+def get_profile(company_key: str = "default"):
+    """Retorna el perfil completo incluyendo onboarding_done."""
+    profile = db.get_service_profile(company_key)
+    if not profile:
+        return {"onboarding_done": False, "services": [], "company_name": None}
+    return profile
+
+
+@app.get("/ai/fits")
+def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 500):
+    """Retorna los scores IA calculados para la empresa."""
+    try:
+        fits = db.get_ai_fits(user_id=company_key, min_score=min_score, limit=limit)
+        return {"fits": fits, "total": len(fits)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/run-ai-scoring")
+def run_ai_scoring_all():
+    """Corre scoring IA para todos los perfiles con onboarding completo."""
+    import threading
+    def _run():
+        try:
+            with db.get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT company_key FROM service_profiles
+                        WHERE onboarding_done = TRUE AND services IS NOT NULL AND services != '[]'
+                    """)
+                    rows = cur.fetchall()
+            keys = [r[0] for r in rows if r[0]]
+            print(f"[admin-ai] Perfiles a procesar: {keys}")
+            import ai_matcher
+            for key in keys:
+                print(f"[admin-ai] Procesando {key}...")
+                ai_matcher.run(company_key=key, limit=500)
+        except Exception as e:
+            import traceback; traceback.print_exc()
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "Scoring IA masivo iniciado"}
 
 @app.post("/admin/mark-onboarding-done")
 def mark_onboarding_done():
