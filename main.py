@@ -616,4 +616,38 @@ def delete_enami():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/admin/run-empleos-signals")
+def run_empleos_signals_endpoint():
+    """Corre señales de empleo manualmente."""
+    import threading
+    def _run():
+        try:
+            from connectors.empleos_indeed   import fetch_indeed
+            from connectors.empleos_portales import fetch_portales
+            from signals.empleos_signals     import run_empleos_signals
+            jobs = []
+            try: jobs += fetch_indeed(limit=150)
+            except Exception as e: print(f"[indeed] {e}")
+            try: jobs += fetch_portales(limit=100)
+            except Exception as e: print(f"[portales] {e}")
+            if jobs: run_empleos_signals(jobs)
+        except Exception as e:
+            print(f"[run-empleos-signals] {e}")
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "Señales de empleo iniciadas en background"}
+
+@app.post("/admin/reset-signals")
+def reset_signals():
+    """Resetea todas las señales de empleo (signal_score y signal_detail)."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE opportunities SET signal_score = 0, signal_detail = NULL")
+                updated = cur.rowcount
+            conn.commit()
+        return {"reset": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
