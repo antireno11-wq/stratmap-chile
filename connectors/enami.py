@@ -130,6 +130,12 @@ def parse_xml_rows(rows_xml) -> List[Dict]:
     items = []
     cutoff = (datetime.now(tz=TZ) - timedelta(days=90)).isoformat()
 
+    # DEBUG — imprimir todos los campos del primer row
+    if rows_xml:
+        first_attrs = rows_xml[0].attrib
+        print(f"[enami] campos disponibles: {list(first_attrs.keys())}")
+        print(f"[enami] primer row completo: {dict(first_attrs)}")
+
     for row in rows_xml:
         attrs = row.attrib
         # Buscar título en atributos comunes de SharePoint
