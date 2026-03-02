@@ -678,7 +678,7 @@ def delete_irrelevant_news():
                     DELETE FROM opportunities 
                     WHERE source IN ('BioBioChile', 'Radio Universidad de Chile', 'Radio U. de Chile')
                     AND phase = 'Noticia'
-                    AND title NOT ~* '(mina|minera|cobre|litio|codelco|bhp|sqm|relave|mineral|metal|oro|plata|hierro|molibdeno|faena)'
+                    AND LOWER(title) NOT SIMILAR TO '%(mina|minera|cobre|litio|codelco|bhp|sqm|relave|mineral|metal|oro|plata|hierro|molibdeno|faena)%'
                 """)
                 deleted += cur.rowcount
             conn.commit()
