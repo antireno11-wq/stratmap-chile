@@ -760,4 +760,164 @@ def sources_summary():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/mandantes")
+def get_mandantes():
+    """
+    Score consolidado por mandante calculado desde:
+    - Proyectos activos (no SEA, no noticias)
+    - Prospectos SEA
+    - Señales de empleo (signal_score)
+    - Noticias recientes
+    """
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    WITH
+                    -- Proyectos activos por mandante (no SEA, no noticias)
+                    proyectos AS (
+                        SELECT
+                            company,
+                            COUNT(*) AS n_proyectos,
+                            MAX(score + COALESCE(signal_score,0)) AS max_score,
+                            AVG(score + COALESCE(signal_score,0)) AS avg_score,
+                            SUM(COALESCE(signal_score,0)) AS total_signal,
+                            MAX(signal_detail) AS signal_detail,
+                            MAX(published_at) AS ultima_actividad
+                        FROM opportunities
+                        WHERE source NOT IN ('sea','Sea','SEA')
+                        AND phase NOT IN ('Noticia')
+                        AND company IS NOT NULL AND company != ''
+                        GROUP BY company
+                    ),
+                    -- Prospectos SEA por titular
+                    sea AS (
+                        SELECT
+                            company,
+                            COUNT(*) AS n_sea,
+                            COUNT(CASE WHEN LOWER(phase) LIKE '%aprobado%' OR LOWER(phase) LIKE '%favorable%' THEN 1 END) AS n_aprobados
+                        FROM opportunities
+                        WHERE source IN ('sea','Sea','SEA')
+                        AND company IS NOT NULL AND company != ''
+                        GROUP BY company
+                    ),
+                    -- Noticias recientes por empresa
+                    noticias AS (
+                        SELECT
+                            company,
+                            COUNT(*) AS n_noticias
+                        FROM opportunities
+                        WHERE phase = 'Noticia'
+                        AND company IS NOT NULL AND company != ''
+                        AND published_at > NOW() - INTERVAL '90 days'
+                        GROUP BY company
+                    )
+                    SELECT
+                        p.company,
+                        p.n_proyectos,
+                        COALESCE(s.n_sea, 0) AS n_sea,
+                        COALESCE(s.n_aprobados, 0) AS n_aprobados,
+                        COALESCE(n.n_noticias, 0) AS n_noticias,
+                        p.total_signal AS signal_score,
+                        p.signal_detail,
+                        p.ultima_actividad,
+                        -- Score consolidado:
+                        -- base: avg_score de proyectos
+                        -- + 20pts por cada SEA aprobado
+                        -- + 10pts por cada SEA en calificación
+                        -- + señales de empleo
+                        -- + 5pts por noticias recientes (cap 15)
+                        ROUND(
+                            p.avg_score
+                            + COALESCE(s.n_aprobados,0) * 20
+                            + (COALESCE(s.n_sea,0) - COALESCE(s.n_aprobados,0)) * 10
+                            + COALESCE(p.total_signal, 0)
+                            + LEAST(COALESCE(n.n_noticias,0) * 5, 15)
+                        ) AS score_consolidado
+                    FROM proyectos p
+                    LEFT JOIN sea s ON LOWER(s.company) = LOWER(p.company)
+                    LEFT JOIN noticias n ON LOWER(n.company) = LOWER(p.company)
+                    ORDER BY score_consolidado DESC
+                    LIMIT 50
+                """)
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                mandantes = [dict(zip(cols, r)) for r in rows]
+
+                # Serializar fechas
+                for m in mandantes:
+                    if m.get("ultima_actividad"):
+                        m["ultima_actividad"] = m["ultima_actividad"].isoformat()
+                    m["score_consolidado"] = int(m["score_consolidado"] or 0)
+                    m["avg_score"] = None  # no exponer
+
+        return {"mandantes": mandantes}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/mandantes/{company_name}")
+def get_mandante_detail(company_name: str):
+    """Detalle completo de un mandante: proyectos, SEA, noticias."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                # Proyectos activos
+                cur.execute("""
+                    SELECT id, source, title, url, company, region, phase, industry,
+                           score, signal_score, signal_detail, published_at
+                    FROM opportunities
+                    WHERE LOWER(company) ILIKE LOWER(%(company)s)
+                    AND source NOT IN ('sea','Sea','SEA')
+                    AND phase NOT IN ('Noticia')
+                    ORDER BY (score + COALESCE(signal_score,0)) DESC
+                """, {"company": f"%{company_name}%"})
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                proyectos = [dict(zip(cols, r)) for r in rows]
+
+                # Prospectos SEA
+                cur.execute("""
+                    SELECT id, title, url, region, phase, score, published_at
+                    FROM opportunities
+                    WHERE LOWER(company) ILIKE LOWER(%(company)s)
+                    AND source IN ('sea','Sea','SEA')
+                    ORDER BY score DESC
+                """, {"company": f"%{company_name}%"})
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                sea_prospectos = [dict(zip(cols, r)) for r in rows]
+
+                # Noticias recientes
+                cur.execute("""
+                    SELECT id, title, url, source, published_at
+                    FROM opportunities
+                    WHERE LOWER(company) ILIKE LOWER(%(company)s)
+                    AND phase = 'Noticia'
+                    AND published_at > NOW() - INTERVAL '90 days'
+                    ORDER BY published_at DESC
+                    LIMIT 20
+                """, {"company": f"%{company_name}%"})
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                noticias = [dict(zip(cols, r)) for r in rows]
+
+        # Serializar fechas
+        for lst in [proyectos, sea_prospectos, noticias]:
+            for item in lst:
+                if item.get("published_at"):
+                    item["published_at"] = item["published_at"].isoformat()
+
+        return {
+            "company": company_name,
+            "proyectos": proyectos,
+            "sea_prospectos": sea_prospectos,
+            "noticias": noticias,
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
