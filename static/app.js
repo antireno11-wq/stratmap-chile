@@ -34,7 +34,9 @@ const NON_MINING_KEYWORDS = [
 
 function isSea(item) {
   const src = (item.source || "").toLowerCase();
-  return src === "sea";
+  // Solo ocultar items genuinamente del SEA (evaluación ambiental)
+  // ENAMI, Codelco, InfoMineria, etc. tienen su propio source
+  return src === "sea" && (item.phase || "").toLowerCase() !== "licitación";
 }
 
 function isNews(item) {
