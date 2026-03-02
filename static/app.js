@@ -145,8 +145,8 @@ window.openOppDrawer = async function(oppId) {
   const notes = notesRes.items || [];
 
   el("drawer-body").innerHTML = `
-    <div class="drawer-stats" style="grid-template-columns:repeat(3,1fr)">
-      <div class="drawer-stat"><div class="drawer-stat-val" style="color:${sc}">${score}</div><div class="drawer-stat-lbl">Score</div></div>
+    <div class="drawer-stats" style="grid-template-columns:repeat(${isLoggedIn ? 3 : 2},1fr)">
+      ${isLoggedIn ? `<div class="drawer-stat"><div class="drawer-stat-val" style="color:${sc}">${score}</div><div class="drawer-stat-lbl">Score</div></div>` : ''}
       <div class="drawer-stat"><div class="drawer-stat-val">${escapeHTML(item.region||"—")}</div><div class="drawer-stat-lbl">Región</div></div>
       <div class="drawer-stat"><div class="drawer-stat-val">${escapeHTML(item.industry||"—")}</div><div class="drawer-stat-lbl">Industria</div></div>
     </div>
@@ -560,8 +560,13 @@ function renderFiltered() {
   el("stat-news").textContent = news.length;
   el("stat-signals").textContent = projects.filter(i => (i.signal_score||0) > 0).length;
   const scores = filtered.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
-  el("stat-avg").textContent = scores.length
+  el("stat-avg").textContent = isLoggedIn && scores.length
     ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : "—";
+  // Hide score-related stats if not logged in
+  const scoreStatEl = document.getElementById('stat-avg')?.closest('.stat-card');
+  if (scoreStatEl) scoreStatEl.style.display = isLoggedIn ? '' : 'none';
+  const signalStatEl = document.getElementById('stat-signals')?.closest('.stat-card');
+  if (signalStatEl) signalStatEl.style.display = isLoggedIn ? '' : 'none';
 
   el("upd-projects").textContent = "Actualizado ahora";
   el("upd-news").textContent = "Actualizado ahora";
@@ -631,7 +636,7 @@ async function checkSession() {
     hasServices = !!(data.services?.length);
   } catch(e) {}
   
-  isLoggedIn = hasSession && (hasLocalPrefs || hasServices || true); // sesión activa = logueado
+  isLoggedIn = hasSession; // sesión activa = tener sesión válida
   updateScoreVisibility();
   updateUserMenuState();
 }
