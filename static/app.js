@@ -393,7 +393,7 @@ function projectRow(item) {
   const score = item.radar_score ?? item.score ?? 0;
   const [c,bg] = scoreColor(score);
   const signals = item.signal_score > 0
-    ? `<span class="signal-badge">⚡ +${item.signal_score}</span>` : "";
+    ? `<span class="signal-badge" title="${item.signal_detail ? '📊 ' + item.signal_detail : 'Señal activa'}">⚡ +${item.signal_score}</span>` : "";
   const phase = item.phase ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
 
   const companyKey = item.company ? drawerKey("company", item.company) : null;
