@@ -921,32 +921,7 @@ def get_mandante_detail(company_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/admin/fix-lithium-dates")
-def fix_lithium_dates():
-    """
-    Elimina todos los registros de Lithium Chile que tienen published_at 
-    igual a la fecha de hoy (fechas de ingesta incorrectas) o NULL.
-    Luego el worker los re-ingesta con las fechas correctas.
-    """
-    try:
-        today = __import__('datetime').date.today().isoformat()
-        with db.get_conn() as conn:
-            with conn.cursor() as cur:
-                # Eliminar los que tienen fecha de hoy (ingesta) o NULL
-                cur.execute("""
-                    DELETE FROM opportunities
-                    WHERE source = 'Lithium Chile'
-                    AND (
-                        published_at IS NULL
-                        OR DATE(published_at) = CURRENT_DATE
-                        OR DATE(published_at) = CURRENT_DATE - INTERVAL '1 day'
-                    )
-                """)
-                deleted = cur.rowcount
-            conn.commit()
-        return {"deleted": deleted, "msg": "Re-corre el worker para re-ingestar con fechas correctas"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/admin/fix-lithium-dates")
@@ -986,5 +961,19 @@ def fix_lithium_dates():
 
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Re-ingesta Lithium Chile iniciada en background"}
+
+
+@app.post("/admin/delete-all-lithium")
+def delete_all_lithium():
+    """Borra TODOS los registros de Lithium Chile para re-ingesta limpia."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'Lithium Chile'")
+                deleted = cur.rowcount
+            conn.commit()
+        return {"deleted": deleted, "msg": "Ahora corre el worker para re-ingestar"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
