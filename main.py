@@ -358,6 +358,144 @@ def update_service_profile(payload: ServiceProfilePayload):
 
 
 
+@app.get("/mandantes")
+def get_mandantes():
+    """
+    Ranking de mandantes por actividad consolidada.
+    Consolida: proyectos activos + señales de empleo + noticias recientes.
+    """
+    sql = """
+    WITH base AS (
+        SELECT
+            company,
+            COUNT(*) FILTER (WHERE source NOT IN (
+                'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+                'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+                'SEA'
+            )) AS n_proyectos,
+            COUNT(*) FILTER (WHERE source = 'SEA') AS n_sea,
+            AVG(score) FILTER (WHERE source NOT IN (
+                'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+                'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+                'SEA'
+            )) AS avg_score,
+            SUM(COALESCE(signal_score, 0)) AS total_signal,
+            SUM(COALESCE(jobs_count, 0)) AS total_jobs,
+            COUNT(*) FILTER (
+                WHERE published_at > NOW() - INTERVAL '90 days'
+                AND source IN (
+                    'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+                    'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería'
+                )
+            ) AS n_news_recent,
+            MAX(COALESCE(published_at, created_at)) AS last_activity
+        FROM opportunities
+        WHERE company IS NOT NULL AND company != ''
+        GROUP BY company
+    )
+    SELECT
+        company,
+        n_proyectos,
+        n_sea,
+        total_signal AS signal_score,
+        total_jobs,
+        n_news_recent,
+        last_activity,
+        ROUND(
+            COALESCE(avg_score, 0) * 0.4 +
+            LEAST(n_proyectos * 5, 30) +
+            LEAST(n_sea * 8, 24) +
+            LEAST(total_signal, 20) +
+            LEAST(n_news_recent * 3, 9) +
+            LEAST(total_jobs * 2, 10)
+        ) AS score_consolidado
+    FROM base
+    WHERE n_proyectos > 0 OR n_sea > 0
+    ORDER BY score_consolidado DESC
+    LIMIT 60;
+    """
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                rows = [dict(r) for r in cur.fetchall()]
+        # Serialize dates
+        for r in rows:
+            if r.get("last_activity"):
+                r["last_activity"] = r["last_activity"].isoformat()
+        return {"mandantes": rows, "total": len(rows)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/mandantes/{company_name}")
+def get_mandante_detail(company_name: str):
+    """Detalle de un mandante: sus proyectos, SEA y noticias recientes."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                # Proyectos activos
+                cur.execute("""
+                    SELECT id, title, source, score, signal_score, phase, region,
+                           url, published_at, jobs_count
+                    FROM opportunities
+                    WHERE company = %(company)s
+                      AND source NOT IN (
+                        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+                        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+                        'SEA'
+                      )
+                    ORDER BY (score + COALESCE(signal_score,0)) DESC
+                    LIMIT 50;
+                """, {"company": company_name})
+                projects = [dict(r) for r in cur.fetchall()]
+
+                # Prospectos SEA
+                cur.execute("""
+                    SELECT id, title, score, phase, region, url, published_at
+                    FROM opportunities
+                    WHERE company = %(company)s AND source = 'SEA'
+                    ORDER BY score DESC LIMIT 20;
+                """, {"company": company_name})
+                sea = [dict(r) for r in cur.fetchall()]
+
+                # Noticias recientes
+                cur.execute("""
+                    SELECT id, title, source, url, published_at
+                    FROM opportunities
+                    WHERE company = %(company)s
+                      AND source IN (
+                        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+                        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería'
+                      )
+                      AND published_at > NOW() - INTERVAL '90 days'
+                    ORDER BY published_at DESC LIMIT 20;
+                """, {"company": company_name})
+                news = [dict(r) for r in cur.fetchall()]
+
+        # Serialize dates
+        for lst in [projects, sea, news]:
+            for r in lst:
+                if r.get("published_at"):
+                    r["published_at"] = r["published_at"].isoformat()
+
+        return {
+            "company": company_name,
+            "projects": projects,
+            "sea": sea,
+            "news": news,
+            "summary": {
+                "n_proyectos": len(projects),
+                "n_sea": len(sea),
+                "n_news": len(news),
+                "total_signal": sum(r.get("signal_score") or 0 for r in projects),
+                "total_jobs": sum(r.get("jobs_count") or 0 for r in projects),
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/me/score-projects")
 def score_projects(payload: dict):
     """
