@@ -368,19 +368,17 @@ def get_mandantes():
     WITH base AS (
         SELECT
             company,
-            -- Proyectos reales: excluir noticias, SEA y fuente manual
-            COUNT(*) FILTER (WHERE source NOT IN (
-                'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-                'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-                'SEA','manual'
-            )) AS n_proyectos,
+            -- Licitaciones directas: ENAMI y Codelco (oportunidades inmediatas)
+            COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco')) AS n_licitaciones,
+            -- Proyectos SIGEX (señal de exploración, peso menor)
+            COUNT(*) FILTER (WHERE source = 'SIGEX') AS n_sigex,
             COUNT(*) FILTER (WHERE source = 'SEA') AS n_sea,
-            -- Score promedio solo de fuentes confiables (ENAMI, Codelco, SIGEX)
-            AVG(score) FILTER (WHERE source IN ('ENAMI','Codelco','SIGEX')) AS avg_score_real,
+            -- Score promedio solo de licitaciones reales
+            AVG(score) FILTER (WHERE source IN ('ENAMI','Codelco')) AS avg_score_licitaciones,
             -- Señales de empleo
             MAX(COALESCE(signal_score, 0)) AS top_signal,
             SUM(COALESCE(jobs_count, 0)) AS total_jobs,
-            -- Noticias recientes (90 días)
+            -- Noticias recientes 90 días
             COUNT(*) FILTER (
                 WHERE published_at > NOW() - INTERVAL '90 days'
                 AND source IN (
@@ -391,33 +389,35 @@ def get_mandantes():
             MAX(COALESCE(published_at, created_at)) AS last_activity
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
+          AND source != 'manual'
         GROUP BY company
     )
     SELECT
         company,
-        n_proyectos,
+        (n_licitaciones + n_sigex) AS n_proyectos,
+        n_licitaciones,
+        n_sigex,
         n_sea,
         top_signal AS signal_score,
         total_jobs,
         n_news_recent,
         last_activity,
         ROUND(
-            -- Base: score promedio de proyectos reales (peso 40%)
-            LEAST(COALESCE(avg_score_real, 55), 100) * 0.4 +
-            -- Volumen: proyectos activos (cap 25)
-            LEAST(n_proyectos * 4, 25) +
-            -- Prospectos SEA (cap 20)
+            -- Licitaciones directas: alto peso (max 40)
+            LEAST(n_licitaciones * 8, 40) +
+            -- Score promedio de licitaciones (max 30)
+            LEAST(COALESCE(avg_score_licitaciones, 0) * 0.3, 30) +
+            -- SEA: señal de proyecto grande (max 20)
             LEAST(n_sea * 5, 20) +
-            -- Señales de empleo (cap 15)
-            LEAST(top_signal, 15) +
-            -- Empleos publicados (cap 10)
-            LEAST(total_jobs * 2, 10) +
-            -- Presencia en noticias recientes (cap 8)
+            -- Empleo: señal de actividad operacional (max 15)
+            LEAST(top_signal, 10) + LEAST(total_jobs * 2, 5) +
+            -- SIGEX: señal de exploración, peso bajo (max 10)
+            LEAST(n_sigex * 0.5, 10) +
+            -- Noticias recientes (max 8)
             LEAST(n_news_recent * 2, 8)
         ) AS score_consolidado
     FROM base
-    -- Solo mandantes con actividad real (no solo noticias o manual)
-    WHERE n_proyectos > 0 OR n_sea > 0
+    WHERE n_licitaciones > 0 OR n_sea > 0
     ORDER BY score_consolidado DESC
     LIMIT 60;
     """
