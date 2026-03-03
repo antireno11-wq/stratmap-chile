@@ -637,7 +637,7 @@ function renderMandantes() {
 
   // En home solo mostramos top 10; en mandantes.html mostramos todos
   const isHome = !!document.getElementById('section-mandantes');
-  const displayData = isHome ? mandantesData.slice(0, 10) : mandantesData;
+  const displayData = isHome ? mandantesData.slice(0, 14) : mandantesData;
 
   if (badge) badge.textContent = mandantesData.length;
   // Update sidebar count
@@ -655,14 +655,28 @@ function renderMandantes() {
     const meta = [];
     if (m.n_proyectos > 0) meta.push(`<span class="mandante-meta-item">🏗 ${m.n_proyectos} proy.</span>`);
     if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">🌿 ${m.n_sea} SEA</span>`);
-    if ((m.total_jobs||0) > 0) meta.push(`<span class="mandante-meta-item">👷 ${m.total_jobs} emp.</span>`);
-    if ((m.n_news_recent||0) > 0) meta.push(`<span class="mandante-meta-item">📰 ${m.n_news_recent}</span>`);
+    if ((m.total_jobs||0) > 0) meta.push(`<span class="mandante-meta-item">👷 ${m.total_jobs}</span>`);
+
+    // Heat badge — solo si hay score IA calculado
+    const heat = m.heat_score || 0;
+    let heatBadge = '';
+    if (heat >= 80) heatBadge = `<span class="heat-badge heat-hot" title="${escapeHTML(m.heat_reason||'')}">🔥 Muy activa</span>`;
+    else if (heat >= 60) heatBadge = `<span class="heat-badge heat-warm" title="${escapeHTML(m.heat_reason||'')}">⚡ Activa</span>`;
+    else if (heat >= 40) heatBadge = `<span class="heat-badge heat-mid" title="${escapeHTML(m.heat_reason||'')}">📊 Moderada</span>`;
+
+    // Topics trending
+    const topics = (m.trending_topics || []).slice(0,2).map(t =>
+      `<span class="mandante-topic">${escapeHTML(t)}</span>`
+    ).join('');
 
     return `
-      <div class="mandante-card" onclick="window.location.href='/mandante.html?empresa=${slug}'">
+      <div class="mandante-card ${heat >= 60 ? 'mandante-card-hot' : ''}"
+           onclick="window.location.href='/mandante.html?empresa=${slug}'">
+        ${heatBadge ? `<div class="mandante-heat-row">${heatBadge}</div>` : ''}
         <div class="mandante-card-name">${escapeHTML(m.company)}</div>
         <div class="mandante-card-score" style="color:${sc}">${score}</div>
         <div class="mandante-card-meta">${meta.join('')}</div>
+        ${topics ? `<div class="mandante-topics">${topics}</div>` : ''}
         <div class="mandante-card-bar" style="width:${pct}%"></div>
       </div>`;
   }).join('');
@@ -732,53 +746,70 @@ async function loadEmpleos() {
 }
 
 function renderEmpleos(empresas) {
-  const grid   = document.getElementById('empleos-grid');
-  const badge  = document.getElementById('badge-empleos');
+  const grid  = document.getElementById('empleos-grid');
+  const badge = document.getElementById('badge-empleos');
   if (!grid) return;
 
-  // Filtrar solo empresas con empleos reales
   const activos = empresas.filter(e => (e.total_jobs || 0) > 0);
 
   if (!activos.length) {
-    grid.innerHTML = '<div class="mandantes-login-hint">Sin señales de empleo activas aún — el worker detecta empleos de LinkedIn/BNE automáticamente</div>';
+    grid.innerHTML = '<div class="mandantes-login-hint">Sin señales de empleo activas aún</div>';
     return;
   }
 
-  if (badge) badge.textContent = activos.reduce((s, e) => s + (e.total_jobs || 0), 0) + ' empleos';
+  const totalJobs = activos.reduce((s, e) => s + (e.total_jobs || 0), 0);
+  if (badge) badge.textContent = totalJobs + ' empleos';
 
-  grid.innerHTML = activos.map(e => {
-    const areas = e.areas || {};
-    const areaItems = Object.entries(areas)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([area, cnt]) => `<span class="empleo-area-tag">${escapeHTML(area)} <strong>${cnt}</strong></span>`)
-      .join('');
-
-    const slug = encodeURIComponent(e.company);
-    return `
-      <div class="empleo-row" onclick="toggleEmpleoDetail('${slug}', this)">
-        <div class="empleo-row-main">
-          <div class="empleo-company">${escapeHTML(e.company)}</div>
-          <div class="empleo-meta">
-            <span class="empleo-count">👷 ${e.total_jobs} empleo${e.total_jobs !== 1 ? 's' : ''}</span>
-            ${e.proyectos_con_empleos > 1 ? `<span class="empleo-meta-item">en ${e.proyectos_con_empleos} proyectos</span>` : ''}
-            ${e.top_signal > 0 ? `<span class="empleo-meta-item">⚡ señal activa</span>` : ''}
-          </div>
-          ${areaItems ? `<div class="empleo-areas">${areaItems}</div>` : ''}
-        </div>
-        <div class="empleo-chevron">›</div>
-        <div class="empleo-detail" id="empleo-detail-${slug}" style="display:none"></div>
-      </div>`;
-  }).join('');
+  // Una sola fila por empresa — consolidado limpio
+  grid.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="border-bottom:2px solid var(--border)">
+      <th style="text-align:left;padding:6px 12px;color:var(--muted);font-size:11px;font-weight:600">EMPRESA</th>
+      <th style="text-align:center;padding:6px 8px;color:var(--muted);font-size:11px;font-weight:600">EMPLEOS</th>
+      <th style="text-align:left;padding:6px 12px;color:var(--muted);font-size:11px;font-weight:600">ÁREAS ACTIVAS</th>
+      <th style="padding:6px 8px"></th>
+    </tr></thead>
+    <tbody>
+    ${activos.map(e => {
+      const areas = e.areas || {};
+      const topAreas = Object.entries(areas).sort((a,b) => b[1]-a[1]).slice(0,3);
+      const areaStr = topAreas.map(([a,c]) =>
+        `<span class="empleo-area-tag">${escapeHTML(a)} <strong>${c}</strong></span>`
+      ).join('');
+      const slug = encodeURIComponent(e.company);
+      return `
+        <tr class="empleo-table-row" style="border-bottom:1px solid var(--border);cursor:pointer"
+            onclick="toggleEmpleoDetail('${slug}', this)">
+          <td style="padding:10px 12px;font-weight:600">${escapeHTML(e.company)}</td>
+          <td style="text-align:center;padding:10px 8px">
+            <span style="font-weight:700;color:var(--blue);font-size:15px">${e.total_jobs}</span>
+          </td>
+          <td style="padding:10px 12px">
+            ${areaStr || '<span style="color:var(--muted);font-size:11px">—</span>'}
+            ${e.top_signal > 0 ? '<span class="empleo-area-tag" style="background:#fef3c7;color:#92400e">⚡ activo</span>' : ''}
+          </td>
+          <td style="padding:10px 8px;color:var(--muted);font-size:16px">›</td>
+        </tr>
+        <tr id="empleo-detail-row-${slug}" style="display:none">
+          <td colspan="4" style="padding:0 12px 12px">
+            <div id="empleo-detail-${slug}" style="background:#f8fafc;border-radius:8px;padding:10px"></div>
+          </td>
+        </tr>`;
+    }).join('')}
+    </tbody>
+  </table>`;
 }
 
 async function toggleEmpleoDetail(slug, row) {
-  const detail = document.getElementById('empleo-detail-' + slug);
+  const detail  = document.getElementById('empleo-detail-' + slug);
+  const detailRow = document.getElementById('empleo-detail-row-' + slug);
   if (!detail) return;
-  if (detail.style.display !== 'none') {
-    detail.style.display = 'none';
+  const isOpen = detailRow ? detailRow.style.display !== 'none' : detail.style.display !== 'none';
+  if (isOpen) {
+    if (detailRow) detailRow.style.display = 'none';
+    else detail.style.display = 'none';
     return;
   }
+  if (detailRow) detailRow.style.display = '';
   detail.style.display = 'block';
   if (detail.innerHTML) return; // ya cargado
   detail.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">Cargando...</div>';
