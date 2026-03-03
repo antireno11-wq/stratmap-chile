@@ -485,14 +485,21 @@ def _mandante_detail(company_name: str):
                 sea = [dict(r) for r in cur.fetchall()]
 
                 # Noticias recientes (90 días)
+                # Las noticias no tienen company asignado, buscar por nombre en título
+                # Usar las primeras 2 palabras del nombre para el match
+                words = [w for w in company_name.split() if len(w) > 3]
+                kw = words[0] if words else company_name
                 cur.execute(f"""
                     SELECT id, title, source, url, published_at
                     FROM opportunities
-                    WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
-                      AND source IN ({NEWS_SOURCES})
-                      AND published_at > NOW() - INTERVAL '90 days'
-                    ORDER BY published_at DESC LIMIT 20;
-                """, {"company": company_name})
+                    WHERE source IN ({NEWS_SOURCES})
+                      AND published_at > NOW() - INTERVAL '180 days'
+                      AND (
+                          LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+                          OR LOWER(title) LIKE %(kw)s
+                      )
+                    ORDER BY published_at DESC LIMIT 15;
+                """, {"company": company_name, "kw": f"%{kw.lower()}%"})
                 news = [dict(r) for r in cur.fetchall()]
 
         # Serialize dates
@@ -504,8 +511,11 @@ def _mandante_detail(company_name: str):
         return {
             "company": company_name,
             "projects": projects,
+            "proyectos": projects,
             "sea": sea,
+            "sea_prospectos": sea,
             "news": news,
+            "noticias": news,
             "summary": {
                 "n_proyectos": len(projects),
                 "n_sea": len(sea),
