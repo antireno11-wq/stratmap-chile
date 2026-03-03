@@ -48,6 +48,15 @@
     .mandante-card-bar { height: 3px; border-radius: 4px; margin-top: 8px; background: linear-gradient(90deg, var(--blue), #60a5fa); }
 
     .empty { text-align: center; color: var(--muted); padding: 60px 20px; font-size: 14px; }
+    .mandante-heat-row { margin-bottom: 4px; }
+    .heat-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px; display: inline-block; cursor: help; }
+    .heat-hot  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .heat-warm { background: #fefce8; color: #ca8a04; border: 1px solid #fde68a; }
+    .heat-mid  { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .mandante-card-hot { border-color: #fca5a5 !important; }
+    .mandante-card-hot:hover { border-color: #ef4444 !important; box-shadow: 0 6px 20px rgba(220,38,38,0.12) !important; }
+    .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; }
   </style>
 </head>
 <body>
@@ -114,11 +123,21 @@
         if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">🌿 ${m.n_sea} SEA</span>`);
         if ((m.total_jobs||0) > 0) meta.push(`<span class="mandante-meta-item">👷 ${m.total_jobs}</span>`);
         if ((m.n_news_recent||0) > 0) meta.push(`<span class="mandante-meta-item">📰 ${m.n_news_recent}</span>`);
+        const heat = m.heat_score || 0;
+        let heatBadge = '';
+        if (heat >= 80) heatBadge = `<span class="heat-badge heat-hot" title="${escapeHTML(m.heat_reason||'')}">🔥 Muy activa</span>`;
+        else if (heat >= 60) heatBadge = `<span class="heat-badge heat-warm" title="${escapeHTML(m.heat_reason||'')}">⚡ Activa</span>`;
+        else if (heat >= 40) heatBadge = `<span class="heat-badge heat-mid" title="${escapeHTML(m.heat_reason||'')}">📊 Moderada</span>`;
+        const topics = (m.trending_topics||[]).slice(0,2).map(t =>
+          `<span class="mandante-topic">${escapeHTML(t)}</span>`).join('');
         return `
-          <div class="mandante-card" onclick="window.location.href='/mandante.html?empresa=${slug}'">
+          <div class="mandante-card ${heat>=60?'mandante-card-hot':''}"
+               onclick="window.location.href='/mandante.html?empresa=${slug}'">
+            ${heatBadge ? `<div class="mandante-heat-row">${heatBadge}</div>` : ''}
             <div class="mandante-card-name">${escapeHTML(m.company)}</div>
             <div class="mandante-card-score" style="color:${sc}">${score}</div>
             <div class="mandante-card-meta">${meta.join('')}</div>
+            ${topics ? `<div class="mandante-topics">${topics}</div>` : ''}
             <div class="mandante-card-bar" style="width:${pct}%"></div>
           </div>`;
       }).join('');
