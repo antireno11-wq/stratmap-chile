@@ -612,11 +612,18 @@ function renderMandantes() {
     return;
   }
 
+  // En home solo mostramos top 10; en mandantes.html mostramos todos
+  const isHome = !!document.getElementById('section-mandantes');
+  const displayData = isHome ? mandantesData.slice(0, 10) : mandantesData;
+
   if (badge) badge.textContent = mandantesData.length;
+  // Update sidebar count
+  const scM = document.getElementById('sc-mandantes');
+  if (scM) scM.textContent = mandantesData.length;
 
-  const maxScore = Math.max(...mandantesData.map(m => m.score_consolidado || 0), 1);
+  const maxScore = Math.max(...displayData.map(m => m.score_consolidado || 0), 1);
 
-  grid.innerHTML = mandantesData.map(m => {
+  grid.innerHTML = displayData.map(m => {
     const score = m.score_consolidado || 0;
     const [sc, sbg] = scoreColorMandante(score);
     const pct = Math.round((score / maxScore) * 100);
@@ -685,6 +692,103 @@ function sortItems(items) {
   });
 }
 
+// ── Empleos por empresa ────────────────────────────────────────────────────────
+async function loadEmpleos() {
+  const section = document.getElementById('section-empleos');
+  if (!isLoggedIn) { if (section) section.style.display = 'none'; return; }
+  if (section) section.style.display = '';
+
+  try {
+    const res = await fetch('/empleos/resumen');
+    const data = await res.json();
+    renderEmpleos(data.empresas || []);
+  } catch(e) {
+    const grid = document.getElementById('empleos-grid');
+    if (grid) grid.innerHTML = '<div class="mandantes-login-hint">Error cargando señales de empleo</div>';
+  }
+}
+
+function renderEmpleos(empresas) {
+  const grid   = document.getElementById('empleos-grid');
+  const badge  = document.getElementById('badge-empleos');
+  if (!grid) return;
+
+  // Filtrar solo empresas con empleos reales
+  const activos = empresas.filter(e => (e.total_jobs || 0) > 0);
+
+  if (!activos.length) {
+    grid.innerHTML = '<div class="mandantes-login-hint">Sin señales de empleo activas aún — el worker detecta empleos de LinkedIn/BNE automáticamente</div>';
+    return;
+  }
+
+  if (badge) badge.textContent = activos.reduce((s, e) => s + (e.total_jobs || 0), 0) + ' empleos';
+
+  grid.innerHTML = activos.map(e => {
+    const areas = e.areas || {};
+    const areaItems = Object.entries(areas)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([area, cnt]) => `<span class="empleo-area-tag">${escapeHTML(area)} <strong>${cnt}</strong></span>`)
+      .join('');
+
+    const slug = encodeURIComponent(e.company);
+    return `
+      <div class="empleo-row" onclick="toggleEmpleoDetail('${slug}', this)">
+        <div class="empleo-row-main">
+          <div class="empleo-company">${escapeHTML(e.company)}</div>
+          <div class="empleo-meta">
+            <span class="empleo-count">👷 ${e.total_jobs} empleo${e.total_jobs !== 1 ? 's' : ''}</span>
+            ${e.proyectos_con_empleos > 1 ? `<span class="empleo-meta-item">en ${e.proyectos_con_empleos} proyectos</span>` : ''}
+            ${e.top_signal > 0 ? `<span class="empleo-meta-item">⚡ señal activa</span>` : ''}
+          </div>
+          ${areaItems ? `<div class="empleo-areas">${areaItems}</div>` : ''}
+        </div>
+        <div class="empleo-chevron">›</div>
+        <div class="empleo-detail" id="empleo-detail-${slug}" style="display:none"></div>
+      </div>`;
+  }).join('');
+}
+
+async function toggleEmpleoDetail(slug, row) {
+  const detail = document.getElementById('empleo-detail-' + slug);
+  if (!detail) return;
+  if (detail.style.display !== 'none') {
+    detail.style.display = 'none';
+    return;
+  }
+  detail.style.display = 'block';
+  if (detail.innerHTML) return; // ya cargado
+  detail.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">Cargando...</div>';
+  try {
+    const res  = await fetch('/empleos/empresa/' + slug);
+    const data = await res.json();
+    const proyectos = data.proyectos || [];
+    if (!proyectos.length) {
+      detail.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">Sin detalle disponible</div>';
+      return;
+    }
+    detail.innerHTML = proyectos.map(p => {
+      const areas = p.areas || {};
+      const areaStr = Object.entries(areas)
+        .sort((a,b) => b[1]-a[1])
+        .map(([a,c]) => `${a}: ${c}`)
+        .join(' · ');
+      return `
+        <div class="empleo-proyecto">
+          <a href="${escapeHTML(p.url||'#')}" target="_blank" class="empleo-proyecto-title">${escapeHTML(p.title)}</a>
+          <div class="empleo-proyecto-meta">
+            <span>📍 ${escapeHTML(p.region||'—')}</span>
+            <span>👷 ${p.jobs_count} empleos</span>
+            ${areaStr ? `<span style="color:var(--muted)">${escapeHTML(areaStr)}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    detail.innerHTML = '<div style="padding:8px;color:red;font-size:12px">Error cargando detalle</div>';
+  }
+}
+
+
 async function checkSession() {
   const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
   const hasSession = !!(session.username);
@@ -714,6 +818,7 @@ async function checkSession() {
   updateScoreVisibility();
   updateUserMenuState();
   loadMandantes();
+  loadEmpleos();
   if (isLoggedIn) loadPersonalizedScores();
 }
 
