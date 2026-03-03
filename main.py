@@ -435,23 +435,33 @@ def get_mandantes():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@app.get("/mandantes/detail")
+def get_mandante_detail_q(company: str):
+    """Detalle de mandante por query param — evita problemas de encoding en path."""
+    return get_mandante_detail(company)
+
 @app.get("/mandantes/{company_name}")
 def get_mandante_detail(company_name: str):
     """Detalle de un mandante: sus proyectos, SEA y noticias recientes."""
+    NEWS_SOURCES = (
+        "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
+        "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
+        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile'"
+    )
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                # Proyectos activos
-                cur.execute("""
-                    SELECT id, title, source, score, signal_score, phase, region,
-                           url, published_at, jobs_count
+                # Proyectos activos — todo lo que NO es noticia ni SEA
+                # Búsqueda case-insensitive para tolerar variaciones de nombre
+                cur.execute(f"""
+                    SELECT id, title, source, score,
+                           COALESCE(signal_score,0) AS signal_score,
+                           phase, region, url, published_at,
+                           COALESCE(jobs_count,0) AS jobs_count
                     FROM opportunities
-                    WHERE company = %(company)s
-                      AND source NOT IN (
-                        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-                        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-                        'SEA'
-                      )
+                    WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+                      AND source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual')
                     ORDER BY (score + COALESCE(signal_score,0)) DESC
                     LIMIT 50;
                 """, {"company": company_name})
@@ -461,20 +471,18 @@ def get_mandante_detail(company_name: str):
                 cur.execute("""
                     SELECT id, title, score, phase, region, url, published_at
                     FROM opportunities
-                    WHERE company = %(company)s AND source = 'SEA'
+                    WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+                      AND source = 'SEA'
                     ORDER BY score DESC LIMIT 20;
                 """, {"company": company_name})
                 sea = [dict(r) for r in cur.fetchall()]
 
-                # Noticias recientes
-                cur.execute("""
+                # Noticias recientes (90 días)
+                cur.execute(f"""
                     SELECT id, title, source, url, published_at
                     FROM opportunities
-                    WHERE company = %(company)s
-                      AND source IN (
-                        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-                        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería'
-                      )
+                    WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+                      AND source IN ({NEWS_SOURCES})
                       AND published_at > NOW() - INTERVAL '90 days'
                     ORDER BY published_at DESC LIMIT 20;
                 """, {"company": company_name})
