@@ -276,27 +276,53 @@
     function getCoords(item) {
       const raw = item.raw || {};
 
-      // Prioridad 1: SIGEX — LATITUD/LONGITUD directos en raw.lat / raw.lng
-      if (raw.lat && raw.lng && raw.lat !== 0 && raw.lng !== 0) {
-        const lat = parseFloat(raw.lat), lng = parseFloat(raw.lng);
-        if (lat < -17 && lat > -56 && lng < -60 && lng > -76) {
-          return { coords: [lat, lng], exact: true };
+      function validChile(lat, lng) {
+        return lat && lng && lat < -15 && lat > -57 && lng < -60 && lng > -76;
+      }
+
+      // Prioridad 1: SIGEX — lat/lng en raw (WGS84)
+      const rlat = parseFloat(raw.lat || raw.LATITUD || 0);
+      const rlng = parseFloat(raw.lng || raw.LONGITUD || 0);
+      if (validChile(rlat, rlng)) {
+        return { coords: [rlat, rlng], exact: true };
+      }
+
+      // Prioridad 2: ENAMI/SEA — NUEVO_X/NUEVO_Y o X/Y
+      // Estas vienen en UTM o WGS84 dependiendo del conector
+      const cx = parseFloat(raw.NUEVO_X || raw.X || 0);
+      const cy = parseFloat(raw.NUEVO_Y || raw.Y || 0);
+      // Si parecen WGS84 (lat/lng decimales)
+      if (validChile(cy, cx)) {
+        return { coords: [cy, cx], exact: true };
+      }
+      // Si parecen coordenadas UTM (valores grandes, zona 19S Chile)
+      // UTM zona 19S: X ~200000-800000, Y ~5000000-7000000
+      if (Math.abs(cx) > 100000 && Math.abs(cy) > 1000000) {
+        // Conversión aproximada UTM→WGS84 para zona 19S
+        const utmLng = (cx - 500000) / 111320 + (-69);
+        const utmLat = cy / 110574 - 90;
+        if (validChile(utmLat, utmLng)) {
+          return { coords: [utmLat, utmLng], exact: true };
         }
       }
 
-      // Prioridad 2: otros conectores (ENAMI, SEA) usan NUEVO_X/NUEVO_Y o X/Y
-      const lng = parseFloat(raw.NUEVO_X || raw.X || 0);
-      const lat = parseFloat(raw.NUEVO_Y || raw.Y || 0);
-      if (lat && lng && lat !== 0 && lng !== 0 && Math.abs(lat) < 56 && Math.abs(lat) > 17 && lng < -60) {
-        return { coords: [lat, lng], exact: true };
-      }
-      // Fallback por región
+      // Fallback: aproximar por región
       const region = item.region || "";
       for (const [key, coords] of Object.entries(REGION_COORDS)) {
-        if (region.includes(key) || key.includes(region.split(" ")[0])) {
-          // Jitter para no apilar todos en el mismo punto
-          const jitter = () => (Math.random() - 0.5) * 1.2;
+        if (region.includes(key) || region.toUpperCase().includes(key.toUpperCase().split(" ")[0])) {
+          const jitter = () => (Math.random() - 0.5) * 1.4;
           return { coords: [coords[0] + jitter(), coords[1] + jitter()], exact: false };
+        }
+      }
+      // Último recurso: si tiene "REG_" en el source
+      if (item.region) {
+        // Buscar parcial
+        for (const [key, coords] of Object.entries(REGION_COORDS)) {
+          const words = key.split(" ");
+          if (words.some(w => w.length > 4 && item.region.includes(w))) {
+            const jitter = () => (Math.random() - 0.5) * 1.4;
+            return { coords: [coords[0] + jitter(), coords[1] + jitter()], exact: false };
+          }
         }
       }
       return null;
