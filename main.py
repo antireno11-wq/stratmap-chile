@@ -620,16 +620,23 @@ def get_mandante_detail(company_name: str):
 
 def _mandante_detail(company_name: str):
     """Lógica compartida del detalle de mandante."""
-    NEWS_SOURCES = (
+
+    # Lista exhaustiva de sources de noticias — todo lo que no sea proyecto real
+    NON_PROJECT_SOURCES = (
         "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
         "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
-        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile'"
+        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',"
+        "'BHP Careers','manual'"
     )
+
+    STOPWORDS = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
+                 'los','las','y','en','por','para','con','una','uno','minera','minero'}
+
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                # Proyectos activos — todo lo que NO es noticia ni SEA
-                # Búsqueda case-insensitive para tolerar variaciones de nombre
+
+                # Proyectos activos
                 cur.execute(f"""
                     SELECT id, title, source, score,
                            COALESCE(signal_score,0) AS signal_score,
@@ -637,7 +644,7 @@ def _mandante_detail(company_name: str):
                            COALESCE(jobs_count,0) AS jobs_count
                     FROM opportunities
                     WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
-                      AND source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual')
+                      AND source NOT IN ({NON_PROJECT_SOURCES}, 'SEA')
                     ORDER BY (score + COALESCE(signal_score,0)) DESC
                     LIMIT 50;
                 """, {"company": company_name})
@@ -653,28 +660,58 @@ def _mandante_detail(company_name: str):
                 """, {"company": company_name})
                 sea = [dict(r) for r in cur.fetchall()]
 
-                # Noticias — buscar por company exacto O keywords del nombre en título
-                # Excluir stopwords para evitar falsos positivos
-                STOPWORDS = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
-                             'los','las','y','en','por','para','con','una','uno'}
-                words = [w.lower() for w in company_name.replace('.',' ').split()
+                # ── Noticias ──────────────────────────────────────────────────
+                # Estrategia en capas:
+                # 1. Noticias con company exacto
+                # 2. Noticias con keywords del nombre en el título
+                # 3. Si aún no hay, mostrar noticias recientes del sector (fallback)
+
+                # Extraer keywords del nombre
+                words = [w.lower() for w in company_name.replace('.',' ').replace(',',' ').split()
                          if len(w) > 3 and w.lower() not in STOPWORDS]
-                # Construir condiciones OR para cada keyword significativo
-                kw_conditions = " OR ".join(
-                    f"LOWER(title) LIKE %(kw{i})s" for i in range(len(words))
-                ) if words else "FALSE"
-                kw_params = {f"kw{i}": f"%{w}%" for i, w in enumerate(words)}
-                cur.execute(f"""
-                    SELECT id, title, source, url, published_at
-                    FROM opportunities
-                    WHERE source IN ({NEWS_SOURCES})
-                      AND (
-                          LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
-                          OR ({kw_conditions})
-                      )
-                    ORDER BY published_at DESC LIMIT 15;
-                """, {**{"company": company_name}, **kw_params})
-                news = [dict(r) for r in cur.fetchall()]
+
+                # Obtener todos los sources que existen en la BD (para no hardcodear)
+                cur.execute("""
+                    SELECT DISTINCT source FROM opportunities
+                    WHERE source NOT IN ('SIGEX','ENAMI','Codelco','SEA','manual','MOP','Chile Compra')
+                      AND source IS NOT NULL
+                """)
+                news_sources_in_db = [r["source"] for r in cur.fetchall()]
+
+                if not news_sources_in_db:
+                    news = []
+                else:
+                    # Query 1: por company exacto o keywords
+                    kw_conds = ""
+                    kw_params = {}
+                    if words:
+                        kw_conds = " OR " + " OR ".join(
+                            f"LOWER(title) LIKE %(kw{i})s" for i in range(len(words))
+                        )
+                        kw_params = {f"kw{i}": f"%{w}%" for i, w in enumerate(words)}
+
+                    cur.execute("""
+                        SELECT id, title, source, url, published_at
+                        FROM opportunities
+                        WHERE source = ANY(%(sources)s)
+                          AND (
+                              LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+                              {kw_conds}
+                          )
+                        ORDER BY published_at DESC LIMIT 15;
+                    """.format(kw_conds=kw_conds),
+                    {**{"sources": news_sources_in_db, "company": company_name}, **kw_params})
+                    news = [dict(r) for r in cur.fetchall()]
+
+                    # Fallback: si no encontró nada, traer las últimas noticias del sector
+                    if not news:
+                        cur.execute("""
+                            SELECT id, title, source, url, published_at
+                            FROM opportunities
+                            WHERE source = ANY(%(sources)s)
+                            ORDER BY published_at DESC LIMIT 10;
+                        """, {"sources": news_sources_in_db})
+                        news = [dict(r) for r in cur.fetchall()]
 
         # Serialize dates
         for lst in [projects, sea, news]:
@@ -870,60 +907,89 @@ def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 5
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/admin/debug-noticias/{company_name}")
-def debug_noticias(company_name: str):
-    """Debug: muestra qué noticias encontraría para un mandante."""
-    NEWS_SOURCES_LIST = [
-        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
-        'BHP Careers',
-    ]
-    STOPWORDS = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
-                 'los','las','y','en','por','para','con','una','uno'}
-    words = [w.lower() for w in company_name.replace('.',' ').split()
-             if len(w) > 3 and w.lower() not in STOPWORDS]
-
+@app.get("/admin/debug-noticias")
+def debug_noticias(company: str = "Codelco"):
+    """Debug: diagnóstico completo de noticias en BD y búsqueda para un mandante."""
     with db.get_conn() as conn:
         with conn.cursor() as cur:
-            # Total noticias en BD
-            cur.execute("SELECT COUNT(*) as n FROM opportunities WHERE source = ANY(%s)", (NEWS_SOURCES_LIST,))
+
+            # 1. Todos los sources distintos en la tabla
+            cur.execute("""
+                SELECT source, COUNT(*) as n
+                FROM opportunities
+                GROUP BY source ORDER BY n DESC LIMIT 30
+            """)
+            all_sources = [dict(r) for r in cur.fetchall()]
+
+            # 2. Qué sources se consideran "noticias" y cuántos hay
+            NEWS_LIST = [
+                'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+                'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+                'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
+            ]
+            cur.execute("SELECT COUNT(*) as n FROM opportunities WHERE source = ANY(%s)", (NEWS_LIST,))
             total_news = cur.fetchone()["n"]
 
-            # Por company exacto
+            # 3. Últimas 5 noticias sin importar mandante
             cur.execute("""
-                SELECT id, title, source, published_at FROM opportunities
-                WHERE LOWER(TRIM(company)) = LOWER(TRIM(%s))
-                  AND source = ANY(%s)
+                SELECT title, source, company, published_at
+                FROM opportunities
+                WHERE source = ANY(%s)
                 ORDER BY published_at DESC LIMIT 5
-            """, (company_name, NEWS_SOURCES_LIST))
-            by_company = [dict(r) for r in cur.fetchall()]
+            """, (NEWS_LIST,))
+            latest_news = [dict(r) for r in cur.fetchall()]
 
-            # Por keywords en título
-            kw_results = {}
-            for kw in words[:5]:
+            # 4. Búsqueda para el mandante específico
+            STOPWORDS = {'spa','ltda','s.a','sa','de','del','la','el','los','las','y','en','por','para','con'}
+            words = [w.lower() for w in company.replace('.',' ').split()
+                     if len(w) > 3 and w.lower() not in STOPWORDS]
+            kw_hits = {}
+            for kw in words[:6]:
                 cur.execute("""
                     SELECT COUNT(*) as n FROM opportunities
                     WHERE source = ANY(%s) AND LOWER(title) LIKE %s
-                """, (NEWS_SOURCES_LIST, f"%{kw}%"))
-                kw_results[kw] = cur.fetchone()["n"]
+                """, (NEWS_LIST, f"%{kw}%"))
+                kw_hits[kw] = cur.fetchone()["n"]
 
-            # Sample de noticias
+            # 5. Noticias que matchean por company exacto
             cur.execute("""
-                SELECT source, COUNT(*) as n FROM opportunities
-                WHERE source = ANY(%s)
-                GROUP BY source ORDER BY n DESC
-            """, (NEWS_SOURCES_LIST,))
-            by_source = [dict(r) for r in cur.fetchall()]
+                SELECT title, source, published_at FROM opportunities
+                WHERE LOWER(TRIM(company)) = LOWER(TRIM(%s))
+                  AND source = ANY(%s)
+                ORDER BY published_at DESC LIMIT 5
+            """, (company, NEWS_LIST))
+            by_company_exact = [dict(r) for r in cur.fetchall()]
+
+            # 6. Sample de lo que realmente devuelve el query de noticias
+            if words:
+                kw_cond = " OR ".join(f"LOWER(title) LIKE '%{w}%'" for w in words[:4])
+                cur.execute(f"""
+                    SELECT title, source, company, published_at
+                    FROM opportunities
+                    WHERE source = ANY(%s)
+                      AND (LOWER(TRIM(company)) = LOWER(TRIM(%s)) OR ({kw_cond}))
+                    ORDER BY published_at DESC LIMIT 10
+                """, (NEWS_LIST, company))
+                query_result = [dict(r) for r in cur.fetchall()]
+            else:
+                query_result = []
+
+    # Serialize dates
+    for lst in [latest_news, by_company_exact, query_result]:
+        for r in lst:
+            for k in ['published_at']:
+                if r.get(k): r[k] = str(r[k])
 
     return {
-        "company": company_name,
-        "keywords": words,
+        "company_buscada": company,
+        "keywords_extraidas": words,
         "total_noticias_en_bd": total_news,
-        "noticias_por_company": len(by_company),
-        "noticias_por_keyword": kw_results,
-        "noticias_por_fuente": by_source,
-        "sample_by_company": by_company[:3],
+        "todos_los_sources": all_sources,
+        "ultimas_5_noticias": latest_news,
+        "noticias_exactas_por_company": by_company_exact,
+        "hits_por_keyword": kw_hits,
+        "resultado_query_final": query_result,
+        "diagnostico": "OK si total_noticias_en_bd > 0 y resultado_query_final tiene items" if total_news > 0 else "PROBLEMA: no hay noticias en BD — correr el worker primero"
     }
 
 
