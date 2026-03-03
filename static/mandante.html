@@ -160,7 +160,7 @@
       if (!empresa) { window.location.href = '/'; return; }
 
       try {
-        const res = await fetch(`/mandantes/${encodeURIComponent(empresa)}`);
+        const res = await fetch(`/mandantes/detail?company=${encodeURIComponent(empresa)}`);
         const data = await res.json();
         renderMandante(empresa, data);
       } catch(e) {
