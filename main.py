@@ -756,6 +756,78 @@ def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 5
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/admin/debug-noticias/{company_name}")
+def debug_noticias(company_name: str):
+    """Debug: muestra qué noticias encontraría para un mandante."""
+    NEWS_SOURCES_LIST = [
+        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
+        'BHP Careers',
+    ]
+    STOPWORDS = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
+                 'los','las','y','en','por','para','con','una','uno'}
+    words = [w.lower() for w in company_name.replace('.',' ').split()
+             if len(w) > 3 and w.lower() not in STOPWORDS]
+
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            # Total noticias en BD
+            cur.execute("SELECT COUNT(*) as n FROM opportunities WHERE source = ANY(%s)", (NEWS_SOURCES_LIST,))
+            total_news = cur.fetchone()["n"]
+
+            # Por company exacto
+            cur.execute("""
+                SELECT id, title, source, published_at FROM opportunities
+                WHERE LOWER(TRIM(company)) = LOWER(TRIM(%s))
+                  AND source = ANY(%s)
+                ORDER BY published_at DESC LIMIT 5
+            """, (company_name, NEWS_SOURCES_LIST))
+            by_company = [dict(r) for r in cur.fetchall()]
+
+            # Por keywords en título
+            kw_results = {}
+            for kw in words[:5]:
+                cur.execute("""
+                    SELECT COUNT(*) as n FROM opportunities
+                    WHERE source = ANY(%s) AND LOWER(title) LIKE %s
+                """, (NEWS_SOURCES_LIST, f"%{kw}%"))
+                kw_results[kw] = cur.fetchone()["n"]
+
+            # Sample de noticias
+            cur.execute("""
+                SELECT source, COUNT(*) as n FROM opportunities
+                WHERE source = ANY(%s)
+                GROUP BY source ORDER BY n DESC
+            """, (NEWS_SOURCES_LIST,))
+            by_source = [dict(r) for r in cur.fetchall()]
+
+    return {
+        "company": company_name,
+        "keywords": words,
+        "total_noticias_en_bd": total_news,
+        "noticias_por_company": len(by_company),
+        "noticias_por_keyword": kw_results,
+        "noticias_por_fuente": by_source,
+        "sample_by_company": by_company[:3],
+    }
+
+
+@app.post("/admin/run-bhp-careers")
+def run_bhp_careers():
+    """Scraping manual de empleos BHP Chile."""
+    import threading
+    def _run():
+        try:
+            import bhp_careers
+            result = bhp_careers.run()
+            print(f"[admin] BHP Careers: {result}")
+        except Exception as e:
+            import traceback; traceback.print_exc()
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "BHP Careers scraping iniciado en background"}
+
+
 @app.post("/admin/run-mandante-scorer")
 def run_mandante_scorer():
     """Dispara scoring de temperatura de mandantes con IA."""
