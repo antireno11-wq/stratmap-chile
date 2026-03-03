@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Debug — Stratmap</title>
+  <style>
+    body { font-family: monospace; background: #0d1117; color: #e6edf3; padding: 24px; }
+    h2 { color: #58a6ff; margin-bottom: 16px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .label { color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .big { font-size: 32px; font-weight: 700; color: #3fb950; }
+    .big.red { color: #f85149; }
+    .big.yellow { color: #e3b341; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; color: #8b949e; border-bottom: 1px solid #30363d; padding: 6px 8px; }
+    td { padding: 6px 8px; border-bottom: 1px solid #21262d; }
+    tr:last-child td { border-bottom: none; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+    .green { background:#1a4731; color:#3fb950; }
+    .red { background:#3d1a1a; color:#f85149; }
+    .yellow { background:#3d3010; color:#e3b341; }
+    .blue { background:#1a2d4f; color:#58a6ff; }
+    input { background:#161b22; border:1px solid #30363d; color:#e6edf3; padding:6px 12px; border-radius:6px; font-family:monospace; width:300px; }
+    button { background:#238636; border:none; color:white; padding:7px 16px; border-radius:6px; cursor:pointer; font-weight:600; margin-left:8px; }
+    button:hover { background:#2ea043; }
+    .news-title { color:#58a6ff; }
+    #log { color:#8b949e; font-size:11px; margin-top:8px; }
+    .row-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  </style>
+</head>
+<body>
+  <h2>🔍 Stratmap — Diagnóstico de Noticias</h2>
+
+  <div class="card">
+    <div class="label">Buscar mandante</div>
+    <input id="inp" type="text" value="Codelco" placeholder="Nombre empresa...">
+    <button onclick="runDiag()">Diagnosticar</button>
+    <div id="log"></div>
+  </div>
+
+  <div class="row-grid">
+    <div class="card">
+      <div class="label">Total noticias en BD</div>
+      <div class="big" id="total-news">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Noticias para este mandante</div>
+      <div class="big" id="mandante-news">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Diagnóstico</div>
+      <div id="diagnostico" style="margin-top:8px">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Sources en la BD (todos)</div>
+    <div id="sources-table">—</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Keywords extraídas del nombre</div>
+    <div id="keywords">—</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Hits por keyword en títulos</div>
+    <div id="kw-hits">—</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Últimas 5 noticias en BD (cualquier mandante)</div>
+    <div id="latest-news">—</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Resultado del query final para este mandante</div>
+    <div id="query-result">—</div>
+  </div>
+
+  <script>
+    async function runDiag() {
+      const company = document.getElementById('inp').value.trim();
+      document.getElementById('log').textContent = 'Cargando...';
+      try {
+        const res = await fetch(`/admin/debug-noticias?company=${encodeURIComponent(company)}`);
+        const d = await res.json();
+        render(d);
+        document.getElementById('log').textContent = '';
+      } catch(e) {
+        document.getElementById('log').textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function render(d) {
+      // Total
+      const tn = d.total_noticias_en_bd || 0;
+      const totalEl = document.getElementById('total-news');
+      totalEl.textContent = tn;
+      totalEl.className = 'big ' + (tn > 0 ? '' : 'red');
+
+      // Mandante news
+      const mn = (d.resultado_query_final || []).length;
+      const mandEl = document.getElementById('mandante-news');
+      mandEl.textContent = mn;
+      mandEl.className = 'big ' + (mn > 0 ? '' : (tn > 0 ? 'yellow' : 'red'));
+
+      // Diagnostico
+      let diag = '';
+      if (tn === 0) {
+        diag = '<span class="tag red">❌ Sin noticias en BD — correr worker</span>';
+      } else if (mn === 0) {
+        diag = '<span class="tag yellow">⚠️ Hay noticias pero no matchean este mandante</span>';
+      } else {
+        diag = '<span class="tag green">✅ Noticias encontradas correctamente</span>';
+      }
+      document.getElementById('diagnostico').innerHTML = diag;
+
+      // Sources
+      const sources = d.todos_los_sources || [];
+      const NEWS_KNOWN = ['Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS','BHP Careers'];
+      const PROJECT_KNOWN = ['SIGEX','ENAMI','Codelco','SEA','manual'];
+      let sHtml = '<table><tr><th>Source</th><th>Registros</th><th>Tipo</th></tr>';
+      sources.forEach(s => {
+        const isNews = NEWS_KNOWN.includes(s.source);
+        const isProj = PROJECT_KNOWN.includes(s.source);
+        const tag = isNews ? '<span class="tag blue">noticia</span>'
+                  : isProj ? '<span class="tag green">proyecto</span>'
+                  : '<span class="tag yellow">desconocido</span>';
+        sHtml += `<tr><td>${s.source}</td><td>${s.n}</td><td>${tag}</td></tr>`;
+      });
+      sHtml += '</table>';
+      document.getElementById('sources-table').innerHTML = sHtml;
+
+      // Keywords
+      const kws = d.keywords_extraidas || [];
+      document.getElementById('keywords').innerHTML = kws.length
+        ? kws.map(k => `<span class="tag blue">${k}</span>`).join(' ')
+        : '<span class="tag red">Sin keywords</span>';
+
+      // KW hits
+      const hits = d.hits_por_keyword || {};
+      let kwHtml = '<table><tr><th>Keyword</th><th>Noticias con esta palabra</th></tr>';
+      Object.entries(hits).forEach(([k,v]) => {
+        kwHtml += `<tr><td>${k}</td><td><strong style="color:${v>0?'#3fb950':'#f85149'}">${v}</strong></td></tr>`;
+      });
+      kwHtml += '</table>';
+      document.getElementById('kw-hits').innerHTML = kwHtml;
+
+      // Latest news
+      const latest = d.ultimas_5_noticias || [];
+      if (!latest.length) {
+        document.getElementById('latest-news').innerHTML = '<span class="tag red">Sin noticias</span>';
+      } else {
+        let lHtml = '<table><tr><th>Título</th><th>Source</th><th>Company</th><th>Fecha</th></tr>';
+        latest.forEach(n => {
+          lHtml += `<tr>
+            <td class="news-title">${n.title||''}</td>
+            <td>${n.source||''}</td>
+            <td>${n.company||'—'}</td>
+            <td style="color:#8b949e;font-size:11px">${n.published_at||''}</td>
+          </tr>`;
+        });
+        lHtml += '</table>';
+        document.getElementById('latest-news').innerHTML = lHtml;
+      }
+
+      // Query result
+      const qr = d.resultado_query_final || [];
+      if (!qr.length) {
+        document.getElementById('query-result').innerHTML = '<span class="tag yellow">Sin resultados — revisar keywords y sources</span>';
+      } else {
+        let qHtml = '<table><tr><th>Título</th><th>Source</th><th>Company</th><th>Fecha</th></tr>';
+        qr.forEach(n => {
+          qHtml += `<tr>
+            <td class="news-title">${n.title||''}</td>
+            <td>${n.source||''}</td>
+            <td>${n.company||'—'}</td>
+            <td style="color:#8b949e;font-size:11px">${n.published_at||''}</td>
+          </tr>`;
+        });
+        qHtml += '</table>';
+        document.getElementById('query-result').innerHTML = qHtml;
+      }
+    }
+
+    runDiag();
+  </script>
+</body>
+</html>
