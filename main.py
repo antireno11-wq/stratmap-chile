@@ -398,29 +398,37 @@ def get_mandantes():
         GROUP BY company
     )
     SELECT
-        company,
-        n_proyectos,
-        n_licitaciones,
-        n_sigex,
-        n_sea,
-        top_signal      AS signal_score,
-        total_jobs,
-        n_news_recent,
-        last_activity,
+        b.company,
+        b.n_proyectos,
+        b.n_licitaciones,
+        b.n_sigex,
+        b.n_sea,
+        b.top_signal                            AS signal_score,
+        b.total_jobs,
+        b.n_news_recent,
+        b.last_activity,
+        COALESCE(h.heat_score, 0)               AS heat_score,
+        COALESCE(h.heat_label, '')              AS heat_label,
+        COALESCE(h.heat_reason, '')             AS heat_reason,
+        COALESCE(h.trending_topics, ARRAY[]::text[]) AS trending_topics,
+        h.scored_at                             AS heat_scored_at,
         ROUND(
             -- Score promedio de proyectos (base, max 60)
-            LEAST(avg_score * 0.6, 60) +
+            LEAST(b.avg_score * 0.6, 60) +
             -- Licitaciones directas tienen más peso (max 20)
-            LEAST(n_licitaciones * 4, 20) +
+            LEAST(b.n_licitaciones * 4, 20) +
             -- SIGEX: exploración activa (max 15)
-            LEAST(n_sigex * 0.3, 15) +
+            LEAST(b.n_sigex * 0.3, 15) +
             -- SEA: proyecto grande en evaluación (max 15)
-            LEAST(n_sea * 5, 15) +
+            LEAST(b.n_sea * 5, 15) +
             -- Señal de empleo (max 10)
-            LEAST(top_signal, 7) + LEAST(total_jobs * 2, 3)
+            LEAST(b.top_signal, 7) + LEAST(b.total_jobs * 2, 3) +
+            -- Heat IA: boost por actividad reciente (max 15)
+            LEAST(COALESCE(h.heat_score, 0) * 0.15, 15)
         ) AS score_consolidado
-    FROM base
-    WHERE n_proyectos > 0 OR n_sea > 0
+    FROM base b
+    LEFT JOIN mandante_heat h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
+    WHERE b.n_proyectos > 0 OR b.n_sea > 0
     ORDER BY score_consolidado DESC
     LIMIT 100;
     """
@@ -484,22 +492,27 @@ def _mandante_detail(company_name: str):
                 """, {"company": company_name})
                 sea = [dict(r) for r in cur.fetchall()]
 
-                # Noticias recientes (90 días)
-                # Las noticias no tienen company asignado, buscar por nombre en título
-                # Usar las primeras 2 palabras del nombre para el match
-                words = [w for w in company_name.split() if len(w) > 3]
-                kw = words[0] if words else company_name
+                # Noticias — buscar por company exacto O keywords del nombre en título
+                # Excluir stopwords para evitar falsos positivos
+                STOPWORDS = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
+                             'los','las','y','en','por','para','con','una','uno'}
+                words = [w.lower() for w in company_name.replace('.',' ').split()
+                         if len(w) > 3 and w.lower() not in STOPWORDS]
+                # Construir condiciones OR para cada keyword significativo
+                kw_conditions = " OR ".join(
+                    f"LOWER(title) LIKE %(kw{i})s" for i in range(len(words))
+                ) if words else "FALSE"
+                kw_params = {f"kw{i}": f"%{w}%" for i, w in enumerate(words)}
                 cur.execute(f"""
                     SELECT id, title, source, url, published_at
                     FROM opportunities
                     WHERE source IN ({NEWS_SOURCES})
-                      AND published_at > NOW() - INTERVAL '180 days'
                       AND (
                           LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
-                          OR LOWER(title) LIKE %(kw)s
+                          OR ({kw_conditions})
                       )
                     ORDER BY published_at DESC LIMIT 15;
-                """, {"company": company_name, "kw": f"%{kw.lower()}%"})
+                """, {**{"company": company_name}, **kw_params})
                 news = [dict(r) for r in cur.fetchall()]
 
         # Serialize dates
@@ -692,6 +705,22 @@ def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 5
         return {"fits": fits, "total": len(fits)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/run-mandante-scorer")
+def run_mandante_scorer():
+    """Dispara scoring de temperatura de mandantes con IA."""
+    import threading
+    def _run():
+        try:
+            import mandante_scorer
+            db.init_ai_db()
+            result = mandante_scorer.run()
+            print(f"[admin] Mandante scorer: {result}")
+        except Exception as e:
+            import traceback; traceback.print_exc()
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "msg": "Scoring de temperatura iniciado en background"}
 
 
 @app.post("/admin/run-ai-scoring")
