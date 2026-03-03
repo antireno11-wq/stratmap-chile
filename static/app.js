@@ -623,9 +623,10 @@ function renderMandantes() {
     const slug = encodeURIComponent(m.company);
 
     const meta = [];
-    if (m.n_proyectos > 0) meta.push(`<span class="mandante-meta-item">🏗 ${m.n_proyectos} proyecto${m.n_proyectos>1?'s':''}</span>`);
-    if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">📋 ${m.n_sea} SEA</span>`);
-    if ((m.signal_score||0) > 0) meta.push(`<span class="mandante-meta-item">⚡ +${m.signal_score}</span>`);
+    if (m.n_proyectos > 0) meta.push(`<span class="mandante-meta-item">🏗 ${m.n_proyectos} proy.</span>`);
+    if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">🌿 ${m.n_sea} SEA</span>`);
+    if ((m.total_jobs||0) > 0) meta.push(`<span class="mandante-meta-item">👷 ${m.total_jobs} emp.</span>`);
+    if ((m.n_news_recent||0) > 0) meta.push(`<span class="mandante-meta-item">📰 ${m.n_news_recent}</span>`);
 
     return `
       <div class="mandante-card" onclick="window.location.href='/mandante.html?empresa=${slug}'">
