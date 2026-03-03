@@ -20,6 +20,10 @@ from auth import hash_password, verify_password, create_access_token, decode_tok
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db_safe()
+    try:
+        db.init_ai_db()
+    except Exception as e:
+        print(f"[startup] init_ai_db warning: {e}")
     yield
 
 app = FastAPI(title="Stratmap Chile", lifespan=lifespan)
@@ -388,7 +392,6 @@ def get_mandantes():
             SUM(COALESCE(jobs_count, 0))                AS total_jobs,
             COUNT(*) FILTER (
                 WHERE published_at > NOW() - INTERVAL '90 days'
-                AND source NOT IN ({NEWS_SOURCES}, 'manual')
                 AND source IN ({NEWS_SOURCES})
             ) AS n_news_recent,
             MAX(COALESCE(published_at, created_at))     AS last_activity
@@ -427,8 +430,11 @@ def get_mandantes():
             LEAST(COALESCE(h.heat_score, 0) * 0.15, 15)
         ) AS score_consolidado
     FROM base b
-    LEFT JOIN mandante_heat h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
-    WHERE b.n_proyectos > 0 OR b.n_sea > 0
+    LEFT JOIN (
+        SELECT * FROM mandante_heat
+        WHERE 1=1
+    ) h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
+    WHERE b.n_proyectos > 0 OR b.n_sea > 0 OR b.n_news_recent > 0
     ORDER BY score_consolidado DESC
     LIMIT 100;
     """
@@ -437,13 +443,54 @@ def get_mandantes():
             with conn.cursor() as cur:
                 cur.execute(sql)
                 rows = [dict(r) for r in cur.fetchall()]
-        # Serialize dates
+        # Serialize dates + convert arrays
         for r in rows:
             if r.get("last_activity"):
                 r["last_activity"] = r["last_activity"].isoformat()
+            if r.get("heat_scored_at"):
+                r["heat_scored_at"] = r["heat_scored_at"].isoformat()
+            # trending_topics may come as None
+            if r.get("trending_topics") is None:
+                r["trending_topics"] = []
         return {"mandantes": rows, "total": len(rows)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[mandantes] Error: {e}")
+        # Si falla por mandante_heat inexistente, reintentar sin heat join
+        try:
+            simple_sql = f"""
+            WITH base AS (
+                SELECT company,
+                    COUNT(*) FILTER (WHERE source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual')) AS n_proyectos,
+                    COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco')) AS n_licitaciones,
+                    COUNT(*) FILTER (WHERE source = 'SIGEX') AS n_sigex,
+                    COUNT(*) FILTER (WHERE source = 'SEA') AS n_sea,
+                    COALESCE(AVG(score) FILTER (WHERE source NOT IN ({NEWS_SOURCES},'SEA','manual')),0) AS avg_score,
+                    MAX(COALESCE(signal_score,0)) AS top_signal,
+                    SUM(COALESCE(jobs_count,0)) AS total_jobs,
+                    MAX(COALESCE(published_at,created_at)) AS last_activity
+                FROM opportunities
+                WHERE company IS NOT NULL AND TRIM(company) != '' AND source != 'manual'
+                GROUP BY company
+            )
+            SELECT company, n_proyectos, n_licitaciones, n_sigex, n_sea,
+                   top_signal AS signal_score, total_jobs, last_activity,
+                   0 AS heat_score, '' AS heat_label, '' AS heat_reason,
+                   ARRAY[]::text[] AS trending_topics, NULL AS heat_scored_at,
+                   ROUND(LEAST(avg_score*0.6,60)+LEAST(n_licitaciones*4,20)+LEAST(n_sigex*0.3,15)+LEAST(n_sea*5,15)+LEAST(top_signal,7)+LEAST(total_jobs*2,3)) AS score_consolidado
+            FROM base WHERE n_proyectos > 0 OR n_sea > 0
+            ORDER BY score_consolidado DESC LIMIT 100;
+            """
+            with db.get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(simple_sql)
+                    rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                if r.get("last_activity"):
+                    r["last_activity"] = r["last_activity"].isoformat()
+                r["trending_topics"] = []
+            return {"mandantes": rows, "total": len(rows)}
+        except Exception as e2:
+            raise HTTPException(status_code=500, detail=str(e2))
 
 
 
@@ -584,26 +631,28 @@ def get_empleos_resumen():
     Resumen de empleos disponibles por empresa (mandante).
     Muestra movimiento de contratación activa en el sector minero.
     """
-    sql = """
+    NEWS_SRC = (
+        "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
+        "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
+        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS','manual'"
+    )
+    sql = f"""
     SELECT
         company,
-        SUM(COALESCE(jobs_count, 0))      AS total_jobs,
-        MAX(COALESCE(signal_score, 0))    AS top_signal,
-        COUNT(*) FILTER (WHERE jobs_count > 0) AS proyectos_con_empleos,
-        MAX(last_signal_at)               AS ultima_señal,
-        -- Desglose por área (extraído del signal_detail JSON)
+        SUM(COALESCE(jobs_count, 0))                    AS total_jobs,
+        MAX(COALESCE(signal_score, 0))                  AS top_signal,
+        COUNT(*) FILTER (WHERE jobs_count > 0)          AS proyectos_con_empleos,
+        COUNT(*) FILTER (WHERE signal_score > 0)        AS proyectos_con_senal,
+        MAX(last_signal_at)                             AS ultima_senal,
         array_agg(DISTINCT signal_detail) FILTER (
-            WHERE jobs_count > 0 AND signal_detail IS NOT NULL
+            WHERE signal_detail IS NOT NULL AND (jobs_count > 0 OR signal_score > 0)
         ) AS signal_details
     FROM opportunities
-    WHERE jobs_count > 0
-      AND company IS NOT NULL AND TRIM(company) != ''
-      AND source NOT IN (
-        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-        'Radio U. de Chile','BioBioChile','RSS','manual'
-      )
+    WHERE company IS NOT NULL AND TRIM(company) != ''
+      AND source NOT IN ({NEWS_SRC})
+      AND (jobs_count > 0 OR signal_score > 0)
     GROUP BY company
+    HAVING SUM(COALESCE(jobs_count,0)) + MAX(COALESCE(signal_score,0)) > 0
     ORDER BY total_jobs DESC, top_signal DESC
     LIMIT 30;
     """
@@ -614,8 +663,8 @@ def get_empleos_resumen():
                 rows = [dict(r) for r in cur.fetchall()]
         # Parsear signal_details para extraer áreas
         for r in rows:
-            if r.get("ultima_señal"):
-                r["ultima_señal"] = r["ultima_señal"].isoformat()
+            if r.get("ultima_senal"):
+                r["ultima_senal"] = r["ultima_senal"].isoformat()
             # Parsear desglose de áreas desde signal_details
             areas = {}
             for detail in (r.get("signal_details") or []):
