@@ -187,6 +187,7 @@ window.openOppDrawer = async function(oppId) {
       <span>Fase: ${escapeHTML(item.phase||"—")}</span>
       <span>Publicado: ${fmtDate(itemDate(item))}</span>
       ${item.url ? `<a href="${item.url}" target="_blank" class="contact-link" style="margin-top:4px">🔗 Ver fuente original</a>` : ""}
+      ${buildMapLink(item)}
     </div>
   `;
 };
@@ -301,6 +302,28 @@ window.openDrawerByKey = function(key) {
   if (!entry) return;
   openDrawer(entry.type, entry.value);
 };
+
+function buildMapLink(item) {
+  // Construir link al mapa con las coordenadas del proyecto
+  const raw = item.raw || {};
+  let lat = null, lng = null;
+
+  // SIGEX coords
+  if (raw.lat && raw.lng) { lat = parseFloat(raw.lat); lng = parseFloat(raw.lng); }
+  // ENAMI/SEA coords
+  else if (raw.NUEVO_X && raw.NUEVO_Y) { lng = parseFloat(raw.NUEVO_X); lat = parseFloat(raw.NUEVO_Y); }
+  else if (raw.X && raw.Y) { lng = parseFloat(raw.X); lat = parseFloat(raw.Y); }
+
+  // Validar rango Chile
+  const valid = lat && lng && lat < -17 && lat > -56 && lng < -60 && lng > -76;
+  if (!valid) {
+    // Sin coords exactas — ir al mapa filtrado por título
+    const q = encodeURIComponent(item.title || '');
+    return `<a href="/mapa.html?q=${q}" class="contact-link" style="margin-top:4px">🗺 Ver en mapa</a>`;
+  }
+  return `<a href="/mapa.html?lat=${lat}&lng=${lng}&zoom=12&id=${item.id}" class="contact-link" style="margin-top:4px">📍 Ver ubicación en mapa</a>`;
+}
+
 
 async function openDrawer(type, value) {
   const items = type === "company"
