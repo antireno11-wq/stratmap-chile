@@ -1,108 +1,595 @@
-"""
-faenas_mineras.py — Conector de Faenas Mineras activas de Chile
-===============================================================
-Fuente: Ministerio de Medio Ambiente / Sernageomin
-API:    https://arcgis.mma.gob.cl/server/rest/services/ide/Cartografia_Base/FeatureServer/2
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mapa · Stratmap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --sidebar: 220px;
+      --blue: #1a56db;
+      --orange: #e05a1e;
+      --border: #e8edf2;
+      --bg: #f5f7fa;
+      --card: #fff;
+      --text: #0f172a;
+      --muted: #8896a5;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
-Contiene ubicación de todas las explotaciones mineras activas de Chile
-con nombre, empresa titular, tipo de mineral y coordenadas exactas.
-Estos datos se sirven directamente al mapa como capa estática (no se
-upsertean en opportunities — son datos de referencia, no oportunidades).
-"""
+    /* Sidebar */
+    .sidebar { width: var(--sidebar); background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
+    .sidebar-brand-logo { width: 140px; height: auto; object-fit: contain; }
+    .sidebar-name { font-weight: 700; font-size: 14px; color: var(--text); }
+    .sidebar-tagline { font-size: 10px; color: var(--muted); }
+    .sidebar-section { padding: 16px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.1s; }
+    .sidebar-item:hover { background: var(--bg); color: var(--text); }
+    .sidebar-item.active { background: #eff6ff; color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
-import requests
-from typing import List, Dict, Any
+    .filter-group { padding: 4px 14px 8px; }
+    .filter-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+    .filter-select { width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; outline: none; }
+    .filter-select:focus { border-color: var(--blue); }
+    .filter-range { width: 100%; accent-color: var(--blue); margin-top: 4px; }
+    .sidebar-stat { padding: 3px 14px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    .sidebar-stat strong { color: var(--text); font-weight: 600; }
 
-BASE_URL = "https://arcgis.mma.gob.cl/server/rest/services/ide/Cartografia_Base/FeatureServer/2/query"
+    /* Main */
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; height: 100vh; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 20px; height: 52px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; z-index: 50; }
+    .topbar-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .topbar-sub { font-size: 12px; color: var(--muted); }
+    .topbar-pill { padding: 4px 10px; background: #eff6ff; color: var(--blue); border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .topbar-pill.orange { background: #fff4ef; color: var(--orange); }
+    .btn-back { padding: 6px 14px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; margin-left: auto; }
+    .btn-back:hover { background: var(--border); }
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; Stratmap/1.0)",
-    "Accept": "application/json",
-}
+    #map { flex: 1; z-index: 1; }
 
-# Tipos de faena conocidos
-TIPO_LABELS = {
-    "1": "Gran Minería",
-    "2": "Mediana Minería",
-    "3": "Pequeña Minería",
-    "4": "Pirquinería",
-    "5": "Planta de Tratamiento",
-    "G": "Gran Minería",
-    "M": "Mediana Minería",
-    "P": "Pequeña Minería",
-}
+    /* Legend */
+    .map-legend { position: absolute; bottom: 20px; right: 20px; z-index: 10; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .legend-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text); margin-bottom: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.8); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .legend-note { font-size: 10px; color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 
-def fetch_faenas(limit: int = 2000) -> List[Dict[str, Any]]:
-    """
-    Descarga todas las faenas mineras activas con coordenadas.
-    Retorna lista de dicts listos para servir al frontend.
-    """
-    params = {
-        "where": "1=1",
-        "outFields": "*",
-        "returnGeometry": "true",
-        "geometryPrecision": "5",
-        "outSR": "4326",   # WGS84
-        "f": "json",
-        "resultOffset": 0,
-        "resultRecordCount": limit,
+    /* Popup */
+        #btn-faenas.active { background:#fef3c7 !important; border-color:#d97706 !important; color:#92400e; }
+    #btn-satellite.active { background:#1e3a5f !important; border-color:#1d4ed8 !important; color:#fff; }
+    .leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); border: 1px solid var(--border); padding: 0; overflow: hidden; }
+    .leaflet-popup-content { margin: 0; width: 260px !important; }
+    .popup-inner { padding: 14px; }
+    .popup-score { display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 5px; margin-bottom: 8px; }
+    .popup-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
+    .popup-meta { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+    .popup-company { color: var(--blue); font-weight: 500; }
+    .popup-approx { font-size: 10px; color: var(--orange); font-style: italic; }
+    .popup-actions { display: flex; gap: 6px; }
+    .popup-btn { flex: 1; padding: 7px; border-radius: 7px; font-size: 12px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: none; transition: opacity 0.1s; }
+    .popup-btn:hover { opacity: 0.85; }
+    .popup-btn-primary { background: var(--blue); color: #fff; }
+    .popup-btn-outline { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+
+    /* Drawer */
+    .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.25); z-index: 200; backdrop-filter: blur(2px); }
+    .drawer-overlay.open { display: block; }
+    .drawer { position: fixed; top: 0; right: -520px; width: 520px; height: 100vh; background: var(--card); z-index: 201; box-shadow: -4px 0 32px rgba(0,0,0,0.1); transition: right 0.25s ease; display: flex; flex-direction: column; }
+    .drawer.open { right: 0; }
+    .drawer-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
+    .drawer-title { font-size: 15px; font-weight: 700; color: var(--text); max-width: 420px; line-height: 1.35; }
+    .drawer-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .drawer-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); padding: 2px; border-radius: 5px; }
+    .drawer-close:hover { background: var(--bg); color: var(--text); }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+    .drawer-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; }
+    .drawer-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 12px; text-align: center; }
+    .drawer-stat-val { font-size: 20px; font-weight: 800; }
+    .drawer-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .drawer-section-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin: 14px 0 8px; }
+    .note-card { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 7px; }
+    .note-text { font-size: 13px; line-height: 1.5; }
+    .note-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .cf-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; outline: none; background: var(--card); margin-bottom: 7px; font-family: inherit; }
+    .cf-input:focus { border-color: var(--blue); }
+    .cf-row { display: flex; gap: 8px; }
+    .cf-btn-save { padding: 7px 16px; background: var(--blue); color: #fff; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .drawer-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
+    .detail-row { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
+    .detail-row a { color: var(--blue); text-decoration: none; }
+    .detail-row a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand" style="background:#fff;justify-content:center;padding:14px 16px"><img src="/logo.png" alt="Stratmap" class="sidebar-brand-logo" onerror="this.style.display='none'"></div>
+      <div>
+        <div class="sidebar-name">Stratmap</div>
+        <div class="sidebar-tagline">Inteligencia Minera Chile</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Vistas</div>
+    <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
+    <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
+    <a class="sidebar-item active" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <div class="sidebar-section">Configuración</div>
+    <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
+
+    <div class="sidebar-section">Filtros</div>
+    <div class="filter-group">
+      <div class="filter-label">Industria</div>
+      <select class="filter-select" id="f-industry" onchange="applyFilters()">
+        <option value="">Todas</option>
+        <option value="Minería">Minería</option>
+        <option value="Infraestructura">Infraestructura</option>
+        <option value="Energía">Energía</option>
+        <option value="Construcción">Construcción</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Fuente</div>
+      <select class="filter-select" id="f-source" onchange="applyFilters()">
+        <option value="">Todas</option>
+        <option value="sea">SEA</option>
+        <option value="MOP">MOP</option>
+        <option value="ChileCompra">ChileCompra</option>
+        <option value="COCHILCO">COCHILCO</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Score mínimo: <strong id="score-label">0</strong></div>
+      <input type="range" class="filter-range" id="f-score" min="0" max="90" step="5" value="0"
+        oninput="document.getElementById('score-label').textContent=this.value; applyFilters()" />
+    </div>
+
+    <div class="sidebar-section">Resumen</div>
+    <div class="sidebar-stat"><span>Con coords exactas</span><strong id="stat-exact">—</strong></div>
+    <div class="sidebar-stat"><span>Por región aprox.</span><strong id="stat-approx">—</strong></div>
+    <div class="sidebar-stat"><span>Mostrando</span><strong id="stat-shown">—</strong></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">🗺 Mapa de Proyectos</span>
+      <span class="topbar-sub" id="topbar-sub">Cargando...</span>
+      <span class="topbar-pill" id="pill-exact">— exactos</span>
+      <span class="topbar-pill orange" id="pill-approx">— por región</span>
+      <a href="/" class="btn-back">← Volver</a>
+    </div>
+    <div id="map"></div>
+  </div>
+
+  <div class="map-legend">
+    <div class="legend-title">Score</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a56db"></div> Alto (80+)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Medio (65–79)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#e05a1e"></div> Normal (50–64)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> Bajo (&lt;50)</div>
+    <div class="legend-note">⊕ Punto exacto · ○ Aprox. región</div>
+  </div>
+
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="drawer-title">—</div>
+        <div class="drawer-subtitle" id="drawer-subtitle">—</div>
+      </div>
+      <button class="drawer-close" id="drawer-close">✕</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </div>
+
+  <script>
+    // ── Coordenadas por región (centros aproximados) ───────────────────────────
+    const REGION_COORDS = {
+      "Arica y Parinacota": [-18.48, -70.32],
+      "Tarapacá":           [-20.21, -69.28],
+      "Antofagasta":        [-23.65, -70.39],
+      "Atacama":            [-27.37, -70.33],
+      "Coquimbo":           [-29.95, -71.34],
+      "Valparaíso":         [-33.05, -71.62],
+      "Metropolitana":      [-33.46, -70.65],
+      "O'Higgins":          [-34.57, -71.00],
+      "Maule":              [-35.43, -71.66],
+      "Ñuble":              [-36.60, -71.95],
+      "Biobío":             [-37.47, -72.35],
+      "Araucanía":          [-38.95, -72.33],
+      "Los Ríos":           [-39.82, -73.24],
+      "Los Lagos":          [-41.47, -72.94],
+      "Aysén":              [-45.57, -72.07],
+      "Magallanes":         [-53.16, -70.91],
+      "Interregional":      [-33.46, -70.65],
+    };
+
+    const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
+
+    function scoreColor(s) {
+      if (s >= 80) return "#1a56db";
+      if (s >= 65) return "#16a34a";
+      if (s >= 50) return "#e05a1e";
+      return "#94a3b8";
     }
 
-    try:
-        resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        print(f"[faenas] Error fetching: {e}")
-        return []
+    function scoreColorBg(s) {
+      if (s >= 80) return ["#1d4ed8","#eff6ff"];
+      if (s >= 65) return ["#15803d","#f0fdf4"];
+      if (s >= 50) return ["#c2410c","#fff7ed"];
+      return ["#475569","#f1f5f9"];
+    }
 
-    features = data.get("features", [])
-    print(f"[faenas] {len(features)} faenas descargadas")
+    function escapeHTML(str) {
+      return String(str||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+    }
 
-    results = []
-    for f in features:
-        attrs = f.get("attributes", {})
-        geom  = f.get("geometry", {})
+    function fmtDatetime(d) {
+      if (!d) return "—";
+      return new Date(d).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    }
 
-        # Coordenadas — vienen en WGS84 por outSR=4326
-        lng = geom.get("x") or attrs.get("LONGITUD") or attrs.get("ESTE")
-        lat = geom.get("y") or attrs.get("LATITUD")  or attrs.get("NORTE")
+    // ── Map ───────────────────────────────────────────────────────────────────
+    const map = L.map("map", { center: [-33.5, -70.6], zoom: 5 });
 
-        if not lat or not lng:
-            continue
-        # Validar rango Chile
-        if not (-56 < float(lat) < -17 and -76 < float(lng) < -60):
-            continue
+    const tileLight = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: "© OpenStreetMap © CartoDB",
+      subdomains: "abcd", maxZoom: 19,
+    });
+    const tileSatellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "© Esri, Maxar, Earthstar Geographics",
+      maxZoom: 19,
+    });
+    const tileHybrid = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "", maxZoom: 19, opacity: 0.7,
+    });
+    tileLight.addTo(map);
 
-        nombre  = (attrs.get("NOMBRE") or attrs.get("NOM_FAENA") or
-                   attrs.get("NOMBRE_FAENA") or "Sin nombre").strip()
-        empresa = (attrs.get("EMPRESA") or attrs.get("TITULAR") or
-                   attrs.get("PROPIETARIO") or "").strip()
-        mineral = (attrs.get("MINERAL") or attrs.get("RECURSO") or
-                   attrs.get("TIPO_MINERAL") or "").strip()
-        tipo    = str(attrs.get("TIPO") or attrs.get("CATEGORIA") or "")
-        region  = (attrs.get("REGION") or attrs.get("NOM_REGION") or "").strip()
-        comuna  = (attrs.get("COMUNA") or "").strip()
+    // Layer control — satellite toggle
+    let satelliteOn = false;
+    function toggleSatellite() {
+      satelliteOn = !satelliteOn;
+      const btn = document.getElementById("btn-satellite");
+      if (satelliteOn) {
+        map.removeLayer(tileLight);
+        tileSatellite.addTo(map);
+        tileHybrid.addTo(map);   // labels sobre satélite
+        btn.classList.add("active");
+        btn.textContent = "🛰 Mapa";
+      } else {
+        map.removeLayer(tileSatellite);
+        map.removeLayer(tileHybrid);
+        tileLight.addTo(map);
+        btn.classList.remove("active");
+        btn.textContent = "🛰 Satelital";
+      }
+    }
 
-        tipo_label = TIPO_LABELS.get(tipo.strip(), tipo or "Faena Minera")
+    let allItems = [];
+    let markers = L.layerGroup().addTo(map);
 
-        results.append({
-            "nombre":   nombre,
-            "empresa":  empresa,
-            "mineral":  mineral,
-            "tipo":     tipo_label,
-            "region":   region,
-            "comuna":   comuna,
-            "lat":      round(float(lat), 5),
-            "lng":      round(float(lng), 5),
-        })
+    function getCoords(item) {
+      const raw = item.raw || {};
 
-    print(f"[faenas] {len(results)} faenas con coordenadas válidas")
-    return results
+      // Prioridad 1: SIGEX — LATITUD/LONGITUD directos en raw.lat / raw.lng
+      if (raw.lat && raw.lng && raw.lat !== 0 && raw.lng !== 0) {
+        const lat = parseFloat(raw.lat), lng = parseFloat(raw.lng);
+        if (lat < -17 && lat > -56 && lng < -60 && lng > -76) {
+          return { coords: [lat, lng], exact: true };
+        }
+      }
 
+      // Prioridad 2: otros conectores (ENAMI, SEA) usan NUEVO_X/NUEVO_Y o X/Y
+      const lng = parseFloat(raw.NUEVO_X || raw.X || 0);
+      const lat = parseFloat(raw.NUEVO_Y || raw.Y || 0);
+      if (lat && lng && lat !== 0 && lng !== 0 && Math.abs(lat) < 56 && Math.abs(lat) > 17 && lng < -60) {
+        return { coords: [lat, lng], exact: true };
+      }
+      // Fallback por región
+      const region = item.region || "";
+      for (const [key, coords] of Object.entries(REGION_COORDS)) {
+        if (region.includes(key) || key.includes(region.split(" ")[0])) {
+          // Jitter para no apilar todos en el mismo punto
+          const jitter = () => (Math.random() - 0.5) * 1.2;
+          return { coords: [coords[0] + jitter(), coords[1] + jitter()], exact: false };
+        }
+      }
+      return null;
+    }
 
-if __name__ == "__main__":
-    faenas = fetch_faenas()
-    for f in faenas[:5]:
-        print(f)
-    print(f"Total: {len(faenas)}")
+    function makeIcon(score, exact, source) {
+      const color = scoreColor(score);
+      const size = score >= 80 ? 13 : score >= 65 ? 11 : 9;
+      const border = exact ? `border:2px solid #fff` : `border:2px dashed #fff;opacity:0.75`;
+
+      // SIGEX: rombo (exploración geológica)
+      if ((source || "").toUpperCase() === "SIGEX") {
+        const d = size + 2;
+        return L.divIcon({
+          html: `<div style="width:${d}px;height:${d}px;background:${color};${border};border-radius:2px;transform:rotate(45deg);box-shadow:0 2px 6px rgba(0,0,0,0.25)"></div>`,
+          className: "",
+          iconSize: [d, d],
+          iconAnchor: [d/2, d/2],
+        });
+      }
+
+      // Default: círculo
+      return L.divIcon({
+        html: `<div style="width:${size}px;height:${size}px;background:${color};${border};border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.25)"></div>`,
+        className: "",
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+      });
+    }
+
+    function applyFilters() {
+      const industry = document.getElementById("f-industry").value;
+      const source = document.getElementById("f-source").value;
+      const minScore = parseInt(document.getElementById("f-score").value) || 0;
+
+      markers.clearLayers();
+      let shown = 0, exact = 0, approx = 0;
+
+      const NEWS_SOURCES = ["Lithium Chile","Portal Minero","Revista EI","Minería Chilena",
+        "Diario Financiero","COCHILCO Noticias","Radio Universidad de Chile","BioBioChile",
+        "Radio U. de Chile","InfoMineria"];
+
+      allItems.forEach(item => {
+        const score = item.radar_score || item.score || 0;
+        // Solo proyectos, no noticias
+        if (item.phase === "Noticia" || NEWS_SOURCES.includes(item.source)) return;
+        if (industry && item.industry !== industry) return;
+        if (source && !(item.source||"").toLowerCase().includes(source.toLowerCase())) return;
+        if (score < minScore) return;
+
+        const result = getCoords(item);
+        if (!result) return;
+
+        shown++;
+        if (result.exact) exact++; else approx++;
+
+        const marker = L.marker(result.coords, { icon: makeIcon(score, result.exact, item.source) });
+        const [sc, sbg] = scoreColorBg(score);
+
+        marker.bindPopup(`
+          <div class="popup-inner">
+            <span class="popup-score" style="color:${sc};background:${sbg}">${score}</span>
+            <div class="popup-title">${escapeHTML((item.title||"").substring(0,80))}${(item.title||"").length>80?"...":""}</div>
+            <div class="popup-meta">
+              <span class="popup-company">${escapeHTML(item.company||"—")}</span>
+              <span>${escapeHTML(item.region||"—")} · ${escapeHTML(item.industry||"—")}</span>
+              ${!result.exact ? `<span class="popup-approx">📍 Ubicación aproximada por región</span>` : ""}
+            </div>
+            <div class="popup-actions">
+              <button class="popup-btn popup-btn-primary" onclick="openDrawer(${item.id})">Ver detalle</button>
+              <a class="popup-btn popup-btn-outline" href="${escapeHTML(item.url||"#")}" target="_blank">Fuente →</a>
+            </div>
+          </div>
+        `, { maxWidth: 280 });
+
+        marker._stratmapId = item.id;
+        markers.addLayer(marker);
+      });
+
+      document.getElementById("stat-shown").textContent = shown;
+      document.getElementById("stat-exact").textContent = exact;
+      document.getElementById("stat-approx").textContent = approx;
+      document.getElementById("pill-exact").textContent = `${exact} exactos`;
+      document.getElementById("pill-approx").textContent = `${approx} por región`;
+      document.getElementById("topbar-sub").textContent = `${shown} proyectos en mapa`;
+    }
+
+    // ── Drawer ────────────────────────────────────────────────────────────────
+    window.openDrawer = async function(oppId) {
+      const item = allItems.find(i => i.id === oppId);
+      if (!item) return;
+
+      document.getElementById("drawer-title").textContent = item.title;
+      document.getElementById("drawer-subtitle").textContent = item.company || item.source || "";
+      document.getElementById("drawer-body").innerHTML = `<p class="drawer-empty">Cargando...</p>`;
+      document.getElementById("drawer").classList.add("open");
+      document.getElementById("drawer-overlay").classList.add("open");
+      map.closePopup();
+
+      const [pipeRes, notesRes] = await Promise.all([
+        fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
+        fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
+      ]);
+
+      const score = item.radar_score || item.score || 0;
+      const [sc] = scoreColorBg(score);
+      const notes = notesRes.items || [];
+      const status = pipeRes.status;
+
+      document.getElementById("drawer-body").innerHTML = `
+        <div class="drawer-stats">
+          <div class="drawer-stat"><div class="drawer-stat-val" style="color:${sc}">${score}</div><div class="drawer-stat-lbl">Score</div></div>
+          <div class="drawer-stat"><div class="drawer-stat-val" style="font-size:13px">${escapeHTML(item.region||"—")}</div><div class="drawer-stat-lbl">Región</div></div>
+          <div class="drawer-stat"><div class="drawer-stat-val" style="font-size:12px">${escapeHTML(item.industry||"—")}</div><div class="drawer-stat-lbl">Industria</div></div>
+        </div>
+
+        <div class="drawer-section-title">Pipeline</div>
+        <div class="cf-row" style="margin-bottom:8px">
+          <select id="ps" class="cf-input" style="margin:0">
+            ${PIPELINE_STATUSES.map(s=>`<option value="${s}" ${s===status?"selected":""}>${s}</option>`).join("")}
+          </select>
+          <input id="pa" class="cf-input" placeholder="Responsable" value="${escapeHTML(pipeRes.assignee||"")}" style="margin:0" />
+          <button class="cf-btn-save" onclick="savePipe(${oppId})">✓</button>
+        </div>
+        <div id="pipe-ok" style="font-size:11px;color:#16a34a;display:none;margin-bottom:8px">✓ Guardado</div>
+
+        <div class="drawer-section-title">Notas (${notes.length})</div>
+        <div id="notes-list" style="margin-bottom:10px">
+          ${notes.length ? notes.map(n=>`
+            <div class="note-card">
+              <div class="note-text">${escapeHTML(n.note)}</div>
+              <div class="note-meta">${n.author?escapeHTML(n.author)+" · ":""}${fmtDatetime(n.created_at)}</div>
+            </div>`).join("") : `<p class="drawer-empty" style="margin-bottom:8px">Sin notas aún</p>`}
+        </div>
+        <textarea id="nt" class="cf-input" rows="2" placeholder="Agregar nota..." style="resize:vertical"></textarea>
+        <div class="cf-row">
+          <input id="na" class="cf-input" placeholder="Tu nombre (opcional)" style="margin:0;flex:1" />
+          <button class="cf-btn-save" onclick="saveNote(${oppId})">Agregar</button>
+        </div>
+
+        <div class="drawer-section-title" style="margin-top:16px">Detalles</div>
+        <div class="detail-row">
+          <span>Fuente: <strong>${escapeHTML(item.source||"—")}</strong></span>
+          <span>Mandante: <strong>${escapeHTML(item.company||"—")}</strong></span>
+          <span>Fase: <strong>${escapeHTML(item.phase||"—")}</strong></span>
+          ${item.raw?.INVERSION_US ? `<span>Inversión: <strong>USD ${(item.raw.INVERSION_US/1e6).toFixed(1)}M</strong></span>` : ""}
+          ${item.url ? `<a href="${item.url}" target="_blank">🔗 Ver fuente original</a>` : ""}
+        </div>
+      `;
+    };
+
+    window.savePipe = async function(oppId) {
+      await fetch(`/opportunities/${oppId}/pipeline`, {
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({status:document.getElementById("ps").value, assignee:document.getElementById("pa").value||null})
+      });
+      const ok = document.getElementById("pipe-ok");
+      ok.style.display = "block";
+      setTimeout(()=>ok.style.display="none", 2000);
+    };
+
+    window.saveNote = async function(oppId) {
+      const note = document.getElementById("nt").value.trim();
+      if (!note) return;
+      const author = document.getElementById("na").value.trim() || null;
+      const res = await fetch(`/opportunities/${oppId}/notes`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({note, author})
+      });
+      const saved = await res.json();
+      document.getElementById("nt").value = "";
+      const list = document.getElementById("notes-list");
+      const card = document.createElement("div");
+      card.className = "note-card";
+      card.innerHTML = `<div class="note-text">${escapeHTML(saved.note)}</div><div class="note-meta">${saved.author?escapeHTML(saved.author)+" · ":""}${fmtDatetime(saved.created_at)}</div>`;
+      list.insertBefore(card, list.firstChild);
+      list.querySelector(".drawer-empty")?.remove();
+    };
+
+    function closeDrawer() {
+      document.getElementById("drawer").classList.remove("open");
+      document.getElementById("drawer-overlay").classList.remove("open");
+    }
+    document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+    document.getElementById("drawer-overlay").addEventListener("click", closeDrawer);
+
+    // ── Faenas layer ──────────────────────────────────────────────────────────
+    let faenasLayer = L.layerGroup();
+    let faenasVisible = false;
+
+    const TIPO_COLORS = {
+      "Gran Minería":         "#dc2626",
+      "Mediana Minería":      "#d97706",
+      "Pequeña Minería":      "#16a34a",
+      "Pirquinería":          "#6b7280",
+      "Planta de Tratamiento":"#7c3aed",
+    };
+
+    function faenaIcon(tipo) {
+      const color = TIPO_COLORS[tipo] || "#374151";
+      return L.divIcon({
+        className: "",
+        html: `<div style="
+          width:10px;height:10px;border-radius:50%;
+          background:${color};border:2px solid white;
+          box-shadow:0 1px 4px rgba(0,0,0,0.4);
+        "></div>`,
+        iconSize: [10, 10],
+        iconAnchor: [5, 5],
+      });
+    }
+
+    async function loadFaenas() {
+      try {
+        const res = await fetch("/faenas");
+        const data = await res.json();
+        const faenas = data.faenas || [];
+        faenasLayer.clearLayers();
+        faenas.forEach(f => {
+          if (!f.lat || !f.lng) return;
+          const m = L.marker([f.lat, f.lng], { icon: faenaIcon(f.tipo) });
+          m.bindPopup(`
+            <div style="padding:12px;min-width:200px">
+              <div style="font-weight:700;font-size:13px;margin-bottom:4px">${escapeHTML(f.nombre)}</div>
+              ${f.empresa ? `<div style="font-size:12px;color:#6b7280;margin-bottom:6px">${escapeHTML(f.empresa)}</div>` : ""}
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${f.tipo ? `<span style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px">${escapeHTML(f.tipo)}</span>` : ""}
+                ${f.mineral ? `<span style="font-size:11px;background:#fef3c7;padding:2px 6px;border-radius:4px">⛏ ${escapeHTML(f.mineral)}</span>` : ""}
+                ${f.region ? `<span style="font-size:11px;background:#eff6ff;padding:2px 6px;border-radius:4px">📍 ${escapeHTML(f.region)}</span>` : ""}
+              </div>
+            </div>
+          `, { maxWidth: 260 });
+          faenasLayer.addLayer(m);
+        });
+        document.getElementById("faenas-count").textContent = faenas.length;
+      } catch(e) {
+        console.error("Error cargando faenas:", e);
+      }
+    }
+
+    function toggleFaenas() {
+      faenasVisible = !faenasVisible;
+      const btn = document.getElementById("btn-faenas");
+      if (faenasVisible) {
+        faenasLayer.addTo(map);
+        btn.classList.add("active");
+        if (faenasLayer.getLayers().length === 0) loadFaenas();
+      } else {
+        faenasLayer.remove();
+        btn.classList.remove("active");
+      }
+    }
+
+    // ── Load ──────────────────────────────────────────────────────────────────
+    async function load() {
+      const res = await fetch("/opportunities?limit=2000");
+      const data = await res.json();
+      allItems = data.items || [];
+      applyFilters();
+
+      // Leer parámetros URL para centrar/resaltar un proyecto
+      const params = new URLSearchParams(window.location.search);
+      const lat  = parseFloat(params.get("lat"));
+      const lng  = parseFloat(params.get("lng"));
+      const zoom = parseInt(params.get("zoom")) || 13;
+      const id   = parseInt(params.get("id"));
+      const q    = params.get("q");
+
+      if (lat && lng) {
+        map.setView([lat, lng], zoom);
+        // Resaltar el marcador del proyecto si tiene id
+        if (id) {
+          setTimeout(() => {
+            markers.eachLayer(m => {
+              if (m._stratmapId === id) {
+                m.openPopup();
+                // Pulsar visualmente
+                const el = m.getElement();
+                if (el) { el.style.transition = "transform .3s"; el.style.transform = "scale(1.8)"; setTimeout(() => el.style.transform = "", 600); }
+              }
+            });
+          }, 500);
+        }
+      } else if (q) {
+        // Filtrar por query string
+        document.getElementById("search-box") && (document.getElementById("search-box").value = q);
+        map.setView([-30, -70], 5);
+      } else {
+        map.setView([-30, -70], 5);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
