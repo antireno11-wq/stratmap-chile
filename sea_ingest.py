@@ -203,6 +203,16 @@ if __name__ == "__main__":
         print(f"[ingest] Error en scoring IA: {e}")
         import traceback; traceback.print_exc()
 
+    # ── BHP Careers ───────────────────────────────────────────────────────────
+    print("[ingest] Scraping empleos BHP Chile...")
+    try:
+        import bhp_careers
+        result = bhp_careers.run()
+        print(f"[ingest] BHP Careers: {result}")
+    except Exception as e:
+        print(f"[ingest] Error BHP Careers: {e}")
+        import traceback; traceback.print_exc()
+
     # ── Scoring temperatura mandantes ─────────────────────────────────────────
     print("[ingest] Scoring temperatura de mandantes...")
     try:
