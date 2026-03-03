@@ -203,4 +203,14 @@ if __name__ == "__main__":
         print(f"[ingest] Error en scoring IA: {e}")
         import traceback; traceback.print_exc()
 
+    # ── Scoring temperatura mandantes ─────────────────────────────────────────
+    print("[ingest] Scoring temperatura de mandantes...")
+    try:
+        import mandante_scorer
+        result = mandante_scorer.run()
+        print(f"[ingest] Mandante scorer: {result}")
+    except Exception as e:
+        print(f"[ingest] Error en mandante scorer: {e}")
+        import traceback; traceback.print_exc()
+
     print("[ingest] Listo")
