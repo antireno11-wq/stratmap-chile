@@ -161,6 +161,14 @@
       <span class="topbar-sub" id="topbar-sub">Cargando...</span>
       <span class="topbar-pill" id="pill-exact">— exactos</span>
       <span class="topbar-pill orange" id="pill-approx">— por región</span>
+      <button id="btn-satellite" onclick="toggleSatellite()"
+        style="cursor:pointer;border:1.5px solid #d1d5db;background:white;font-size:11px;font-weight:600;padding:4px 11px;border-radius:20px;transition:all .15s;color:#374151">
+        🛰 Satelital
+      </button>
+      <button id="btn-faenas" onclick="toggleFaenas()"
+        style="cursor:pointer;border:1.5px solid #d1d5db;background:white;font-size:11px;font-weight:600;padding:4px 11px;border-radius:20px;transition:all .15s;color:#374151">
+        ⛏ Faenas <span id="faenas-count">—</span>
+      </button>
       <a href="/" class="btn-back">← Volver</a>
     </div>
     <div id="map"></div>
@@ -252,7 +260,7 @@
 
     // Layer control — satellite toggle
     let satelliteOn = false;
-    function toggleSatellite() {
+    window.toggleSatellite = function toggleSatellite() {
       satelliteOn = !satelliteOn;
       const btn = document.getElementById("btn-satellite");
       if (satelliteOn) {
@@ -563,7 +571,7 @@
       }
     }
 
-    function toggleFaenas() {
+    window.toggleFaenas = function toggleFaenas() {
       faenasVisible = !faenasVisible;
       const btn = document.getElementById("btn-faenas");
       if (faenasVisible) {
