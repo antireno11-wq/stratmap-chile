@@ -6,7 +6,7 @@ const NEWS_SOURCES = new Set([
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
-const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","manual"]);
+const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","SIGEX","ENAMI","Codelco"]);
 // SEA aparece solo como señal (⚡), no como proyecto en la tabla
 const SEA_SOURCES = new Set(["sea","SEA"]);
 
