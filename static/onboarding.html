@@ -427,10 +427,22 @@ async function finishOnboarding() {
     }).catch(() => {});
 
     await delay(800);
-    addMsg('✅ Listo. Tus scores personalizados se están calculando (tarda ~30 segundos).\n\nTe llevo al radar ahora...');
-    document.getElementById('footer').innerHTML = `
-      <div class="input-row"><button class="btn" onclick="window.location.href='/?from=onboarding'">Ir al Radar →</button></div>`;
+    addMsg('✅ Listo. Tus scores personalizados se están calculando en segundo plano.\n\nRedirectando al radar...');
     setProgress(TOTAL_STEPS);
+
+    // Auto-redirect con countdown
+    let secs = 3;
+    document.getElementById('footer').innerHTML =
+      `<div class="input-row" style="justify-content:center;color:var(--muted);font-size:13px" id="countdown-row">
+        Redirigiendo en <strong id="countdown-n">${secs}</strong>s...
+        <button class="btn" style="margin-left:12px;padding:6px 16px" onclick="window.location.href='/?from=onboarding'">Ir ahora →</button>
+      </div>`;
+    const iv = setInterval(() => {
+      secs--;
+      const el = document.getElementById('countdown-n');
+      if (el) el.textContent = secs;
+      if (secs <= 0) { clearInterval(iv); window.location.href = '/?from=onboarding'; }
+    }, 1000);
 
   } catch(e) {
     addMsg('Hubo un error guardando tu perfil. Intenta de nuevo.');
