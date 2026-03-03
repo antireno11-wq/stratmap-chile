@@ -362,31 +362,36 @@ def update_service_profile(payload: ServiceProfilePayload):
 def get_mandantes():
     """
     Ranking de mandantes por actividad consolidada.
-    Consolida: proyectos activos + señales de empleo + noticias recientes.
+    Incluye cualquier mandante con proyectos reales (ENAMI, Codelco, SIGEX, SEA).
     """
-    sql = """
+    NEWS_SOURCES = (
+        "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
+        "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
+        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS'"
+    )
+    sql = f"""
     WITH base AS (
         SELECT
             company,
-            -- Licitaciones directas: ENAMI y Codelco (oportunidades inmediatas)
-            COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco')) AS n_licitaciones,
-            -- Proyectos SIGEX (señal de exploración, peso menor)
-            COUNT(*) FILTER (WHERE source = 'SIGEX') AS n_sigex,
-            COUNT(*) FILTER (WHERE source = 'SEA') AS n_sea,
-            -- Score promedio solo de licitaciones reales
-            AVG(score) FILTER (WHERE source IN ('ENAMI','Codelco')) AS avg_score_licitaciones,
-            -- Señales de empleo
-            MAX(COALESCE(signal_score, 0)) AS top_signal,
-            SUM(COALESCE(jobs_count, 0)) AS total_jobs,
-            -- Noticias recientes 90 días
+            COUNT(*) FILTER (WHERE source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual'))
+                AS n_proyectos,
+            COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco'))
+                AS n_licitaciones,
+            COUNT(*) FILTER (WHERE source = 'SIGEX')
+                AS n_sigex,
+            COUNT(*) FILTER (WHERE source = 'SEA')
+                AS n_sea,
+            COALESCE(AVG(score) FILTER (
+                WHERE source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual')
+            ), 0)                                       AS avg_score,
+            MAX(COALESCE(signal_score, 0))              AS top_signal,
+            SUM(COALESCE(jobs_count, 0))                AS total_jobs,
             COUNT(*) FILTER (
                 WHERE published_at > NOW() - INTERVAL '90 days'
-                AND source IN (
-                    'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-                    'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería'
-                )
+                AND source NOT IN ({NEWS_SOURCES}, 'manual')
+                AND source IN ({NEWS_SOURCES})
             ) AS n_news_recent,
-            MAX(COALESCE(published_at, created_at)) AS last_activity
+            MAX(COALESCE(published_at, created_at))     AS last_activity
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
           AND source != 'manual'
@@ -394,32 +399,30 @@ def get_mandantes():
     )
     SELECT
         company,
-        (n_licitaciones + n_sigex) AS n_proyectos,
+        n_proyectos,
         n_licitaciones,
         n_sigex,
         n_sea,
-        top_signal AS signal_score,
+        top_signal      AS signal_score,
         total_jobs,
         n_news_recent,
         last_activity,
         ROUND(
-            -- Licitaciones directas: alto peso (max 40)
-            LEAST(n_licitaciones * 8, 40) +
-            -- Score promedio de licitaciones (max 30)
-            LEAST(COALESCE(avg_score_licitaciones, 0) * 0.3, 30) +
-            -- SEA: señal de proyecto grande (max 20)
-            LEAST(n_sea * 5, 20) +
-            -- Empleo: señal de actividad operacional (max 15)
-            LEAST(top_signal, 10) + LEAST(total_jobs * 2, 5) +
-            -- SIGEX: señal de exploración, peso bajo (max 10)
-            LEAST(n_sigex * 0.5, 10) +
-            -- Noticias recientes (max 8)
-            LEAST(n_news_recent * 2, 8)
+            -- Score promedio de proyectos (base, max 60)
+            LEAST(avg_score * 0.6, 60) +
+            -- Licitaciones directas tienen más peso (max 20)
+            LEAST(n_licitaciones * 4, 20) +
+            -- SIGEX: exploración activa (max 15)
+            LEAST(n_sigex * 0.3, 15) +
+            -- SEA: proyecto grande en evaluación (max 15)
+            LEAST(n_sea * 5, 15) +
+            -- Señal de empleo (max 10)
+            LEAST(top_signal, 7) + LEAST(total_jobs * 2, 3)
         ) AS score_consolidado
     FROM base
-    WHERE n_licitaciones > 0 OR n_sea > 0
+    WHERE n_proyectos > 0 OR n_sea > 0
     ORDER BY score_consolidado DESC
-    LIMIT 60;
+    LIMIT 100;
     """
     try:
         with db.get_conn() as conn:
@@ -439,11 +442,15 @@ def get_mandantes():
 @app.get("/mandantes/detail")
 def get_mandante_detail_q(company: str):
     """Detalle de mandante por query param — evita problemas de encoding en path."""
-    return get_mandante_detail(company)
+    return _mandante_detail(company)
 
 @app.get("/mandantes/{company_name}")
 def get_mandante_detail(company_name: str):
     """Detalle de un mandante: sus proyectos, SEA y noticias recientes."""
+    return _mandante_detail(company_name)
+
+def _mandante_detail(company_name: str):
+    """Lógica compartida del detalle de mandante."""
     NEWS_SOURCES = (
         "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
         "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
