@@ -614,6 +614,21 @@ def init_ai_db() -> None:
     ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS known_mandantes JSONB DEFAULT '[]';
     ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS onboarding_done BOOLEAN DEFAULT FALSE;
 
+    CREATE TABLE IF NOT EXISTS mandante_heat (
+        id              SERIAL PRIMARY KEY,
+        company         TEXT NOT NULL UNIQUE,
+        heat_score      INTEGER DEFAULT 0,    -- 0-100, calculado por IA
+        heat_label      TEXT,                 -- "Muy activo", "Caliente", "Normal", "Frío"
+        heat_reason     TEXT,                 -- explicación IA
+        n_noticias      INTEGER DEFAULT 0,    -- noticias recientes detectadas
+        n_empleos       INTEGER DEFAULT 0,    -- empleos activos detectados
+        trending_topics TEXT[],               -- temas que aparecen en noticias
+        scored_at       TIMESTAMPTZ DEFAULT NOW(),
+        model_version   TEXT DEFAULT 'claude-sonnet-4-6'
+    );
+    CREATE INDEX IF NOT EXISTS idx_mandante_heat_company ON mandante_heat(company);
+    CREATE INDEX IF NOT EXISTS idx_mandante_heat_score ON mandante_heat(heat_score DESC);
+
     CREATE TABLE IF NOT EXISTS ai_opportunity_fits (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
@@ -780,4 +795,53 @@ def list_top_ai_fits(user_id: str = "default", min_score: int = 40, limit: int =
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {"user_id": user_id, "min_score": min_score, "limit": limit})
+            return [dict(r) for r in cur.fetchall()]
+
+def upsert_mandante_heat(company: str, heat_score: int, heat_label: str,
+                         heat_reason: str, n_noticias: int, n_empleos: int,
+                         trending_topics: list, model_version: str = "claude-sonnet-4-6") -> None:
+    sql = """
+    INSERT INTO mandante_heat
+        (company, heat_score, heat_label, heat_reason, n_noticias, n_empleos,
+         trending_topics, scored_at, model_version)
+    VALUES
+        (%(company)s, %(heat_score)s, %(heat_label)s, %(heat_reason)s,
+         %(n_noticias)s, %(n_empleos)s, %(topics)s, NOW(), %(model)s)
+    ON CONFLICT (company) DO UPDATE SET
+        heat_score     = EXCLUDED.heat_score,
+        heat_label     = EXCLUDED.heat_label,
+        heat_reason    = EXCLUDED.heat_reason,
+        n_noticias     = EXCLUDED.n_noticias,
+        n_empleos      = EXCLUDED.n_empleos,
+        trending_topics= EXCLUDED.trending_topics,
+        scored_at      = NOW(),
+        model_version  = EXCLUDED.model_version;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {
+                "company":    company,
+                "heat_score": heat_score,
+                "heat_label": heat_label,
+                "heat_reason": heat_reason[:500],
+                "n_noticias": n_noticias,
+                "n_empleos":  n_empleos,
+                "topics":     trending_topics,
+                "model":      model_version,
+            })
+        conn.commit()
+
+
+def get_mandante_heat(company: str) -> dict | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM mandante_heat WHERE company = %(c)s", {"c": company})
+            r = cur.fetchone()
+            return dict(r) if r else None
+
+
+def get_all_mandante_heat() -> list:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM mandante_heat ORDER BY heat_score DESC")
             return [dict(r) for r in cur.fetchall()]
