@@ -130,6 +130,10 @@
 
     /* ── Mandantes ─────────────────────────────────────────────────── */
     .mandantes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 4px 0 8px; }
+    .mandantes-grid-compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .mandantes-grid-compact .mandante-card { padding: 10px 12px; }
+    .mandantes-grid-compact .mandante-card-score { font-size: 18px; }
+    .mandantes-grid-compact .mandante-card-name { font-size: 12px; }
     .mandante-card {
       background: var(--card); border: 1.5px solid var(--border); border-radius: 12px;
       padding: 14px 16px; cursor: pointer; transition: all 0.15s;
@@ -200,7 +204,25 @@
       color: #3b82f6;
     }
 
-    </style>
+  
+    /* Empleos */
+    .empleo-row { border-bottom: 1px solid var(--border); padding: 10px 16px; cursor: pointer; transition: background .1s; display: flex; flex-direction: column; gap: 4px; }
+    .empleo-row:hover { background: #fafafa; }
+    .empleo-row-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .empleo-company { font-weight: 600; font-size: 13px; }
+    .empleo-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+    .empleo-count { font-size: 13px; font-weight: 700; color: var(--blue); }
+    .empleo-meta-item { font-size: 11px; color: var(--muted); }
+    .empleo-areas { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .empleo-area-tag { font-size: 11px; background: #eff6ff; color: #1d4ed8; padding: 2px 7px; border-radius: 4px; }
+    .empleo-chevron { font-size: 18px; color: var(--muted); align-self: center; flex-shrink: 0; }
+    .empleo-detail { padding: 8px 0 4px; border-top: 1px dashed var(--border); margin-top: 6px; }
+    .empleo-proyecto { padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+    .empleo-proyecto:last-child { border-bottom: none; }
+    .empleo-proyecto-title { font-size: 12px; font-weight: 600; color: var(--blue); text-decoration: none; }
+    .empleo-proyecto-title:hover { text-decoration: underline; }
+    .empleo-proyecto-meta { display: flex; gap: 10px; font-size: 11px; color: var(--muted); margin-top: 2px; flex-wrap: wrap; }
+  </style>
 </head>
 <body>
   <aside class="sidebar">
@@ -214,6 +236,7 @@
     <div class="sidebar-item"><span class="icon">📰</span> Noticias <span class="sidebar-count" id="sc-news">—</span></div>
     <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <a class="sidebar-item" href="/mandantes.html"><span class="icon">🏢</span> Mandantes <span class="sidebar-count" id="sc-mandantes">—</span></a>
 
     <hr class="sidebar-divider" />
 
@@ -308,10 +331,23 @@
           <span class="section-icon">🏢</span>
           <span class="section-title">Mandantes</span>
           <span class="section-badge" id="badge-mandantes">—</span>
-          <span class="section-updated" style="font-size:11px;color:var(--muted);margin-left:8px">Ordenados por score de actividad</span>
+          <span class="section-updated" style="font-size:11px;color:var(--muted);margin-left:8px">Top 10 por actividad</span>
+          <a href="/mandantes.html" style="margin-left:auto;font-size:12px;color:var(--blue);text-decoration:none;font-weight:600">Ver todos →</a>
         </div>
-        <div id="mandantes-grid" class="mandantes-grid">
+        <div id="mandantes-grid" class="mandantes-grid mandantes-grid-compact">
           <div class="mandantes-login-hint">Cargando mandantes...</div>
+        </div>
+      </div>
+
+      <div class="section-card" id="section-empleos" style="display:none">
+        <div class="section-head">
+          <span class="section-icon">👷</span>
+          <span class="section-title">Empleos activos</span>
+          <span class="section-badge" id="badge-empleos">—</span>
+          <span class="section-updated" style="font-size:11px;color:var(--muted);margin-left:8px">Señales de contratación por empresa</span>
+        </div>
+        <div id="empleos-grid" style="padding:4px 0 8px">
+          <div class="mandantes-login-hint">Cargando señales de empleo...</div>
         </div>
       </div>
 
