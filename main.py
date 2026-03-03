@@ -368,19 +368,19 @@ def get_mandantes():
     WITH base AS (
         SELECT
             company,
+            -- Proyectos reales: excluir noticias, SEA y fuente manual
             COUNT(*) FILTER (WHERE source NOT IN (
                 'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
                 'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-                'SEA'
+                'SEA','manual'
             )) AS n_proyectos,
             COUNT(*) FILTER (WHERE source = 'SEA') AS n_sea,
-            AVG(score) FILTER (WHERE source NOT IN (
-                'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-                'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-                'SEA'
-            )) AS avg_score,
-            SUM(COALESCE(signal_score, 0)) AS total_signal,
+            -- Score promedio solo de fuentes confiables (ENAMI, Codelco, SIGEX)
+            AVG(score) FILTER (WHERE source IN ('ENAMI','Codelco','SIGEX')) AS avg_score_real,
+            -- Señales de empleo
+            MAX(COALESCE(signal_score, 0)) AS top_signal,
             SUM(COALESCE(jobs_count, 0)) AS total_jobs,
+            -- Noticias recientes (90 días)
             COUNT(*) FILTER (
                 WHERE published_at > NOW() - INTERVAL '90 days'
                 AND source IN (
@@ -390,26 +390,33 @@ def get_mandantes():
             ) AS n_news_recent,
             MAX(COALESCE(published_at, created_at)) AS last_activity
         FROM opportunities
-        WHERE company IS NOT NULL AND company != ''
+        WHERE company IS NOT NULL AND TRIM(company) != ''
         GROUP BY company
     )
     SELECT
         company,
         n_proyectos,
         n_sea,
-        total_signal AS signal_score,
+        top_signal AS signal_score,
         total_jobs,
         n_news_recent,
         last_activity,
         ROUND(
-            COALESCE(avg_score, 0) * 0.4 +
-            LEAST(n_proyectos * 5, 30) +
-            LEAST(n_sea * 8, 24) +
-            LEAST(total_signal, 20) +
-            LEAST(n_news_recent * 3, 9) +
-            LEAST(total_jobs * 2, 10)
+            -- Base: score promedio de proyectos reales (peso 40%)
+            LEAST(COALESCE(avg_score_real, 55), 100) * 0.4 +
+            -- Volumen: proyectos activos (cap 25)
+            LEAST(n_proyectos * 4, 25) +
+            -- Prospectos SEA (cap 20)
+            LEAST(n_sea * 5, 20) +
+            -- Señales de empleo (cap 15)
+            LEAST(top_signal, 15) +
+            -- Empleos publicados (cap 10)
+            LEAST(total_jobs * 2, 10) +
+            -- Presencia en noticias recientes (cap 8)
+            LEAST(n_news_recent * 2, 8)
         ) AS score_consolidado
     FROM base
+    -- Solo mandantes con actividad real (no solo noticias o manual)
     WHERE n_proyectos > 0 OR n_sea > 0
     ORDER BY score_consolidado DESC
     LIMIT 60;
@@ -576,6 +583,37 @@ def mark_onboarding_done():
         return {"updated": updated}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/sources-count")
+def sources_count():
+    """Muestra cuántos registros hay por source — útil para diagnóstico."""
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT source, COUNT(*) as n,
+                       ROUND(AVG(score)) as avg_score,
+                       MIN(published_at::date) as oldest,
+                       MAX(published_at::date) as newest
+                FROM opportunities
+                GROUP BY source ORDER BY n DESC;
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+    for r in rows:
+        for k in ['oldest','newest']:
+            if r.get(k): r[k] = str(r[k])
+    return {"sources": rows}
+
+
+@app.delete("/admin/delete-source/{source_name}")
+def delete_source(source_name: str):
+    """Elimina todos los registros de una fuente específica."""
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM opportunities WHERE source = %(s)s", {"s": source_name})
+            deleted = cur.rowcount
+        conn.commit()
+    return {"deleted": deleted, "source": source_name}
 
 
 @app.post("/admin/run-sigex")
