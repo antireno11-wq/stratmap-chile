@@ -528,6 +528,132 @@ def _mandante_detail(company_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Faenas Mineras ─────────────────────────────────────────────────────────────
+
+_faenas_cache: dict = {"data": [], "ts": 0}
+
+@app.get("/faenas")
+def get_faenas():
+    """
+    Lista de faenas mineras activas con coordenadas.
+    Se cachea en memoria 24h para no golpear la API en cada carga de mapa.
+    """
+    import time
+    global _faenas_cache
+    now = time.time()
+    # Cache de 24 horas
+    if _faenas_cache["data"] and (now - _faenas_cache["ts"]) < 86400:
+        return {"faenas": _faenas_cache["data"], "total": len(_faenas_cache["data"]), "cached": True}
+    try:
+        from faenas_mineras import fetch_faenas
+        data = fetch_faenas(limit=2000)
+        _faenas_cache = {"data": data, "ts": now}
+        return {"faenas": data, "total": len(data), "cached": False}
+    except Exception as e:
+        if _faenas_cache["data"]:
+            return {"faenas": _faenas_cache["data"], "total": len(_faenas_cache["data"]), "cached": True}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/refresh-faenas")
+def refresh_faenas():
+    """Fuerza recarga del cache de faenas mineras."""
+    global _faenas_cache
+    _faenas_cache = {"data": [], "ts": 0}
+    return {"ok": True, "msg": "Cache de faenas limpiado, próxima llamada a /faenas recargará"}
+
+
+# ── Empleos por empresa ────────────────────────────────────────────────────────
+
+@app.get("/empleos/resumen")
+def get_empleos_resumen():
+    """
+    Resumen de empleos disponibles por empresa (mandante).
+    Muestra movimiento de contratación activa en el sector minero.
+    """
+    sql = """
+    SELECT
+        company,
+        SUM(COALESCE(jobs_count, 0))      AS total_jobs,
+        MAX(COALESCE(signal_score, 0))    AS top_signal,
+        COUNT(*) FILTER (WHERE jobs_count > 0) AS proyectos_con_empleos,
+        MAX(last_signal_at)               AS ultima_señal,
+        -- Desglose por área (extraído del signal_detail JSON)
+        array_agg(DISTINCT signal_detail) FILTER (
+            WHERE jobs_count > 0 AND signal_detail IS NOT NULL
+        ) AS signal_details
+    FROM opportunities
+    WHERE jobs_count > 0
+      AND company IS NOT NULL AND TRIM(company) != ''
+      AND source NOT IN (
+        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+        'Radio U. de Chile','BioBioChile','RSS','manual'
+      )
+    GROUP BY company
+    ORDER BY total_jobs DESC, top_signal DESC
+    LIMIT 30;
+    """
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                rows = [dict(r) for r in cur.fetchall()]
+        # Parsear signal_details para extraer áreas
+        for r in rows:
+            if r.get("ultima_señal"):
+                r["ultima_señal"] = r["ultima_señal"].isoformat()
+            # Parsear desglose de áreas desde signal_details
+            areas = {}
+            for detail in (r.get("signal_details") or []):
+                if not detail:
+                    continue
+                try:
+                    import json as _json
+                    d = _json.loads(detail) if isinstance(detail, str) else detail
+                    for area, cnt in (d.get("by_area") or d.get("areas") or {}).items():
+                        areas[area] = areas.get(area, 0) + int(cnt)
+                except Exception:
+                    pass
+            r["areas"] = areas
+            del r["signal_details"]
+        return {"empresas": rows, "total": len(rows)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/empleos/empresa/{company_name}")
+def get_empleos_empresa(company_name: str):
+    """Detalle de empleos por proyecto para una empresa específica."""
+    sql = """
+    SELECT id, title, region, phase, jobs_count, signal_score,
+           signal_detail, last_signal_at, url
+    FROM opportunities
+    WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+      AND jobs_count > 0
+    ORDER BY jobs_count DESC, signal_score DESC
+    LIMIT 50;
+    """
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, {"company": company_name})
+                rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            if r.get("last_signal_at"):
+                r["last_signal_at"] = r["last_signal_at"].isoformat()
+            # Parsear áreas del signal_detail
+            try:
+                import json as _json
+                d = _json.loads(r["signal_detail"]) if isinstance(r.get("signal_detail"), str) else (r.get("signal_detail") or {})
+                r["areas"] = d.get("by_area") or d.get("areas") or {}
+            except Exception:
+                r["areas"] = {}
+        return {"company": company_name, "proyectos": rows, "total": len(rows)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/me/score-projects")
 def score_projects(payload: dict):
     """
