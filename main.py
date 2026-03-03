@@ -494,6 +494,120 @@ def get_mandantes():
 
 
 
+# Cache en memoria para no regenerar en cada visita
+_company_summaries: dict = {}
+
+@app.get("/mandantes/summary/{company_name}")
+def get_company_summary(company_name: str):
+    """
+    Genera un resumen ejecutivo del mandante usando IA.
+    Se cachea en memoria durante la sesión.
+    """
+    import os, json as _json
+
+    key = company_name.lower().strip()
+    if key in _company_summaries:
+        return _company_summaries[key]
+
+    # Recolectar contexto de la BD
+    NEWS_SRC_LIST = [
+        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
+        'BHP Careers',
+    ]
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FILTER (WHERE source = 'SIGEX') as n_sigex,
+                       COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco')) as n_licitaciones,
+                       COUNT(*) FILTER (WHERE source = 'SEA') as n_sea,
+                       SUM(COALESCE(jobs_count,0)) as total_jobs,
+                       array_agg(DISTINCT region) FILTER (WHERE region IS NOT NULL) as regiones,
+                       array_agg(DISTINCT phase) FILTER (WHERE phase IS NOT NULL) as fases,
+                       MAX(published_at) as ultima_actividad
+                FROM opportunities
+                WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(c)s))
+                  AND source != 'manual'
+            """, {"c": company_name})
+            stats = dict(cur.fetchone() or {})
+
+            cur.execute("""
+                SELECT title FROM opportunities
+                WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(c)s))
+                  AND source = ANY(%(news)s)
+                ORDER BY published_at DESC LIMIT 5
+            """, {"c": company_name, "news": NEWS_SRC_LIST})
+            recent_news = [r["title"] for r in cur.fetchall()]
+
+            cur.execute("""
+                SELECT title, source FROM opportunities
+                WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(c)s))
+                  AND source NOT IN ('SEA','manual')
+                  AND source != ANY(%(news)s)
+                ORDER BY (score + COALESCE(signal_score,0)) DESC LIMIT 5
+            """, {"c": company_name, "news": NEWS_SRC_LIST})
+            top_projects = [f"{r['title']} ({r['source']})" for r in cur.fetchall()]
+
+    # Construir prompt para Claude
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        result = {"summary": None, "error": "no_api_key"}
+        _company_summaries[key] = result
+        return result
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    regiones = [r for r in (stats.get("regiones") or []) if r][:5]
+    prompt = f"""Eres un analista del sector minero chileno. Genera un resumen ejecutivo conciso de esta empresa para profesionales del sector.
+
+EMPRESA: {company_name}
+
+DATOS EN BD STRATMAP:
+- Concesiones SIGEX: {stats.get("n_sigex",0)}
+- Licitaciones (ENAMI/Codelco): {stats.get("n_licitaciones",0)}
+- Prospectos SEA: {stats.get("n_sea",0)}
+- Empleos detectados: {stats.get("total_jobs",0)}
+- Regiones activas: {", ".join(regiones) if regiones else "—"}
+- Proyectos destacados: {"; ".join(top_projects[:3]) if top_projects else "—"}
+- Noticias recientes: {"; ".join(recent_news[:3]) if recent_news else "—"}
+
+Responde SOLO JSON sin markdown:
+{{
+  "descripcion": "<2-3 oraciones sobre qué hace esta empresa en minería chilena, sus operaciones principales y relevancia en el sector>",
+  "presencia_chile": "<1 oración sobre su presencia geográfica y escala de operaciones en Chile>",
+  "actividad_reciente": "<1 oración sobre su actividad más reciente según los datos>",
+  "tipo": "<uno de: Gran Minería | Mediana Minería | Junior Explorer | Proveedor Minero | Empresa Estatal | Consultora>",
+  "minerales_principales": ["mineral1", "mineral2"],
+  "regiones_clave": ["region1", "region2"]
+}}"""
+
+    try:
+        msg = client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=600,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = msg.content[0].text.strip().replace("```json","").replace("```","").strip()
+        data = _json.loads(raw)
+        result = {
+            "company": company_name,
+            "summary": data,
+            "stats": {
+                "n_sigex": stats.get("n_sigex",0),
+                "n_licitaciones": stats.get("n_licitaciones",0),
+                "n_sea": stats.get("n_sea",0),
+                "total_jobs": stats.get("total_jobs",0),
+                "regiones": regiones,
+            }
+        }
+    except Exception as e:
+        result = {"company": company_name, "summary": None, "error": str(e)}
+
+    _company_summaries[key] = result
+    return result
+
+
 @app.get("/mandantes/detail")
 def get_mandante_detail_q(company: str):
     """Detalle de mandante por query param — evita problemas de encoding en path."""
