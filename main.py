@@ -24,6 +24,24 @@ async def lifespan(app: FastAPI):
         db.init_ai_db()
     except Exception as e:
         print(f"[startup] init_ai_db warning: {e}")
+    # Noticias no deben tener score — reset al arrancar
+    try:
+        NEWS_SRCS = [
+            'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+            'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+            'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
+            'BHP Careers',
+        ]
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE opportunities SET score = 0, signal_score = 0 WHERE source = ANY(%s) AND score > 0",
+                    (NEWS_SRCS,)
+                )
+            conn.commit()
+        print("[startup] Scores de noticias reseteados a 0")
+    except Exception as e:
+        print(f"[startup] Warning reset news scores: {e}")
     yield
 
 app = FastAPI(title="Stratmap Chile", lifespan=lifespan)
@@ -156,6 +174,35 @@ def opportunities(
             if r.get(f): r[f] = r[f].isoformat()
         result.append(r)
     return {"items": result, "count": len(result)}
+
+
+@app.get("/noticias")
+def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
+    """Noticias recientes del sector minero."""
+    NEWS_SOURCES = [
+        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
+        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
+        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
+        'BHP Careers',
+    ]
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, source, title, url, company, industry, region,
+                           score, published_at, created_at
+                    FROM opportunities
+                    WHERE source = ANY(%s)
+                    ORDER BY COALESCE(published_at, created_at) DESC NULLS LAST
+                    LIMIT %s
+                """, (NEWS_SOURCES, limit))
+                rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            for f in ['published_at','created_at']:
+                if r.get(f): r[f] = r[f].isoformat()
+        return {"items": rows, "count": len(rows)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
