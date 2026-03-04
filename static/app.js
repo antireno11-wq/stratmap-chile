@@ -2,7 +2,8 @@ const NEWS_SOURCES = new Set([
   "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
   "Revista EI","Radio U. de Chile","Radio Universidad de Chile","RSS",
-  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores"
+  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores",
+  "BHP Careers"
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
@@ -490,6 +491,7 @@ async function fetchJSON(url) {
 
 let activeFilters = { industry: new Set(), region: new Set(), source: new Set() };
 let allItems = [];
+let newsItems = []; // cargado desde /noticias separado
 
 function syncFilterUI() {
   // Sync checkboxes to match activeFilters state
@@ -553,8 +555,9 @@ function renderPagination(containerId, total, currentPg, onPage) {
 
 function renderFiltered() {
   const filtered = applyFilters(allItems);
-  const projects = filtered.filter(i => !isNews(i) && !isSea(i));
-  const news = filtered.filter(i => isRelevantNews(i)).sort((a,b) => new Date(itemDate(b)||0) - new Date(itemDate(a)||0));
+  const projects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews);
+  // Noticias vienen de /noticias endpoint (no de allItems que solo tiene proyectos)
+  const news = newsItems.sort((a,b) => new Date(b.published_at||b.created_at||0) - new Date(a.published_at||a.created_at||0));
 
   // Reset to page 1 if current page is out of range
   if ((currentPage.projects - 1) * PAGE_SIZE >= projects.length) currentPage.projects = 1;
@@ -943,8 +946,21 @@ async function load() {
     buildFilters(allItems);
     syncFilterUI();
     renderFiltered();
+    // Cargar noticias por separado
+    loadNoticias();
   } catch(e) {
     el("status").textContent = `Error: ${e.message}`;
+  }
+}
+
+async function loadNoticias() {
+  try {
+    const data = await fetchJSON('/noticias?limit=50');
+    // Marcar cada noticia para que NUNCA aparezca en tabla de proyectos
+    newsItems = (data.items || []).map(n => ({ ...n, _isNews: true }));
+    renderFiltered();
+  } catch(e) {
+    console.warn('Error cargando noticias:', e);
   }
 }
 
