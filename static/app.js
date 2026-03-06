@@ -2,10 +2,11 @@ const NEWS_SOURCES = new Set([
   "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
   "Revista EI","Radio U. de Chile","Radio Universidad de Chile","RSS",
-  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores",
-  "BHP Careers",
-  "AMSA Careers"
+  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores"
 ]);
+
+// Fuentes de empleos — aparecen en Empleos activos, NUNCA en Noticias del Sector
+const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers"]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
 const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","SIGEX","ENAMI","Codelco"]);
@@ -43,8 +44,9 @@ function isSea(item) {
 
 function isNews(item) {
   const src = item.source || "";
-  if (isSea(item)) return false;       // SEA no es noticia
+  if (isSea(item)) return false;
   if (PROJECT_SOURCES.has(src)) return false;
+  if (EMPLEOS_SOURCES.has(src)) return false;  // empleos van a sección propia
   if (item.phase === "Noticia") return true;
   return NEWS_SOURCES.has(src);
 }
@@ -958,7 +960,8 @@ async function loadNoticias() {
   try {
     const data = await fetchJSON('/noticias?limit=50');
     // Marcar cada noticia para que NUNCA aparezca en tabla de proyectos
-    newsItems = (data.items || []).map(n => ({ ...n, _isNews: true }));
+    // Filtrar empleos de la sección noticias
+    newsItems = (data.items || []).filter(n => !EMPLEOS_SOURCES.has(n.source)).map(n => ({ ...n, _isNews: true }));
     renderFiltered();
   } catch(e) {
     console.warn('Error cargando noticias:', e);
