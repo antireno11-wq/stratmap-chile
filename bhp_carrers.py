@@ -162,8 +162,9 @@ def build_opportunities(jobs: List[Dict]) -> List[Dict[str, Any]]:
             f"disponibles en Chile actualmente:\n\n{cargo_list}"
         )
 
-        # URL de la búsqueda filtrada por empresa (aproximación)
-        url = SEARCH_URL
+        # URL única por empresa para que el upsert no colisione
+        empresa_slug = empresa.lower().replace(" ", "-").replace("/", "-")
+        url = f"https://careers.bhp.com/chile/{empresa_slug}"
 
         signal_detail = {
             "by_area": areas,
