@@ -206,6 +206,7 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
         'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
         'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
         'BHP Careers',
+        'AMSA Careers',
     ]
     try:
         with db.get_conn() as conn:
@@ -584,6 +585,7 @@ def get_company_summary(company_name: str):
         'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
         'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
         'BHP Careers',
+        'AMSA Careers',
     ]
     with db.get_conn() as conn:
         with conn.cursor() as cur:
@@ -1173,6 +1175,150 @@ def run_bhp_careers():
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
+@app.post("/admin/run-amsa-careers")
+def run_amsa_careers():
+    """Scraping de empleos Antofagasta Minerals (AMSA) — Pelambres, Centinela, Zaldívar, AMSA."""
+    import traceback as tb, requests as _req, re as _re, json as _json
+    from bs4 import BeautifulSoup
+    from datetime import datetime, timezone
+
+    BASE_URL = "https://career8.successfactors.com"
+    LIST_URL = BASE_URL + "/career?company=AMSAP&career_ns=job_listing_summary&navBarLevel=JOB_SEARCH"
+    HEADERS  = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "Accept-Language": "es-CL,es;q=0.9",
+    }
+
+    # Normalizar empresa AMSA a nombre canónico en Stratmap
+    AMSA_COMPANIES = {
+        "pelambres":   "MINERA LOS PELAMBRES",
+        "centinela":   "MINERA CENTINELA",
+        "zaldivar":    "COMPANIA MINERA ZALDIVAR",
+        "zaldívar":    "COMPANIA MINERA ZALDIVAR",
+        "amsa":        "ANTOFAGASTA MINERALS",
+        "corporativo": "ANTOFAGASTA MINERALS",
+    }
+
+    AREA_KW = {
+        "Operaciones":   ["operador","operadora","mina","produccion","extraccion","planta"],
+        "Mantenimiento": ["mantenedor","mantenci","electrico","eléctrico","mecanico","instrumentista"],
+        "Ingeniería":    ["engineer","ingeniero","ingeniera","specialist","especialista","senior","tecnic"],
+        "Geología":      ["geolog","geoscien","geotecnia","hidrogeol","exploracion"],
+        "Finanzas":      ["finance","finanza","financiero","reporting","planning","gestor"],
+        "TI / Datos":    ["digital","data","sistemas","software","ti ","tecnolog"],
+        "RRHH":          ["training","capacit","rrhh","people","talento","personas"],
+        "Supervisión":   ["supervisor","superintendente","gerente","jefe","coordinador","superintendenta"],
+        "HSE":           ["seguridad","safety","ambiente","hse","salud","prevencion"],
+        "Proyectos":     ["project","proyecto","inversiones","construccion","ejecucion"],
+    }
+
+    def classify(title):
+        t = title.lower()
+        for area, kws in AREA_KW.items():
+            if any(k in t for k in kws): return area
+        return "Otros"
+
+    def empresa_from_meta(meta):
+        m = meta.lower()
+        for key, name in AMSA_COMPANIES.items():
+            if key in m: return name
+        return "ANTOFAGASTA MINERALS"
+
+    def get_page(page_no, session):
+        params = {"company": "AMSAP", "career_ns": "job_listing_summary",
+                  "navBarLevel": "JOB_SEARCH", "pageNo": page_no}
+        r = session.get(BASE_URL + "/career", params=params, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        return BeautifulSoup(r.text, "html.parser")
+
+    try:
+        # Borrar registros anteriores
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'AMSA Careers'")
+                deleted = cur.rowcount
+            conn.commit()
+
+        session = _req.Session()
+        jobs = []
+
+        # Primera página — detectar total de páginas
+        soup = get_page(1, session)
+        total_text = soup.select_one('.jobResultsCount, .resultCount, [class*="result"]')
+        # Buscar "de X" en el paginador
+        pager = soup.get_text()
+        m = _re.search(r'de\s+(\d+)', pager)
+        total_pages = int(m.group(1)) if m else 1
+
+        def parse_jobs(soup):
+            for el in soup.select('.jobResultItem'):
+                link = el.select_one('a')
+                title = link.get_text(strip=True) if link else ''
+                if not title or len(title) < 4: continue
+                job_url = (BASE_URL + link['href']) if link and link.get('href','').startswith('/') else (link['href'] if link else LIST_URL)
+                meta = el.get_text(separator=' ', strip=True)
+                # Extraer ID y fecha
+                id_m    = _re.search(r'(\d{4,6})', meta)
+                date_m  = _re.search(r'(\d{2}/\d{2}/\d{4})', meta)
+                job_id  = id_m.group(1) if id_m else ''
+                fecha   = date_m.group(1) if date_m else ''
+                empresa = empresa_from_meta(meta)
+                jobs.append({"title": title, "empresa": empresa, "area": classify(title),
+                             "job_id": job_id, "fecha": fecha})
+
+        parse_jobs(soup)
+        for p in range(2, total_pages + 1):
+            s = get_page(p, session)
+            parse_jobs(s)
+
+        if not jobs:
+            return {"ok": True, "msg": "Sin empleos encontrados en AMSA", "deleted": deleted}
+
+        # Agrupar por empresa
+        from collections import defaultdict
+        by_emp = defaultdict(list)
+        for j in jobs: by_emp[j["empresa"]].append(j)
+
+        now = datetime.now(timezone.utc)
+        opps = []
+        for empresa, emp_jobs in by_emp.items():
+            total = len(emp_jobs)
+            areas = {}
+            for j in emp_jobs: areas[j["area"]] = areas.get(j["area"], 0) + 1
+            cargo_list = "\n".join(f"• {j['title']} ({j['area']})" for j in emp_jobs)
+            slug = empresa.lower().replace(" ", "-")
+            opps.append({
+                "source": "AMSA Careers",
+                "title": f"Empleos AMSA — {empresa} ({total} cargos)",
+                "company": empresa,
+                "industry": "Minería",
+                "phase": "Contratación activa",
+                "region": "Chile",
+                "score": 0,
+                "url": f"https://career8.successfactors.com/amsa/{slug}",
+                "published_at": now.isoformat(),
+                "entry": f"{empresa}: {total} cargos disponibles.\n\n{cargo_list}",
+                "jobs_count": total,
+                "signal_score": min(total * 3, 40),
+                "last_signal_at": now.isoformat(),
+                "signal_detail": _json.dumps({"by_area": areas, "total": total, "fuente": "AMSA Careers"}, ensure_ascii=False),
+                "raw": {"by_area": areas},
+            })
+
+        inserted, updated = db.upsert_opportunities(opps)
+        return {
+            "ok": True,
+            "deleted_old": deleted,
+            "jobs_encontrados": len(jobs),
+            "empresas": {e: len(j) for e, j in by_emp.items()},
+            "inserted": inserted,
+            "updated": updated,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
+
 
 
 @app.post("/admin/run-mandante-scorer")
