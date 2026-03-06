@@ -24,6 +24,17 @@ async def lifespan(app: FastAPI):
         db.init_ai_db()
     except Exception as e:
         print(f"[startup] init_ai_db warning: {e}")
+    # Normalizar source 'sea' → 'SEA' (inconsistencia en datos)
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE opportunities SET source = 'SEA' WHERE source = 'sea'")
+                n = cur.rowcount
+            conn.commit()
+        if n: print(f"[startup] Normalizado {n} registros 'sea' → 'SEA'")
+    except Exception as e:
+        print(f"[startup] Warning SEA normalize: {e}")
+
     # Noticias no deben tener score — reset al arrancar
     try:
         NEWS_SRCS = [
@@ -1030,19 +1041,109 @@ def debug_noticias(company: str = "Codelco"):
 
 @app.post("/admin/run-bhp-careers")
 def run_bhp_careers():
-    """Scraping manual de empleos BHP Chile. Corre sincrónicamente para ver el resultado."""
-    import traceback as tb
+    """Scraping de empleos BHP Chile — inline, sin módulo externo."""
+    import traceback as tb, requests as _req, json as _json
+    from bs4 import BeautifulSoup
+    from datetime import datetime, timezone
+
+    SEARCH_URL = (
+        "https://careers.bhp.com/search/"
+        "?createNewAlert=false&q=&optionsFacetsDD_location=Chile"
+    )
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "Accept-Language": "es-CL,es;q=0.9",
+    }
+    AREA_KW = {
+        "Operaciones":   ["operador","operadora","mina","produccion","extraccion"],
+        "Mantenimiento": ["mantenedor","mantenci","electrico","mecanico","instrumentista"],
+        "Ingeniería":    ["engineer","ingeniero","specialist","especialista","lead","principal","tecnico"],
+        "Geología":      ["geolog","geoscien","geotecnia","hidrogeol","exploracion"],
+        "Finanzas":      ["finance","finanza","financiero","reporting","planning"],
+        "TI / Datos":    ["digital","data","ai","autonomous","autonomia","ahs","software"],
+        "RRHH":          ["training","capacit","rrhh","people","talento"],
+        "Supervisión":   ["supervisor","superintendente","gerente","jefe","coordinador"],
+        "HSE":           ["seguridad","safety","ambiente","hse","salud"],
+        "Proyectos":     ["project","proyecto","inversiones","transactions"],
+    }
+
+    def classify(title):
+        t = title.lower()
+        for area, kws in AREA_KW.items():
+            if any(k in t for k in kws):
+                return area
+        return "Otros"
+
     try:
-        # Borrar registros BHP anteriores
+        # Borrar registros anteriores
         with db.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM opportunities WHERE source = 'BHP Careers'")
                 deleted = cur.rowcount
             conn.commit()
 
-        import bhp_careers
-        result = bhp_careers.run()
-        return {"ok": True, "deleted_old": deleted, "result": result}
+        # Scrape
+        resp = _req.get(SEARCH_URL, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        jobs = []
+        seen = set()
+        for a in soup.select("table a[href*='/job/']"):
+            raw_title = a.get_text(strip=True)
+            if not raw_title or len(raw_title) < 5: continue
+            href = a.get("href","")
+            url = ("https://careers.bhp.com" + href) if href.startswith("/") else href
+            if url in seen: continue
+            seen.add(url)
+            parts = raw_title.split("|")
+            title   = parts[0].strip()
+            empresa = parts[1].strip() if len(parts) > 1 else "BHP"
+            jobs.append({"title": title, "empresa": empresa, "area": classify(title), "url": url})
+
+        if not jobs:
+            return {"ok": True, "msg": "Sin empleos encontrados en BHP Chile", "deleted": deleted}
+
+        # Agrupar por empresa
+        from collections import defaultdict
+        by_emp = defaultdict(list)
+        for j in jobs: by_emp[j["empresa"]].append(j)
+
+        now = datetime.now(timezone.utc)
+        opps = []
+        for empresa, emp_jobs in by_emp.items():
+            total = len(emp_jobs)
+            areas = {}
+            for j in emp_jobs: areas[j["area"]] = areas.get(j["area"], 0) + 1
+            cargo_list = "\n".join(f"• {j['title']} ({j['area']})" for j in emp_jobs)
+            slug = empresa.lower().replace(" ","-")
+            opps.append({
+                "source": "BHP Careers",
+                "title": f"Empleos BHP Chile — {empresa} ({total} cargos)",
+                "company": empresa,
+                "industry": "Minería",
+                "phase": "Contratación activa",
+                "region": "Chile",
+                "score": 0,
+                "url": f"https://careers.bhp.com/chile/{slug}",
+                "published_at": now.isoformat(),
+                "entry": f"{empresa}: {total} cargos disponibles en Chile.\n\n{cargo_list}",
+                "jobs_count": total,
+                "signal_score": min(total * 3, 40),
+                "last_signal_at": now.isoformat(),
+                "signal_detail": _json.dumps({"by_area": areas, "total": total, "fuente": "BHP Careers"}, ensure_ascii=False),
+                "raw": {"by_area": areas, "empleos": [j["url"] for j in emp_jobs]},
+            })
+
+        inserted, updated = db.upsert_opportunities(opps)
+        return {
+            "ok": True,
+            "deleted_old": deleted,
+            "jobs_encontrados": len(jobs),
+            "empresas": list(by_emp.keys()),
+            "inserted": inserted,
+            "updated": updated,
+        }
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
