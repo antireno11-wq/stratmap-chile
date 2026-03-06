@@ -211,6 +211,16 @@ if __name__ == "__main__":
         print(f"[ingest] BHP Careers: {result}")
     except Exception as e:
         print(f"[ingest] Error BHP Careers: {e}")
+
+    # ── AMSA Careers ──────────────────────────────────────────────────────────
+    print("[ingest] Scraping empleos AMSA (Pelambres, Centinela, Zaldívar)...")
+    try:
+        import requests as _req
+        r = _req.post("http://localhost:8000/admin/run-amsa-careers", timeout=60)
+        result = r.json()
+        print(f"[ingest] AMSA Careers: {result}")
+    except Exception as e:
+        print(f"[ingest] Error AMSA Careers: {e}")
         import traceback; traceback.print_exc()
 
     # ── Scoring temperatura mandantes ─────────────────────────────────────────
