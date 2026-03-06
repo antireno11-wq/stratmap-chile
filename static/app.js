@@ -3,7 +3,8 @@ const NEWS_SOURCES = new Set([
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
   "Revista EI","Radio U. de Chile","Radio Universidad de Chile","RSS",
   "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores",
-  "BHP Careers"
+  "BHP Careers",
+  "AMSA Careers"
 ]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
