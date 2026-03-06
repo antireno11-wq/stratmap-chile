@@ -54,7 +54,7 @@
     .filter-item .fc { font-size: 10px; color: #374151; margin-left: auto; font-weight: 600; }
 
     /* ── Main ── */
-    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; overflow-x: hidden; }
 
     .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .topbar-title { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
@@ -82,7 +82,7 @@
     .btn-outline:hover { border-color: #d1d5db; background: var(--bg); }
     .status-bar { font-size: 11px; color: var(--muted); font-weight: 500; }
 
-    .content { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+    .content { padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; max-width: 1400px; width: 100%; box-sizing: border-box; }
 
     /* ── Stat cards ── */
     .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -106,7 +106,7 @@
     .section-updated { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
 
     /* ── Table ── */
-    .tableWrap { overflow-x: auto; }
+    .tableWrap { overflow-x: auto; max-width: 100%; } table { table-layout: fixed; width: 100%; }
     table { width: 100%; border-collapse: collapse; }
     th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: #fafbfc; }
     td { font-size: 13px; padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
