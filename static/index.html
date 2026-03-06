@@ -54,7 +54,19 @@
     .filter-item .fc { font-size: 10px; color: #374151; margin-left: auto; font-weight: 600; }
 
     /* ── Main ── */
-    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; overflow-x: hidden; }
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; max-width: calc(100vw - var(--sidebar)); overflow-x: hidden; }
+
+    /* ── Region filter chips ── */
+    .chip { background: var(--bg); border: 1.5px solid var(--border); border-radius: 99px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .chip:hover { border-color: var(--blue); color: var(--blue); }
+    .chip-active { background: var(--blue); border-color: var(--blue); color: #fff !important; }
+
+    /* ── Dark mode ── */
+    [data-theme="dark"] { --bg: #0f1117; --card: #1a1f2e; --text: #e5e7eb; --muted: #9ca3af; --border: #2d3548; --blue-light: #1e2d4a; --orange-light: #2d2010; }
+    [data-theme="dark"] .topbar { background: var(--card); }
+    [data-theme="dark"] .sidebar { background: #0d1117; }
+    [data-theme="dark"] .topbar-search { background: #0f1117; }
+    [data-theme="dark"] .topbar-search:focus-within { background: #1a1f2e; }
 
     .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .topbar-title { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
@@ -106,15 +118,24 @@
     .section-updated { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
 
     /* ── Table ── */
-    .tableWrap { overflow-x: auto; max-width: 100%; } table { table-layout: fixed; width: 100%; }
+    .tableWrap { overflow-x: auto; max-width: 100%; }
+    table { table-layout: fixed; width: 100%; word-break: break-word; }
+    table th:nth-child(1) { width: 60px; }   /* score */
+    table th:nth-child(2) { width: 35%; }     /* title */
+    table th:nth-child(3) { width: 70px; }    /* fuente */
+    table th:nth-child(4) { width: 22%; }     /* mandante */
+    table th:nth-child(5) { width: 12%; }     /* region */
+    table th:nth-child(6) { width: 80px; }    /* estado */
+    table th:nth-child(7) { width: 80px; }    /* fecha */
+    table th:nth-child(8) { width: 50px; }    /* ver */
     table { width: 100%; border-collapse: collapse; }
     th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: #fafbfc; }
     td { font-size: 13px; padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #fafbff; }
-    .proj-title { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; display: block; letter-spacing: -0.2px; font-size: 13px; }
+    .proj-title { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(300px, 28vw); display: block; letter-spacing: -0.2px; font-size: 13px; }
     .proj-industry { font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-    .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 480px; display: block; text-decoration: none; font-weight: 600; }
+    .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(480px, 40vw); display: block; text-decoration: none; font-weight: 600; }
     .news-title:hover { text-decoration: underline; }
     .score-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 3px 9px; font-size: 12px; font-weight: 800; border-radius: 6px; letter-spacing: -0.2px; }
     .source-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
@@ -272,6 +293,7 @@
         <input id="q" placeholder="Buscar proyectos, empresas, regiones…" />
       </div>
       <div class="topbar-actions">
+        <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:16px;line-height:1" title="Cambiar tema">🌙</button>
         <select id="limit" class="topbar-select">
           <option value="50">50</option>
           <option value="100">100</option>
@@ -331,9 +353,9 @@
           <div class="stat-sub">indexadas</div>
         </div>
         <div class="stat-card yellow">
-          <div class="stat-label">Score promedio</div>
-          <div class="stat-value" id="stat-avg">—</div>
-          <div class="stat-sub">radar score</div>
+          <div class="stat-label">Empleos activos 💼</div>
+          <div class="stat-value" id="stat-empleos">—</div>
+          <div class="stat-sub">cargos disponibles</div>
         </div>
       </div>
 
@@ -364,6 +386,7 @@
       </div>
 
       <div class="section-card">
+        <div id="region-chips" style="padding:10px 18px 0;display:flex;gap:6px;flex-wrap:wrap;min-height:0;transition:all 0.2s"></div>
         <div class="section-head">
           <span class="section-icon">🏗</span>
           <span class="section-title">Proyectos</span>
