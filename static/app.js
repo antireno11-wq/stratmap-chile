@@ -998,11 +998,47 @@ function getPrefs() {
 
 
 
+
+// ── Score dinámico para proyectos SIGEX ───────────────────────────────────────
+// Los proyectos SIGEX vienen con score fijo=93. Recalculamos en base a datos reales.
+function calcSigexScore(item) {
+  if (item.source !== 'SIGEX') return item.score || 0;
+
+  let score = 30; // base: existe en registro SIGEX
+
+  // Fase del proyecto
+  const phase = (item.phase || '').toLowerCase();
+  if (phase.includes('tramite') || phase.includes('trámite')) score += 30;
+  else if (phase.includes('aprobado'))                          score += 20;
+  else if (phase.includes('concesion') || phase.includes('concesión')) score += 15;
+  else                                                           score += 5;
+
+  // Mineral (del título o raw.recurso)
+  const recurso = ((item.raw?.recurso || item.title || '')).toLowerCase();
+  if (/\bli\b|litio/.test(recurso))       score += 25; // litio = estratégico
+  else if (/cu|cobre/.test(recurso))       score += 20;
+  else if (/au|ag|oro|plata/.test(recurso)) score += 15;
+  else if (/fe|hierro|zn|zinc/.test(recurso)) score += 10;
+  else                                      score += 5;
+
+  // Señal activa (BHP careers, licitaciones, SEA)
+  if ((item.signal_score || 0) > 0)  score += 15;
+  if ((item.jobs_count   || 0) > 0)  score += 10;
+
+  // Región activa (norte grande = más actividad histórica)
+  const region = (item.region || '').toLowerCase();
+  if (/antofagasta|atacama|tarapac/.test(region)) score += 5;
+
+  return Math.min(score, 99); // cap en 99 para no superar señales reales
+}
+
 function applyPrefsScoring(items) {
   const prefs = getPrefs();
   if (!prefs || Object.keys(prefs).length === 0) return items;
 
   return items.map(item => {
+    // Recalcular score SIGEX dinámicamente antes de aplicar prefs
+    if (item.source === 'SIGEX') item = { ...item, score: calcSigexScore(item), radar_score: calcSigexScore(item) };
     let boost = 0;
     const title = (item.title || "").toLowerCase();
 
