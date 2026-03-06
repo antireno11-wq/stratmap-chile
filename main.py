@@ -1104,6 +1104,22 @@ def run_bhp_careers():
         if not jobs:
             return {"ok": True, "msg": "Sin empleos encontrados en BHP Chile", "deleted": deleted}
 
+        # Normalizar nombres de empresa BHP → entidad canónica
+        BHP_NORMALIZE = {
+            "bhp":                    "BHP CHILE INC",
+            "bhp chile":              "BHP CHILE INC",
+            "bhp chile inc":          "BHP CHILE INC",
+            "minera escondida":       "BHP CHILE INC",
+            "escondida":              "BHP CHILE INC",
+            "minera spence":          "BHP CHILE INC",
+            "spence":                 "BHP CHILE INC",
+            "cas plazo fijo":         "BHP CHILE INC",
+            "bhp billiton":           "BHP CHILE INC",
+        }
+        for j in jobs:
+            key = j["empresa"].lower().strip()
+            j["empresa"] = BHP_NORMALIZE.get(key, j["empresa"])
+
         # Agrupar por empresa
         from collections import defaultdict
         by_emp = defaultdict(list)
