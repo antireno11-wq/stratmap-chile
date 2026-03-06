@@ -1030,23 +1030,21 @@ def debug_noticias(company: str = "Codelco"):
 
 @app.post("/admin/run-bhp-careers")
 def run_bhp_careers():
-    """Scraping manual de empleos BHP Chile. Borra registros anteriores y re-inserta."""
-    import threading
-    def _run():
-        try:
-            # Borrar registros BHP anteriores (URLs viejas sin jobs_count)
-            with db.get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM opportunities WHERE source = 'BHP Careers'")
-                conn.commit()
-            print("[admin] BHP Careers anteriores borrados")
-            import bhp_careers
-            result = bhp_careers.run()
-            print(f"[admin] BHP Careers: {result}")
-        except Exception as e:
-            import traceback; traceback.print_exc()
-    threading.Thread(target=_run, daemon=True).start()
-    return {"ok": True, "msg": "BHP Careers: limpiando y re-scrapeando en background"}
+    """Scraping manual de empleos BHP Chile. Corre sincrónicamente para ver el resultado."""
+    import traceback as tb
+    try:
+        # Borrar registros BHP anteriores
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'BHP Careers'")
+                deleted = cur.rowcount
+            conn.commit()
+
+        import bhp_careers
+        result = bhp_careers.run()
+        return {"ok": True, "deleted_old": deleted, "result": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
 
 @app.post("/admin/run-mandante-scorer")
