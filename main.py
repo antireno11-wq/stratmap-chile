@@ -24,6 +24,17 @@ async def lifespan(app: FastAPI):
         db.init_ai_db()
     except Exception as e:
         print(f"[startup] init_ai_db warning: {e}")
+    # Resetear scores SIGEX a 0 para que el frontend los calcule dinámicamente
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE opportunities SET score = 0 WHERE source = 'SIGEX' AND score > 0")
+                n = cur.rowcount
+            conn.commit()
+        if n: print(f"[startup] Reset {n} scores SIGEX a 0 (se calculan en frontend)")
+    except Exception as e:
+        print(f"[startup] Warning SIGEX score reset: {e}")
+
     # Normalizar source 'sea' → 'SEA' (inconsistencia en datos)
     try:
         with db.get_conn() as conn:
