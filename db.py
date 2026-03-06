@@ -236,7 +236,7 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
 
 
 def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
-    limit = max(1, min(int(limit), 500))
+    limit = max(1, min(int(limit), 2000))
     base = """
     SELECT o.id, o.source, o.title, o.url, o.company, o.contractor, o.industry, o.region, o.phase,
            o.score, o.signal_score, o.signal_detail, o.jobs_count, o.signals, o.last_signal_at,
