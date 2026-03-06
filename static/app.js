@@ -558,7 +558,13 @@ function renderPagination(containerId, total, currentPg, onPage) {
 
 function renderFiltered() {
   const filtered = applyFilters(allItems);
-  const projects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews);
+  let projects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews);
+
+  // Apply region quick-filter chip
+  if (window._activeRegion) {
+    projects = projects.filter(i => i.region === window._activeRegion);
+  }
+
   // Noticias vienen de /noticias endpoint (no de allItems que solo tiene proyectos)
   const news = newsItems.sort((a,b) => new Date(b.published_at||b.created_at||0) - new Date(a.published_at||a.created_at||0));
 
@@ -587,21 +593,43 @@ function renderFiltered() {
   renderPagination('pagination-news', news.length, currentPage.news,
     'function(p){currentPage.news=p;renderFiltered()}');
 
-  el("stat-projects").textContent = projects.length;
+  el("stat-projects").textContent = projects.length.toLocaleString('es-CL');
   el("stat-news").textContent = news.length;
-  el("stat-signals").textContent = projects.filter(i => (i.signal_score||0) > 0).length;
-  const scores = filtered.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
-  el("stat-avg").textContent = isLoggedIn && scores.length
-    ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : "—";
-  // Hide score-related stats if not logged in
-  const scoreStatEl = document.getElementById('stat-avg')?.closest('.stat-card');
-  if (scoreStatEl) scoreStatEl.style.display = isLoggedIn ? '' : 'none';
+  el("stat-signals").textContent = projects.filter(i => (i.radar_score ?? i.score ?? 0) > 50).length;
+
+  // Empleos activos total
+  const empEl = document.getElementById('stat-empleos');
+  if (empEl) {
+    const totalEmpleos = (window._empleosData || []).reduce((s, e) => s + (e.total_jobs || 0), 0);
+    empEl.textContent = totalEmpleos || '—';
+  }
+
+  // Hide signal stats if not logged in
   const signalStatEl = document.getElementById('stat-signals')?.closest('.stat-card');
   if (signalStatEl) signalStatEl.style.display = isLoggedIn ? '' : 'none';
 
+  // ── Region quick-filter chips ──
+  const chipsEl = document.getElementById('region-chips');
+  if (chipsEl) {
+    const regionCounts = {};
+    allItems.filter(i => !isNews(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source)).forEach(i => {
+      if (i.region) regionCounts[i.region] = (regionCounts[i.region] || 0) + 1;
+    });
+    const topRegions = Object.entries(regionCounts).sort((a,b) => b[1]-a[1]).slice(0, 8);
+    if (topRegions.length > 1) {
+      chipsEl.style.paddingBottom = '10px';
+      chipsEl.innerHTML = `
+        <button onclick="filterByRegion(null)" class="chip ${!window._activeRegion ? 'chip-active' : ''}">Todas las regiones</button>
+        ${topRegions.map(([r, n]) =>
+          `<button onclick="filterByRegion('${r}')" class="chip ${window._activeRegion === r ? 'chip-active' : ''}">${r} <span style="opacity:.6">${n}</span></button>`
+        ).join('')}
+      `;
+    } else { chipsEl.style.paddingBottom = '0'; }
+  }
+
   el("upd-projects").textContent = "Actualizado ahora";
   el("upd-news").textContent = "Actualizado ahora";
-  el("status").textContent = `${projects.length} proyectos · ${news.length} noticias`;
+  el("status").textContent = `${projects.length.toLocaleString('es-CL')} proyectos · ${news.length} noticias`;
 }
 
 
@@ -744,6 +772,7 @@ async function loadEmpleos() {
   try {
     const res = await fetch('/empleos/resumen');
     const data = await res.json();
+    window._empleosData = data.empresas || [];
     renderEmpleos(data.empresas || []);
   } catch(e) {
     const grid = document.getElementById('empleos-grid');
@@ -942,7 +971,12 @@ async function load() {
     const data = await fetchJSON(url);
     await checkSession();
     loadAiFits();
-    const scored = applyPrefsScoring(data.items || []);
+    const rawItems = (data.items || []).map(item =>
+      item.source === 'SIGEX'
+        ? { ...item, score: calcSigexScore(item), radar_score: calcSigexScore(item) }
+        : item
+    );
+    const scored = applyPrefsScoring(rawItems);
     currentSort.by = currentSort.by || (isLoggedIn ? 'score' : 'date');
     allItems = sortItems(scored);
     updateSortArrows();
@@ -1041,8 +1075,6 @@ function applyPrefsScoring(items) {
   if (!prefs || Object.keys(prefs).length === 0) return items;
 
   return items.map(item => {
-    // Recalcular score SIGEX dinámicamente antes de aplicar prefs
-    if (item.source === 'SIGEX') item = { ...item, score: calcSigexScore(item), radar_score: calcSigexScore(item) };
     let boost = 0;
     const title = (item.title || "").toLowerCase();
 
@@ -1150,3 +1182,43 @@ function updateUserMenuState() {
     if (logoutBtn)    logoutBtn.style.display      = 'none';
   }
 }
+
+// ── Region quick-filter ────────────────────────────────────────────────────
+window._activeRegion = null;
+
+function filterByRegion(region) {
+  window._activeRegion = region;
+  // Update chip active states
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
+  const chips = document.querySelectorAll('.chip');
+  chips.forEach(c => {
+    if (region === null && c.textContent.startsWith('Todas')) c.classList.add('chip-active');
+    else if (region && c.textContent.startsWith(region)) c.classList.add('chip-active');
+  });
+  renderFiltered();
+}
+
+// Hook into getFiltered to apply region filter
+const _origGetFiltered = window.getFiltered;
+
+// ── Dark / Light mode toggle ────────────────────────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const isDark = root.getAttribute('data-theme') === 'dark';
+  root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = isDark ? '🌙' : '☀️';
+  localStorage.setItem('stratmap-theme', isDark ? 'light' : 'dark');
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('stratmap-theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    setTimeout(() => {
+      const btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = '☀️';
+    }, 100);
+  }
+})();
