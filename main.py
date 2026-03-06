@@ -16,7 +16,6 @@ from db import (db_health, init_db_safe, list_opportunities, upsert_opportunitie
                 get_pipeline_notes, list_pipeline, PIPELINE_STATUSES)
 from auth import hash_password, verify_password, create_access_token, decode_token
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db_safe()
@@ -52,7 +51,6 @@ async def lifespan(app: FastAPI):
             'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
             'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
             'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
-            'BHP Careers',
         ]
         with db.get_conn() as conn:
             with conn.cursor() as cur:
@@ -68,7 +66,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Stratmap Chile", lifespan=lifespan)
 
-
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def get_current_user(authorization: Optional[str] = Header(default=None)):
@@ -79,7 +76,6 @@ def get_current_user(authorization: Optional[str] = Header(default=None)):
     if not payload:
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     return {"user_id": int(payload["sub"]), "email": payload["email"]}
-
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -147,7 +143,6 @@ class NoteIn(BaseModel):
     note: str
     author: Optional[str] = None
 
-
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 @app.post("/setup/first-user")
@@ -158,7 +153,6 @@ def setup_first_user(payload: CreateUserPayload):
     password_hash = hash_password(payload.password)
     new_user = create_user(payload.email, password_hash, payload.name)
     return {"ok": True, "user_id": new_user["id"], "email": new_user["email"]}
-
 
 # ── Endpoints públicos ────────────────────────────────────────────────────────
 
@@ -197,7 +191,6 @@ def opportunities(
         result.append(r)
     return {"items": result, "count": len(result)}
 
-
 @app.get("/noticias")
 def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
     """Noticias recientes del sector minero."""
@@ -205,8 +198,6 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
         'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
         'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
         'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
-        'BHP Careers',
-        'AMSA Careers',
     ]
     try:
         with db.get_conn() as conn:
@@ -226,7 +217,6 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
         return {"items": rows, "count": len(rows)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
@@ -277,7 +267,6 @@ def get_notes(opportunity_id: int):
         if r.get("created_at"): r["created_at"] = r["created_at"].isoformat()
         result.append(r)
     return {"items": result}
-
 
 # ── Contactos ─────────────────────────────────────────────────────────────────
 
@@ -346,7 +335,6 @@ def export_contacts():
         headers={"Content-Disposition": "attachment; filename=contactos_stratmap.csv"}
     )
 
-
 # ── Endpoints privados ────────────────────────────────────────────────────────
 
 @app.get("/feed")
@@ -385,7 +373,6 @@ def get_my_preferences(user=Depends(get_current_user)):
 def update_preferences(payload: PreferencesPayload, user=Depends(get_current_user)):
     save_preferences(user["user_id"], payload.model_dump())
     return {"ok": True}
-
 
 # ── AI Matching ───────────────────────────────────────────────────────────────
 
@@ -429,8 +416,6 @@ def update_service_profile(payload: ServiceProfilePayload):
         onboarding_done=payload.onboarding_done,
     )
     return {"ok": True, "profile": profile}
-
-
 
 @app.get("/mandantes")
 def get_mandantes():
@@ -562,8 +547,6 @@ def get_mandantes():
         except Exception as e2:
             raise HTTPException(status_code=500, detail=str(e2))
 
-
-
 # Cache en memoria para no regenerar en cada visita
 _company_summaries: dict = {}
 
@@ -584,8 +567,6 @@ def get_company_summary(company_name: str):
         'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
         'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
         'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
-        'BHP Careers',
-        'AMSA Careers',
     ]
     with db.get_conn() as conn:
         with conn.cursor() as cur:
@@ -677,7 +658,6 @@ Responde SOLO JSON sin markdown:
 
     _company_summaries[key] = result
     return result
-
 
 @app.get("/mandantes/detail")
 def get_mandante_detail_q(company: str):
@@ -809,7 +789,6 @@ def _mandante_detail(company_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ── Faenas Mineras ─────────────────────────────────────────────────────────────
 
 _faenas_cache: dict = {"data": [], "ts": 0}
@@ -836,14 +815,12 @@ def get_faenas():
             return {"faenas": _faenas_cache["data"], "total": len(_faenas_cache["data"]), "cached": True}
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/admin/refresh-faenas")
 def refresh_faenas():
     """Fuerza recarga del cache de faenas mineras."""
     global _faenas_cache
     _faenas_cache = {"data": [], "ts": 0}
     return {"ok": True, "msg": "Cache de faenas limpiado, próxima llamada a /faenas recargará"}
-
 
 # ── Empleos por empresa ────────────────────────────────────────────────────────
 
@@ -905,7 +882,6 @@ def get_empleos_resumen():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/empleos/empresa/{company_name}")
 def get_empleos_empresa(company_name: str):
     """Detalle de empleos por proyecto para una empresa específica."""
@@ -937,7 +913,6 @@ def get_empleos_empresa(company_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/me/score-projects")
 def score_projects(payload: dict):
     """
@@ -958,7 +933,6 @@ def score_projects(payload: dict):
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Scoring IA iniciado en background", "company_key": company_key}
 
-
 @app.get("/me/profile")
 def get_profile(company_key: str = "default"):
     """Retorna el perfil completo incluyendo onboarding_done."""
@@ -966,7 +940,6 @@ def get_profile(company_key: str = "default"):
     if not profile:
         return {"onboarding_done": False, "services": [], "company_name": None}
     return profile
-
 
 @app.get("/ai/fits")
 def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 500):
@@ -976,7 +949,6 @@ def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 5
         return {"fits": fits, "total": len(fits)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/admin/debug-noticias")
 def debug_noticias(company: str = "Codelco"):
@@ -1318,9 +1290,6 @@ def run_amsa_careers():
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
-
-
-
 @app.post("/admin/run-mandante-scorer")
 def run_mandante_scorer():
     """Dispara scoring de temperatura de mandantes con IA."""
@@ -1335,7 +1304,6 @@ def run_mandante_scorer():
             import traceback; traceback.print_exc()
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Scoring de temperatura iniciado en background"}
-
 
 @app.post("/admin/run-ai-scoring")
 def run_ai_scoring_all():
@@ -1378,7 +1346,6 @@ def mark_onboarding_done():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/admin/sources-count")
 def sources_count():
     """Muestra cuántos registros hay por source — útil para diagnóstico."""
@@ -1398,7 +1365,6 @@ def sources_count():
             if r.get(k): r[k] = str(r[k])
     return {"sources": rows}
 
-
 @app.delete("/admin/delete-source/{source_name}")
 def delete_source(source_name: str):
     """Elimina todos los registros de una fuente específica."""
@@ -1408,7 +1374,6 @@ def delete_source(source_name: str):
             deleted = cur.rowcount
         conn.commit()
     return {"deleted": deleted, "source": source_name}
-
 
 @app.post("/admin/run-sigex")
 def run_sigex():
@@ -1427,5 +1392,31 @@ def run_sigex():
             import traceback; traceback.print_exc()
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Ingesta SIGEX iniciada en background"}
+
+# Rutas explícitas para páginas HTML (fallback si static/ no las encuentra)
+from fastapi.responses import FileResponse
+import os as _os
+
+def _static(filename):
+    """Sirve un archivo desde static/ con fallback."""
+    path = _os.path.join("static", filename)
+    if _os.path.exists(path):
+        return FileResponse(path)
+    return {"detail": "Not Found"}, 404
+
+@app.get("/mandantes.html", include_in_schema=False)
+def serve_mandantes(): return _static("mandantes.html")
+
+@app.get("/mandante.html", include_in_schema=False)
+def serve_mandante(): return _static("mandante.html")
+
+@app.get("/mapa.html", include_in_schema=False)
+def serve_mapa(): return _static("mapa.html")
+
+@app.get("/kanban.html", include_in_schema=False)
+def serve_kanban(): return _static("kanban.html")
+
+@app.get("/preferences.html", include_in_schema=False)
+def serve_preferences(): return _static("preferences.html")
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
