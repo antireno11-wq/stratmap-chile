@@ -192,14 +192,22 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     updated = 0
     sql = """
     INSERT INTO opportunities
-      (source, title, url, company, contractor, industry, region, phase, score, entry, raw, published_at, created_at, updated_at)
+      (source, title, url, company, contractor, industry, region, phase, score,
+       entry, raw, published_at, created_at, updated_at,
+       jobs_count, signal_score, signal_detail, last_signal_at)
     VALUES
-      (%(source)s, %(title)s, %(url)s, %(company)s, %(contractor)s, %(industry)s, %(region)s, %(phase)s, %(score)s, %(entry)s, %(raw)s, %(published_at)s, NOW(), NOW())
+      (%(source)s, %(title)s, %(url)s, %(company)s, %(contractor)s, %(industry)s,
+       %(region)s, %(phase)s, %(score)s, %(entry)s, %(raw)s, %(published_at)s, NOW(), NOW(),
+       %(jobs_count)s, %(signal_score)s, %(signal_detail)s, %(last_signal_at)s)
     ON CONFLICT (url) DO UPDATE SET
       source = EXCLUDED.source, title = EXCLUDED.title, company = EXCLUDED.company,
       contractor = EXCLUDED.contractor, industry = EXCLUDED.industry, region = EXCLUDED.region,
       phase = EXCLUDED.phase, score = EXCLUDED.score, entry = EXCLUDED.entry,
       raw = EXCLUDED.raw,
+      jobs_count = EXCLUDED.jobs_count,
+      signal_score = EXCLUDED.signal_score,
+      signal_detail = EXCLUDED.signal_detail,
+      last_signal_at = COALESCE(EXCLUDED.last_signal_at, opportunities.last_signal_at),
       published_at = CASE WHEN EXCLUDED.published_at IS NOT NULL THEN EXCLUDED.published_at ELSE opportunities.published_at END,
       updated_at = NOW()
     RETURNING (xmax = 0) AS inserted;
@@ -209,6 +217,8 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
         it.setdefault("industry", None); it.setdefault("region", None)
         it.setdefault("phase", None); it.setdefault("score", 0); it.setdefault("entry", None)
         it.setdefault("published_at", None)
+        it.setdefault("jobs_count", 0); it.setdefault("signal_score", 0)
+        it.setdefault("signal_detail", None); it.setdefault("last_signal_at", None)
         raw = it.get("raw")
         if isinstance(raw, (dict, list)): it["raw"] = Json(raw)
         elif raw is None: it["raw"] = None
