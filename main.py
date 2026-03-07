@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 import db
 from db import (db_health, init_db_safe, list_opportunities, upsert_opportunities,
+                recalc_all_scores,
                 create_user, get_user_by_email, save_preferences, get_preferences,
                 create_contact, update_contact, delete_contact,
                 get_contacts_by_company, list_contacts, bulk_import_contacts,
@@ -23,16 +24,13 @@ async def lifespan(app: FastAPI):
         db.init_ai_db()
     except Exception as e:
         print(f"[startup] init_ai_db warning: {e}")
-    # Resetear scores SIGEX a 0 para que el frontend los calcule dinámicamente
+    # Recalcular scores con el scoring engine al arrancar
     try:
-        with db.get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE opportunities SET score = 0 WHERE source = 'SIGEX' AND score > 0")
-                n = cur.rowcount
-            conn.commit()
-        if n: print(f"[startup] Reset {n} scores SIGEX a 0 (se calculan en frontend)")
+        result = recalc_all_scores()
+        print(f"[startup] Scores recalculados: {result['total_updated']} actualizados de {result['total_rows']} total")
+        print(f"[startup] Distribución: {result['distribution']}")
     except Exception as e:
-        print(f"[startup] Warning SIGEX score reset: {e}")
+        print(f"[startup] Warning recalc scores: {e}")
 
     # Normalizar source 'sea' → 'SEA' (inconsistencia en datos)
     try:
@@ -1289,6 +1287,20 @@ def run_amsa_careers():
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
+@app.post("/admin/recalcular-scores")
+def admin_recalcular_scores():
+    """
+    Recalcula scores de todos los proyectos usando el scoring engine de Stratmap.
+    Aplica la función calc_score() a cada registro y actualiza la BD.
+    """
+    import traceback as tb
+    try:
+        result = recalc_all_scores()
+        return {"ok": True, **result}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
 
 @app.post("/admin/run-mandante-scorer")
 def run_mandante_scorer():
