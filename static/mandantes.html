@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mandantes — Stratmap</title>
+  <style>
+    :root {
+      --sidebar: 230px;
+      --text: #111827; --muted: #6b7280; --border: #e5e7eb;
+      --card: #ffffff; --bg: #f8fafc;
+      --blue: #1a56db; --orange: #f97316;
+      --sidebar-bg: #1a1f2e; --sidebar-hover: #232940; --sidebar-active: #2a3355;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; display: flex; flex-direction: column; overflow-y: auto; }
+    .sidebar-brand { padding: 16px 18px; border-bottom: 1px solid #2d3548; background: #fff; display: flex; align-items: center; justify-content: center; }
+    .sidebar-logo-img { width: 140px; height: auto; }
+    .sidebar-section { padding: 20px 18px 5px; font-size: 9px; font-weight: 700; color: #6b7a99; letter-spacing: 0.1em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; font-size: 14px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
+    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; }
+    .sidebar-item.active { background: var(--sidebar-active); color: #fff; border-left-color: var(--orange); font-weight: 600; }
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; }
+
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 50; }
+    .topbar-title { font-size: 16px; font-weight: 700; }
+    .topbar-sub { font-size: 12px; color: var(--muted); }
+
+    .content { padding: 24px; max-width: 1400px; }
+
+    /* Filtros */
+    .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-input { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; transition: border .15s; width: 220px; }
+    .filter-input:focus { border-color: var(--blue); }
+    .filter-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+    /* Grid */
+    .mandantes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .mandante-card { background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; padding: 14px 16px; cursor: pointer; transition: all .15s; position: relative; overflow: hidden; }
+    .mandante-card:hover { border-color: var(--blue); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,86,219,0.1); }
+    .mandante-card-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; margin-bottom: 4px; }
+    .mandante-card-score { font-size: 26px; font-weight: 900; letter-spacing: -1px; line-height: 1; margin-bottom: 4px; }
+    .mandante-card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+    .mandante-meta-item { font-size: 11px; color: var(--muted); background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+    .mandante-card-bar { height: 3px; border-radius: 4px; margin-top: 8px; background: linear-gradient(90deg, var(--blue), #60a5fa); }
+
+    .empty { text-align: center; color: var(--muted); padding: 60px 20px; font-size: 14px; }
+    .mandante-heat-row { margin-bottom: 4px; }
+    .heat-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px; display: inline-block; cursor: help; }
+    .heat-hot  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .heat-warm { background: #fefce8; color: #ca8a04; border: 1px solid #fde68a; }
+    .heat-mid  { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .mandante-card-hot { border-color: #fca5a5 !important; }
+    .mandante-card-hot:hover { border-color: #ef4444 !important; box-shadow: 0 6px 20px rgba(220,38,38,0.12) !important; }
+    .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <img src="/img/logo.png" class="sidebar-logo-img" alt="Stratmap" onerror="this.style.display='none'">
+    </div>
+    <div class="sidebar-section">Plataforma</div>
+    <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
+    <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <a class="sidebar-item active" href="/mandantes.html"><span class="icon">🏢</span> Mandantes</a>
+    <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
+    <div class="sidebar-section">Cuenta</div>
+    <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">🏢 Mandantes</span>
+      <span class="topbar-sub" id="topbar-sub">Cargando...</span>
+    </div>
+    <div class="content">
+      <div class="filters">
+        <input class="filter-input" id="search-input" placeholder="Buscar empresa..." oninput="filterMandantes()">
+        <span class="filter-count" id="filter-count"></span>
+      </div>
+      <div class="mandantes-grid" id="mandantes-grid">
+        <div class="empty">Cargando mandantes...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allMandantes = [];
+
+    function escapeHTML(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function scoreColor(s) {
+      if (s >= 90) return ['#15803d','#f0fdf4'];
+      if (s >= 70) return ['#1a56db','#eff6ff'];
+      if (s >= 50) return ['#92400e','#fef3c7'];
+      return ['#6b7280','#f9fafb'];
+    }
+
+    function renderGrid(data) {
+      const grid  = document.getElementById('mandantes-grid');
+      const count = document.getElementById('filter-count');
+      if (count) count.textContent = `${data.length} mandante${data.length !== 1 ? 's' : ''}`;
+
+      if (!data.length) {
+        grid.innerHTML = '<div class="empty">Sin resultados</div>';
+        return;
+      }
+
+      const maxScore = Math.max(...data.map(m => m.score_consolidado || 0), 1);
+
+      grid.innerHTML = data.map(m => {
+        const score = m.score_consolidado || 0;
+        const [sc] = scoreColor(score);
+        const pct  = Math.round((score / maxScore) * 100);
+        const slug = encodeURIComponent(m.company);
+        const meta = [];
+        if (m.n_proyectos > 0) meta.push(`<span class="mandante-meta-item">🏗 ${m.n_proyectos} proy.</span>`);
+        if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">🌿 ${m.n_sea} SEA</span>`);
+        if ((m.total_jobs||0) > 0) meta.push(`<span class="mandante-meta-item">👷 ${m.total_jobs}</span>`);
+        if ((m.n_news_recent||0) > 0) meta.push(`<span class="mandante-meta-item">📰 ${m.n_news_recent}</span>`);
+        const heat = m.heat_score || 0;
+        let heatBadge = '';
+        if (heat >= 80) heatBadge = `<span class="heat-badge heat-hot" title="${escapeHTML(m.heat_reason||'')}">🔥 Muy activa</span>`;
+        else if (heat >= 60) heatBadge = `<span class="heat-badge heat-warm" title="${escapeHTML(m.heat_reason||'')}">⚡ Activa</span>`;
+        else if (heat >= 40) heatBadge = `<span class="heat-badge heat-mid" title="${escapeHTML(m.heat_reason||'')}">📊 Moderada</span>`;
+        const topics = (m.trending_topics||[]).slice(0,2).map(t =>
+          `<span class="mandante-topic">${escapeHTML(t)}</span>`).join('');
+        return `
+          <div class="mandante-card ${heat>=60?'mandante-card-hot':''}"
+               onclick="window.location.href='/mandante.html?empresa=${slug}'">
+            ${heatBadge ? `<div class="mandante-heat-row">${heatBadge}</div>` : ''}
+            <div class="mandante-card-name">${escapeHTML(m.company)}</div>
+            <div class="mandante-card-score" style="color:${sc}">${score}</div>
+            <div class="mandante-card-meta">${meta.join('')}</div>
+            ${topics ? `<div class="mandante-topics">${topics}</div>` : ''}
+            <div class="mandante-card-bar" style="width:${pct}%"></div>
+          </div>`;
+      }).join('');
+    }
+
+    function filterMandantes() {
+      const q = document.getElementById('search-input').value.toLowerCase().trim();
+      const filtered = q ? allMandantes.filter(m => m.company.toLowerCase().includes(q)) : allMandantes;
+      renderGrid(filtered);
+    }
+
+    async function load() {
+      const res  = await fetch('/mandantes');
+      const data = await res.json();
+      allMandantes = data.mandantes || [];
+      document.getElementById('topbar-sub').textContent = `${allMandantes.length} empresas con actividad minera`;
+      renderGrid(allMandantes);
+    }
+
+    load();
+  </script>
+</body>
+</html>
