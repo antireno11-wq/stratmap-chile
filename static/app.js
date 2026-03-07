@@ -658,9 +658,11 @@ function renderFiltered() {
     } else { chipsEl.style.paddingBottom = '0'; }
   }
 
+  const updLic = document.getElementById('upd-licitaciones');
+  if (updLic) updLic.textContent = "Actualizado ahora";
   el("upd-projects").textContent = "Actualizado ahora";
   el("upd-news").textContent = "Actualizado ahora";
-  el("status").textContent = `${projects.length.toLocaleString('es-CL')} proyectos · ${news.length} noticias`;
+  el("status").textContent = `${allProjects.length.toLocaleString('es-CL')} proyectos · ${news.length} noticias`;
 }
 
 
