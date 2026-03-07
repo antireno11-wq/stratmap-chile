@@ -827,6 +827,7 @@ def get_empleos_resumen():
     """
     Resumen de empleos disponibles por empresa (mandante).
     Muestra movimiento de contratación activa en el sector minero.
+    Normaliza nombres de empresa para consolidar duplicados (BHP, Escondida, etc.)
     """
     NEWS_SRC = (
         "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
@@ -834,8 +835,41 @@ def get_empleos_resumen():
         "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS','manual'"
     )
     sql = f"""
+    WITH normalized AS (
+        SELECT
+            CASE
+                WHEN LOWER(TRIM(company)) IN (
+                    'bhp','bhp chile','bhp chile inc','minera escondida',
+                    'escondida','minera spence','spence','cas plazo fijo',
+                    'bhp billiton','bhp chile ltda'
+                ) THEN 'BHP CHILE INC'
+                WHEN LOWER(TRIM(company)) IN (
+                    'antofagasta minerals','amsa','amsa - corporativo',
+                    'antofagasta minerals s.a.'
+                ) THEN 'ANTOFAGASTA MINERALS'
+                WHEN LOWER(TRIM(company)) IN (
+                    'minera centinela','centinela'
+                ) THEN 'MINERA CENTINELA'
+                WHEN LOWER(TRIM(company)) IN (
+                    'minera los pelambres','los pelambres','pelambres'
+                ) THEN 'MINERA LOS PELAMBRES'
+                WHEN LOWER(TRIM(company)) IN (
+                    'minera zaldivar','minera zaldívar','compania minera zaldivar',
+                    'compañía minera zaldívar'
+                ) THEN 'MINERA ZALDIVAR'
+                WHEN LOWER(TRIM(company)) IN (
+                    'codelco','corporacion nacional del cobre','corporación nacional del cobre'
+                ) THEN 'CODELCO'
+                ELSE UPPER(TRIM(company))
+            END AS company_norm,
+            jobs_count, signal_score, last_signal_at, signal_detail
+        FROM opportunities
+        WHERE company IS NOT NULL AND TRIM(company) != ''
+          AND source NOT IN ({NEWS_SRC})
+          AND (jobs_count > 0 OR signal_score > 0)
+    )
     SELECT
-        company,
+        company_norm                                    AS company,
         SUM(COALESCE(jobs_count, 0))                    AS total_jobs,
         MAX(COALESCE(signal_score, 0))                  AS top_signal,
         COUNT(*) FILTER (WHERE jobs_count > 0)          AS proyectos_con_empleos,
@@ -844,11 +878,8 @@ def get_empleos_resumen():
         array_agg(DISTINCT signal_detail) FILTER (
             WHERE signal_detail IS NOT NULL AND (jobs_count > 0 OR signal_score > 0)
         ) AS signal_details
-    FROM opportunities
-    WHERE company IS NOT NULL AND TRIM(company) != ''
-      AND source NOT IN ({NEWS_SRC})
-      AND (jobs_count > 0 OR signal_score > 0)
-    GROUP BY company
+    FROM normalized
+    GROUP BY company_norm
     HAVING SUM(COALESCE(jobs_count,0)) + MAX(COALESCE(signal_score,0)) > 0
     ORDER BY total_jobs DESC, top_signal DESC
     LIMIT 30;
