@@ -862,6 +862,17 @@ def get_empleos_resumen():
                     'lumina copper','lundin mining'
                 ) THEN 'MINERA CANDELARIA'
                 WHEN LOWER(TRIM(company)) IN (
+                    'compania minera teck quebrada blanca','teck quebrada blanca',
+                    'quebrada blanca','teck resources'
+                ) THEN 'TECK QUEBRADA BLANCA'
+                WHEN LOWER(TRIM(company)) IN (
+                    'compania minera carmen de andacollo','carmen de andacollo',
+                    'teck andacollo','minera andacollo'
+                ) THEN 'CARMEN DE ANDACOLLO'
+                WHEN LOWER(TRIM(company)) IN (
+                    'teck chile','teck'
+                ) THEN 'TECK CHILE'
+                WHEN LOWER(TRIM(company)) IN (
                     'compania minera dona ines de collahuasi',
                     'compañía minera doña inés de collahuasi',
                     'collahuasi','minera collahuasi'
@@ -1544,6 +1555,170 @@ def run_lundin_careers():
             "empresas": {e: len(j) for e, j in by_emp.items()},
             "inserted": inserted,
             "updated": updated,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
+
+@app.post("/admin/run-teck-careers")
+def run_teck_careers():
+    """Scraping de empleos Teck Chile — Carmen de Andacollo y Quebrada Blanca."""
+    import traceback as tb, requests as _req, json as _json
+    from datetime import datetime, timezone
+
+    API_URL = "https://jobs.teck.com/services/recruiting/v1/jobs"
+    BASE_URL = "https://jobs.teck.com"
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Referer": "https://jobs.teck.com/search/?q=&locationsearch=Chile&searchResultView=LIST",
+    }
+
+    # Mapeo de ubicación → empresa canónica Stratmap
+    # Pica, TA = Quebrada Blanca (Tarapacá); Andacollo, CO = Carmen de Andacollo (Coquimbo)
+    LOCATION_MAP = {
+        "pica":       "COMPANIA MINERA TECK QUEBRADA BLANCA",
+        "tarapacá":   "COMPANIA MINERA TECK QUEBRADA BLANCA",
+        "tarapaca":   "COMPANIA MINERA TECK QUEBRADA BLANCA",
+        "andacollo":  "COMPANIA MINERA CARMEN DE ANDACOLLO",
+        "coquimbo":   "COMPANIA MINERA CARMEN DE ANDACOLLO",
+        "santiago":   "TECK CHILE",
+    }
+
+    # Mapeo categoría SuccessFactors → área Stratmap
+    CAT_MAP = {
+        "mantenimiento":          "Mantenimiento",
+        "maintenance":            "Mantenimiento",
+        "ingeniería":             "Ingeniería",
+        "ingenieria":             "Ingeniería",
+        "engineering":            "Ingeniería",
+        "operaciones mina":       "Operaciones",
+        "mine operations":        "Operaciones",
+        "geociencia":             "Geología",
+        "geoscience":             "Geología",
+        "geología":               "Geología",
+        "salud":                  "HSE",
+        "health":                 "HSE",
+        "safety":                 "HSE",
+        "ambiente":               "HSE",
+        "finanzas":               "Finanzas",
+        "finance":                "Finanzas",
+        "tecnología":             "TI / Datos",
+        "technology":             "TI / Datos",
+        "recursos humanos":       "RRHH",
+        "human resources":        "RRHH",
+        "supply chain":           "Supply Chain",
+        "abastecimiento":         "Supply Chain",
+        "proyectos":              "Proyectos",
+        "projects":               "Proyectos",
+        "administración":         "Administración",
+        "business administration":"Administración",
+    }
+
+    def empresa_from_location(location_str):
+        loc = (location_str or "").lower()
+        for key, name in LOCATION_MAP.items():
+            if key in loc: return name
+        return "TECK CHILE"
+
+    def area_from_cat(cat_str):
+        c = (cat_str or "").lower()
+        for key, area in CAT_MAP.items():
+            if key in c: return area
+        return "Otros"
+
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'Teck Careers'")
+                deleted = cur.rowcount
+            conn.commit()
+
+        # POST a la API interna de SuccessFactors/Teck — filtro Chile, pageSize 200
+        payload = {
+            "keyword": "",
+            "location": "Chile",
+            "locale": "es_ES",
+            "pageNo": 1,
+            "pageSize": 200,
+        }
+        r = _req.post(API_URL, headers=HEADERS, json=payload, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+
+        raw_jobs = data.get("jobSearchResult", [])
+        total_api = data.get("totalJobs", 0)
+
+        if not raw_jobs:
+            return {"ok": True, "msg": "Sin empleos encontrados en Teck Chile", "deleted": deleted, "total_api": total_api}
+
+        # Parsear cada job
+        jobs = []
+        for item in raw_jobs:
+            resp = item.get("response", {})
+            title    = resp.get("unifiedStandardTitle", "")
+            if not title: continue
+            job_id   = resp.get("id", "")
+            url_title = resp.get("unifiedUrlTitle", resp.get("urlTitle", ""))
+            location  = (resp.get("jobLocationShort") or [""])[0].strip().rstrip(",").strip()
+            cat       = (resp.get("filter6") or [""])[0]
+            empresa   = empresa_from_location(location)
+            area      = area_from_cat(cat)
+            # Construir URL del empleo
+            loc_slug = location.split(",")[0].strip().replace(" ", "-") if location else "Chile"
+            job_url  = f"{BASE_URL}/job/{loc_slug}-{url_title}-/{job_id}/" if job_id else BASE_URL + "/search/?q=&locationsearch=Chile"
+            jobs.append({
+                "title":   title,
+                "empresa": empresa,
+                "area":    area,
+                "location": location,
+                "url":     job_url,
+                "id":      job_id,
+            })
+
+        # Agrupar por empresa
+        from collections import defaultdict
+        by_emp = defaultdict(list)
+        for j in jobs: by_emp[j["empresa"]].append(j)
+
+        now = datetime.now(timezone.utc)
+        opps = []
+        for empresa, emp_jobs in by_emp.items():
+            total_emp = len(emp_jobs)
+            areas = {}
+            for j in emp_jobs:
+                areas[j["area"]] = areas.get(j["area"], 0) + 1
+            cargo_list = "\n".join(f"• {j['title']} ({j['area']}) — {j['location']}" for j in emp_jobs)
+            slug = empresa.lower().replace(" ", "-").replace(".", "")
+            region = "Tarapacá" if "quebrada" in empresa.lower() else "Coquimbo" if "andacollo" in empresa.lower() else "Chile"
+            opps.append({
+                "source":       "Teck Careers",
+                "title":        f"Empleos Teck Chile — {empresa} ({total_emp} cargos)",
+                "company":      empresa,
+                "industry":     "Minería",
+                "phase":        "Contratación activa",
+                "region":       region,
+                "score":        0,
+                "url":          f"https://jobs.teck.com/search/?q=&locationsearch=Chile&searchResultView=LIST",
+                "published_at": now.isoformat(),
+                "entry":        f"{empresa}: {total_emp} cargos disponibles en Chile.\n\n{cargo_list}",
+                "jobs_count":   total_emp,
+                "signal_score": min(total_emp * 3, 45),
+                "last_signal_at": now.isoformat(),
+                "signal_detail": _json.dumps({"by_area": areas, "total": total_emp, "fuente": "Teck Careers"}, ensure_ascii=False),
+                "raw":          {"by_area": areas, "empleos": [{"title": j["title"], "url": j["url"]} for j in emp_jobs]},
+            })
+
+        inserted, updated = db.upsert_opportunities(opps)
+        return {
+            "ok":           True,
+            "deleted_old":  deleted,
+            "total_api":    total_api,
+            "jobs_encontrados": len(jobs),
+            "empresas":     {e: len(j) for e, j in by_emp.items()},
+            "inserted":     inserted,
+            "updated":      updated,
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
