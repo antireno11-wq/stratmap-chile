@@ -39,15 +39,30 @@ def _run_rss_ingest():
 
 
 async def _rss_scheduler():
-    """Corre RSS cada 6 horas en background."""
-    # Primera corrida al arrancar (espera 10s para que la app esté lista)
+    """Corre RSS cada 6 horas y AI scorer una vez al día en background."""
     await asyncio.sleep(10)
+    cycle = 0
     while True:
+        # RSS cada 6h
         print("[scheduler] Corriendo RSS ingest...")
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, _run_rss_ingest)
         print(f"[scheduler] RSS done: {result}")
-        await asyncio.sleep(6 * 3600)  # 6 horas
+
+        # AI scorer una vez al día (cada 4 ciclos de 6h)
+        cycle += 1
+        if cycle % 4 == 0:
+            print("[scheduler] Corriendo AI scorer zona gris...")
+            try:
+                import ai_scorer
+                ai_result = await loop.run_in_executor(
+                    None, lambda: ai_scorer.run(score_min=45, score_max=65, batch_size=20, max_batches=3)
+                )
+                print(f"[scheduler] AI scorer done: {ai_result}")
+            except Exception as e:
+                print(f"[scheduler] AI scorer error: {e}")
+
+        await asyncio.sleep(6 * 3600)
 
 
 @asynccontextmanager
@@ -1944,6 +1959,47 @@ def run_ai_scoring_all():
             import traceback; traceback.print_exc()
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Scoring IA masivo iniciado"}
+
+
+@app.post("/admin/run-ai-scorer")
+def run_ai_scorer(
+    score_min: int = Query(default=45, ge=0, le=99),
+    score_max: int = Query(default=65, ge=0, le=99),
+    batch_size: int = Query(default=20, ge=5, le=50),
+    max_batches: int = Query(default=5, ge=1, le=20),
+):
+    """
+    Corre AI scoring inteligente para proyectos en zona gris.
+    Claude evalúa proyectos con score entre score_min y score_max
+    y ajusta ±10 puntos según contexto que las reglas no capturan.
+    """
+    import threading
+    result_container = {}
+
+    def _run():
+        try:
+            import ai_scorer
+            result = ai_scorer.run(
+                score_min=score_min,
+                score_max=score_max,
+                batch_size=batch_size,
+                max_batches=max_batches,
+            )
+            result_container.update(result)
+            print(f"[ai-scorer] {result}")
+        except Exception as e:
+            import traceback
+            result_container.update({"ok": False, "error": str(e)})
+            traceback.print_exc()
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout=120)  # esperar hasta 2 min
+
+    if result_container:
+        return result_container
+    return {"ok": True, "msg": "AI scorer corriendo en background"}
+
 
 @app.post("/admin/mark-onboarding-done")
 def mark_onboarding_done():
