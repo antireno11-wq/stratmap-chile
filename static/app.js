@@ -6,7 +6,7 @@ const NEWS_SOURCES = new Set([
 ]);
 
 // Fuentes de empleos — aparecen en Empleos activos, NUNCA en Noticias del Sector
-const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers","Lundin Careers"]);
+const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers","Lundin Careers","Collahuasi Careers"]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
 const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","SIGEX","ENAMI","Codelco"]);
@@ -791,7 +791,10 @@ const BHP_NORM = {
   "spence":                 "BHP CHILE INC",
   "cas plazo fijo":         "BHP CHILE INC",
   "bhp billiton":           "BHP CHILE INC",
-  "minera candelaria":              "MINERA CANDELARIA",
+  "compania minera dona ines de collahuasi": "COLLAHUASI",
+  "collahuasi":                              "COLLAHUASI",
+  "minera collahuasi":                       "COLLAHUASI",
+  "minera candelaria":                       "MINERA CANDELARIA",
   "candelaria":                     "MINERA CANDELARIA",
   "scm minera lumina copper chile": "MINERA CANDELARIA",
   "lumina copper":                  "MINERA CANDELARIA",
