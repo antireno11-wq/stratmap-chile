@@ -558,50 +558,81 @@ function renderPagination(containerId, total, currentPg, onPage) {
 
 function renderFiltered() {
   const filtered = applyFilters(allItems);
-  let projects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
 
-  // Apply region quick-filter chip
+  // Separar fuentes: licitaciones (alta señal comercial) vs concesiones SIGEX
+  const LICITACION_SOURCES = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores']);
+  const allProjects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
+
+  let licitaciones = allProjects.filter(i => LICITACION_SOURCES.has(i.source));
+  let concesiones  = allProjects.filter(i => !LICITACION_SOURCES.has(i.source));
+
+  // Apply region quick-filter chip to both
   if (window._activeRegion) {
-    projects = projects.filter(i => i.region === window._activeRegion);
+    licitaciones = licitaciones.filter(i => i.region === window._activeRegion);
+    concesiones  = concesiones.filter(i  => i.region === window._activeRegion);
   }
 
-  // Noticias vienen de /noticias endpoint (no de allItems que solo tiene proyectos)
+  // Sort ambas por score desc (o el sort activo)
+  licitaciones = sortItems(licitaciones);
+  concesiones  = sortItems(concesiones);
+
+  // Noticias
   const news = newsItems.sort((a,b) => new Date(b.published_at||b.created_at||0) - new Date(a.published_at||a.created_at||0));
 
-  // Reset to page 1 if current page is out of range
-  if ((currentPage.projects - 1) * PAGE_SIZE >= projects.length) currentPage.projects = 1;
-  if ((currentPage.news - 1) * PAGE_SIZE >= news.length) currentPage.news = 1;
+  // Reset pagination if out of range
+  if ((currentPage.licitaciones - 1) * PAGE_SIZE >= licitaciones.length) currentPage.licitaciones = 1;
+  if ((currentPage.projects  - 1) * PAGE_SIZE >= concesiones.length)  currentPage.projects  = 1;
+  if ((currentPage.news      - 1) * PAGE_SIZE >= news.length)          currentPage.news      = 1;
 
-  const projPage = projects.slice((currentPage.projects-1)*PAGE_SIZE, currentPage.projects*PAGE_SIZE);
-  const newsPage = news.slice((currentPage.news-1)*PAGE_SIZE, currentPage.news*PAGE_SIZE);
+  const licitPage = licitaciones.slice((currentPage.licitaciones-1)*PAGE_SIZE, currentPage.licitaciones*PAGE_SIZE);
+  const projPage  = concesiones.slice((currentPage.projects-1)*PAGE_SIZE,  currentPage.projects*PAGE_SIZE);
+  const newsPage  = news.slice((currentPage.news-1)*PAGE_SIZE, currentPage.news*PAGE_SIZE);
 
-  el("badge-projects").textContent = projects.length;
-  el("badge-news").textContent = news.length;
-  el("sc-projects").textContent = projects.length;
-  el("sc-news").textContent = news.length;
+  // Badges
+  const badgeLic = document.getElementById('badge-licitaciones');
+  if (badgeLic) badgeLic.textContent = licitaciones.length;
+  el('badge-projects').textContent = concesiones.length;
+  el('badge-news').textContent = news.length;
 
-  el("tbody-projects").innerHTML = projPage.length
-    ? projPage.map(projectRow).join("")
-    : `<tr><td colspan="8" class="muted-row">Sin proyectos</td></tr>`;
+  const scLic = document.getElementById('sc-licitaciones');
+  if (scLic) scLic.textContent = licitaciones.length;
+  el('sc-projects').textContent = concesiones.length;
+  el('sc-news').textContent = news.length;
 
-  el("tbody-news").innerHTML = newsPage.length
-    ? newsPage.map(newsRow).join("")
+  // Render tables
+  const tbodyLic = document.getElementById('tbody-licitaciones');
+  if (tbodyLic) {
+    tbodyLic.innerHTML = licitPage.length
+      ? licitPage.map(projectRow).join('')
+      : `<tr><td colspan="8" class="muted-row">Sin licitaciones activas</td></tr>`;
+  }
+
+  el('tbody-projects').innerHTML = projPage.length
+    ? projPage.map(projectRow).join('')
+    : `<tr><td colspan="8" class="muted-row">Sin concesiones</td></tr>`;
+
+  el('tbody-news').innerHTML = newsPage.length
+    ? newsPage.map(newsRow).join('')
     : `<tr><td colspan="5" class="muted-row">Sin noticias</td></tr>`;
 
-  renderPagination('pagination-projects', projects.length, currentPage.projects,
+  // Pagination
+  renderPagination('pagination-licitaciones', licitaciones.length, currentPage.licitaciones,
+    'function(p){currentPage.licitaciones=p;renderFiltered()}');
+  renderPagination('pagination-projects', concesiones.length, currentPage.projects,
     'function(p){currentPage.projects=p;renderFiltered()}');
   renderPagination('pagination-news', news.length, currentPage.news,
     'function(p){currentPage.news=p;renderFiltered()}');
 
-  el("stat-projects").textContent = projects.length.toLocaleString('es-CL');
-  el("stat-news").textContent = news.length;
-  el("stat-signals").textContent = projects.filter(i => (i.radar_score ?? i.score ?? 0) > 50).length;
+  // Stat cards
+  el('stat-projects').textContent = allProjects.length.toLocaleString('es-CL');
+  el('stat-news').textContent = news.length;
+  el('stat-signals').textContent = allProjects.filter(i => (i.radar_score ?? i.score ?? 0) > 50).length;
 
-  // Empleos activos total
+  // Empleos activos — sumar todos los scrapers de empleo
   const empEl = document.getElementById('stat-empleos');
   if (empEl) {
     const totalEmpleos = (window._empleosData || []).reduce((s, e) => s + (e.total_jobs || 0), 0);
-    empEl.textContent = totalEmpleos || '—';
+    empEl.textContent = totalEmpleos > 0 ? totalEmpleos.toLocaleString('es-CL') : '—';
   }
 
   // Hide signal stats if not logged in
@@ -719,7 +750,7 @@ function renderMandantes() {
 // ── Session state ─────────────────────────────────────────────────────────────
 let isLoggedIn = false;
 let currentSort = { by: null, dir: 'desc' };
-let currentPage = { projects: 1, news: 1 };
+let currentPage = { projects: 1, news: 1, licitaciones: 1 };
 const PAGE_SIZE = 20;
 
 function updateSortArrows() {
