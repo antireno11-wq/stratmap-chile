@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
-import csv, io
+import csv, io, asyncio
 
 from fastapi import FastAPI, HTTPException, Query, Depends, Header
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +16,39 @@ from db import (db_health, init_db_safe, list_opportunities, upsert_opportunitie
                 get_pipeline, upsert_pipeline, add_pipeline_note,
                 get_pipeline_notes, list_pipeline, PIPELINE_STATUSES)
 from auth import hash_password, verify_password, create_access_token, decode_token
+
+def _run_rss_ingest():
+    """Corre el ingestor RSS y retorna un resumen."""
+    try:
+        from connectors.rss import fetch_rss
+        items = fetch_rss()
+        MINING_KW = [
+            'mina','minera','minería','cobre','litio','oro','plata','molibdeno',
+            'codelco','bhp','antofagasta','escondida','teck','collahuasi','enami',
+            'atacama','antofagasta','tarapacá','exploración','yacimiento','faena',
+        ]
+        filtered = [i for i in items if any(
+            kw in (i.get('title','') + i.get('description','')).lower()
+            for kw in MINING_KW
+        )]
+        upsert_opportunities(filtered)
+        return {"ok": True, "total": len(items), "relevantes": len(filtered)}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
+
+
+async def _rss_scheduler():
+    """Corre RSS cada 6 horas en background."""
+    # Primera corrida al arrancar (espera 10s para que la app esté lista)
+    await asyncio.sleep(10)
+    while True:
+        print("[scheduler] Corriendo RSS ingest...")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _run_rss_ingest)
+        print(f"[scheduler] RSS done: {result}")
+        await asyncio.sleep(6 * 3600)  # 6 horas
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,6 +93,10 @@ async def lifespan(app: FastAPI):
         print("[startup] Scores de noticias reseteados a 0")
     except Exception as e:
         print(f"[startup] Warning reset news scores: {e}")
+
+    # Arrancar scheduler RSS en background
+    asyncio.create_task(_rss_scheduler())
+    print("[startup] RSS scheduler iniciado (cada 6h)")
     yield
 
 app = FastAPI(title="Stratmap Chile", lifespan=lifespan)
@@ -1953,6 +1990,13 @@ def delete_source(source_name: str):
             deleted = cur.rowcount
         conn.commit()
     return {"deleted": deleted, "source": source_name}
+
+@app.post("/admin/run-rss")
+def run_rss_manual():
+    """Ingesta manual de noticias RSS (Portal Minero, Revista EI, InfoMinería, etc.)."""
+    result = _run_rss_ingest()
+    return result
+
 
 @app.post("/admin/run-sigex")
 def run_sigex():
