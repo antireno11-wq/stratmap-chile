@@ -862,6 +862,11 @@ def get_empleos_resumen():
                     'lumina copper','lundin mining'
                 ) THEN 'MINERA CANDELARIA'
                 WHEN LOWER(TRIM(company)) IN (
+                    'compania minera dona ines de collahuasi',
+                    'compañía minera doña inés de collahuasi',
+                    'collahuasi','minera collahuasi'
+                ) THEN 'COLLAHUASI'
+                WHEN LOWER(TRIM(company)) IN (
                     'codelco','corporacion nacional del cobre','corporación nacional del cobre'
                 ) THEN 'CODELCO'
                 ELSE UPPER(TRIM(company))
@@ -1539,6 +1544,120 @@ def run_lundin_careers():
             "empresas": {e: len(j) for e, j in by_emp.items()},
             "inserted": inserted,
             "updated": updated,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
+
+@app.post("/admin/run-collahuasi-careers")
+def run_collahuasi_careers():
+    """Scraping de empleos Minera Collahuasi — sitio web propio."""
+    import traceback as tb, requests as _req, re as _re, json as _json
+    from bs4 import BeautifulSoup
+    from datetime import datetime, timezone
+
+    BASE_URL   = "https://www.collahuasi.cl"
+    OFERTAS_URL = BASE_URL + "/trabaja-con-nosotros/ofertas-laborales/"
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "Accept-Language": "es-CL,es;q=0.9",
+    }
+
+    AREA_KW = {
+        "Supervisión":   ["supervisor","superintendente","gerente","jefe","coordinador","administrador","lider","líder"],
+        "Operaciones":   ["operador","operadora","mina","produccion","extraccion","perforación","tronadura","carguío"],
+        "Mantenimiento": ["mantenedor","mantenci","electrico","eléctrico","mecanico","instrumentista","mecánico"],
+        "Ingeniería":    ["ingeniero","ingeniera","engineer","specialist","especialista","senior","técnico","tecnico","metalurgista","geólogo"],
+        "Geología":      ["geolog","geotecnia","hidrogeol","exploracion","minería"],
+        "RRHH":          ["rrhh","people","talento","personas","recursos humanos","aprendiz","profesional en entrenamiento"],
+        "HSE":           ["seguridad","safety","ambiente","hse","salud","prevencion","prevención"],
+        "Finanzas":      ["finanza","financiero","administrador","contab","gestor"],
+        "Supply Chain":  ["abastecimiento","compras","logística","bodega","supply"],
+    }
+
+    def classify(title):
+        t = title.lower()
+        for area, kws in AREA_KW.items():
+            if any(k in t for k in kws): return area
+        return "Otros"
+
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'Collahuasi Careers'")
+                deleted = cur.rowcount
+            conn.commit()
+
+        r = _req.get(OFERTAS_URL, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        jobs = []
+        seen = set()
+
+        # Las ofertas están como <a href="/oferta/nombre-cargo/">
+        for a in soup.find_all("a", href=_re.compile(r"/oferta/")):
+            href = a.get("href", "")
+            if not href: continue
+            url = (BASE_URL + href) if href.startswith("/") else href
+            if url in seen: continue
+            seen.add(url)
+
+            # El título está en el texto del link o en un h2/h3 cercano
+            title = ""
+            heading = a.find(["h2", "h3", "h4", "strong", "span"])
+            if heading:
+                title = heading.get_text(strip=True)
+            if not title:
+                title = a.get_text(strip=True).replace("VER MÁS", "").strip()
+            if not title or len(title) < 4:
+                continue
+
+            jobs.append({
+                "title": title,
+                "url":   url,
+                "area":  classify(title),
+            })
+
+        if not jobs:
+            return {"ok": True, "msg": "Sin ofertas encontradas en Collahuasi", "deleted": deleted}
+
+        now = datetime.now(timezone.utc)
+        total = len(jobs)
+        areas = {}
+        for j in jobs:
+            areas[j["area"]] = areas.get(j["area"], 0) + 1
+
+        cargo_list = "\n".join(f"• {j['title']} ({j['area']})" for j in jobs)
+
+        opp = {
+            "source":       "Collahuasi Careers",
+            "title":        f"Empleos Collahuasi — {total} cargos disponibles",
+            "company":      "COMPANIA MINERA DONA INES DE COLLAHUASI",
+            "industry":     "Minería",
+            "phase":        "Contratación activa",
+            "region":       "Tarapacá",
+            "score":        0,
+            "url":          OFERTAS_URL,
+            "published_at": now.isoformat(),
+            "entry":        f"Collahuasi: {total} cargos disponibles.\n\n{cargo_list}",
+            "jobs_count":   total,
+            "signal_score": min(total * 4, 45),
+            "last_signal_at": now.isoformat(),
+            "signal_detail": _json.dumps({"by_area": areas, "total": total, "fuente": "Collahuasi Careers",
+                                          "ofertas": [j["title"] for j in jobs]}, ensure_ascii=False),
+            "raw": {"by_area": areas, "empleos": [{"title": j["title"], "url": j["url"]} for j in jobs]},
+        }
+
+        inserted, updated = db.upsert_opportunities([opp])
+        return {
+            "ok":           True,
+            "deleted_old":  deleted,
+            "jobs_encontrados": total,
+            "cargos":       [j["title"] for j in jobs],
+            "areas":        areas,
+            "inserted":     inserted,
+            "updated":      updated,
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
