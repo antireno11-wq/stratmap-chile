@@ -135,10 +135,10 @@
     tr:hover td { background: #fafbff; }
     .proj-title { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(300px, 28vw); display: block; letter-spacing: -0.2px; font-size: 13px; }
     .proj-industry { font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-    .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(480px, 40vw); display: block; text-decoration: none; font-weight: 600; }
+    .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(640px, 55vw); display: block; text-decoration: none; font-weight: 600; }
     .news-title:hover { text-decoration: underline; }
     .score-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 3px 9px; font-size: 12px; font-weight: 800; border-radius: 6px; letter-spacing: -0.2px; }
-    .source-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
+    .source-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
     .status-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
     .phase-chip { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 5px; background: var(--blue-light); color: var(--blue); font-weight: 600; }
     .signal-badge { display: inline-flex; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; margin-left: 4px; }
@@ -410,7 +410,14 @@
           <span class="section-updated" id="upd-news"></span>
         </div>
         <div class="tableWrap">
-          <table>
+          <table style="table-layout:fixed;width:100%">
+            <colgroup>
+              <col style="width:55%">
+              <col style="width:110px">
+              <col style="width:100px">
+              <col style="width:80px">
+              <col style="width:44px">
+            </colgroup>
             <thead><tr><th>Titular</th><th>Fuente</th><th>Industria</th><th>Fecha</th><th></th></tr></thead>
             <tbody id="tbody-news"><tr><td colspan="5" class="muted-row">Cargando...</td></tr></tbody>
           </table>
