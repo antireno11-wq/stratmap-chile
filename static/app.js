@@ -6,7 +6,7 @@ const NEWS_SOURCES = new Set([
 ]);
 
 // Fuentes de empleos — aparecen en Empleos activos, NUNCA en Noticias del Sector
-const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers","Lundin Careers","Collahuasi Careers"]);
+const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers","Lundin Careers","Collahuasi Careers","Teck Careers"]);
 
 // Fuentes que SIEMPRE son proyectos, nunca noticias
 const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","SIGEX","ENAMI","Codelco"]);
@@ -791,6 +791,13 @@ const BHP_NORM = {
   "spence":                 "BHP CHILE INC",
   "cas plazo fijo":         "BHP CHILE INC",
   "bhp billiton":           "BHP CHILE INC",
+  "compania minera teck quebrada blanca": "TECK QUEBRADA BLANCA",
+  "teck quebrada blanca":                 "TECK QUEBRADA BLANCA",
+  "quebrada blanca":                      "TECK QUEBRADA BLANCA",
+  "compania minera carmen de andacollo":  "CARMEN DE ANDACOLLO",
+  "carmen de andacollo":                  "CARMEN DE ANDACOLLO",
+  "teck chile":                           "TECK CHILE",
+  "teck":                                 "TECK CHILE",
   "compania minera dona ines de collahuasi": "COLLAHUASI",
   "collahuasi":                              "COLLAHUASI",
   "minera collahuasi":                       "COLLAHUASI",
