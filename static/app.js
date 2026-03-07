@@ -971,11 +971,7 @@ async function load() {
     const data = await fetchJSON(url);
     await checkSession();
     loadAiFits();
-    const rawItems = (data.items || []).map(item =>
-      item.source === 'SIGEX'
-        ? { ...item, score: calcSigexScore(item), radar_score: calcSigexScore(item) }
-        : item
-    );
+    const rawItems = data.items || [];
     const scored = applyPrefsScoring(rawItems);
     currentSort.by = currentSort.by || (isLoggedIn ? 'score' : 'date');
     allItems = sortItems(scored);
