@@ -1246,27 +1246,47 @@ def run_amsa_careers():
 
         # Primera página — detectar total de páginas
         soup = get_page(1, session)
-        total_text = soup.select_one('.jobResultsCount, .resultCount, [class*="result"]')
-        # Buscar "de X" en el paginador
         pager = soup.get_text()
-        m = _re.search(r'de\s+(\d+)', pager)
+        # "Página 1 de 3" → extraer el último número
+        m = _re.search(r'[Pp][áa]gina\s+\d+\s+de\s+(\d+)', pager)
+        if not m:
+            m = _re.search(r'Page\s+\d+\s+of\s+(\d+)', pager)
         total_pages = int(m.group(1)) if m else 1
 
         def parse_jobs(soup):
-            for el in soup.select('.jobResultItem'):
-                link = el.select_one('a')
-                title = link.get_text(strip=True) if link else ''
-                if not title or len(title) < 4: continue
-                job_url = (BASE_URL + link['href']) if link and link.get('href','').startswith('/') else (link['href'] if link else LIST_URL)
-                meta = el.get_text(separator=' ', strip=True)
-                # Extraer ID y fecha
-                id_m    = _re.search(r'(\d{4,6})', meta)
-                date_m  = _re.search(r'(\d{2}/\d{2}/\d{4})', meta)
-                job_id  = id_m.group(1) if id_m else ''
-                fecha   = date_m.group(1) if date_m else ''
+            # SuccessFactors muestra empleos como links dentro de tablas o divs
+            # Estructura: <a href="/career?...jobId=XXXXX">Título del cargo</a>
+            # Seguido de texto: "ID de solicitud de puesto: XXXXX - Publicado el DD/MM/YYYY - EMPRESA"
+            seen_ids = set()
+            for a in soup.find_all('a', href=True):
+                href = a.get('href', '')
+                if 'jobId' not in href and 'job_id' not in href and 'requisitionId' not in href:
+                    continue
+                title = a.get_text(strip=True)
+                if not title or len(title) < 5:
+                    continue
+                job_url = (BASE_URL + href) if href.startswith('/') else href
+                # Extraer ID del puesto para deduplicar
+                id_m = _re.search(r'[jJ]ob[Ii]d=(\d+)|requisitionId=(\d+)', href)
+                job_id = (id_m.group(1) or id_m.group(2)) if id_m else href[-8:]
+                if job_id in seen_ids:
+                    continue
+                seen_ids.add(job_id)
+                # El texto del contenedor padre tiene la empresa y fecha
+                container = a.parent
+                for _ in range(4):  # subir hasta 4 niveles
+                    if container and container.name in ('td', 'div', 'li', 'tr'):
+                        break
+                    container = container.parent if container else None
+                meta = container.get_text(separator=' ', strip=True) if container else ''
                 empresa = empresa_from_meta(meta)
-                jobs.append({"title": title, "empresa": empresa, "area": classify(title),
-                             "job_id": job_id, "fecha": fecha})
+                date_m = _re.search(r'(\d{2}/\d{2}/\d{4})', meta)
+                fecha = date_m.group(1) if date_m else ''
+                jobs.append({
+                    "title": title, "empresa": empresa,
+                    "area": classify(title), "job_id": job_id,
+                    "fecha": fecha, "url": job_url,
+                })
 
         parse_jobs(soup)
         for p in range(2, total_pages + 1):
