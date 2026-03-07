@@ -1,5 +1,6 @@
 # db.py
-import os
+import os, re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
@@ -209,6 +210,7 @@ _MANDANTES_GRANDES = {
     "minera san cristobal", "quantum pacific",
 }
 
+
 def _mandante_size(company: str) -> int:
     """Retorna bonus de mandante: 15 si grande, 8 si mediano conocido, 0 si desconocido."""
     if not company:
@@ -216,7 +218,6 @@ def _mandante_size(company: str) -> int:
     c = company.lower().strip()
     if any(m in c for m in _MANDANTES_GRANDES):
         return 15
-    # Heurística: si tiene "minera" o "compañía minera" probablemente es mediano
     if "minera" in c or "compania minera" in c or "compañía minera" in c:
         return 8
     return 3
@@ -235,97 +236,184 @@ def _mineral_score(recurso: str, title: str) -> int:
     return 3
 
 
+def _title_keywords_score(title: str) -> int:
+    """Detecta señales positivas y negativas en el título del proyecto."""
+    t = title.lower()
+    score = 0
+    POSITIVE = [
+        ("llamado a licitación", 10), ("llamado a propuesta", 10),
+        ("licitación pública", 8),    ("licitación privada", 7),
+        ("proceso de contratación", 8), ("adjudicación", 6),
+        ("concurso público", 7),       ("contrato de servicio", 6),
+        ("convenio marco", 5),         ("en construcción", 5),
+        ("inicio de obras", 6),        ("construcción y montaje", 7),
+        ("ingeniería de detalle", 6),  ("ingeniería básica", 5),
+        ("expansión", 5),              ("ampliación", 5),
+        ("nuevo proyecto", 4),         ("fase ii", 5), ("fase iii", 5),
+    ]
+    NEGATIVE = [
+        ("suspendido", -15),    ("paralizado", -15),   ("paralización", -15),
+        ("desistido", -20),     ("desistimiento", -20), ("rechazado", -18),
+        ("no admitido", -18),   ("archivado", -12),     ("abandonado", -15),
+        ("término anticipado", -10), ("resolución de término", -10),
+        ("cierre de faena", -8),
+    ]
+    for kw, pts in POSITIVE:
+        if kw in t:
+            score += pts
+            break  # solo el mejor positivo
+    for kw, pts in NEGATIVE:
+        if kw in t:
+            score += pts
+    return score
+
+
+def _region_score(region: str, raw: dict) -> int:
+    """Bonus por región minera estratégica de Chile."""
+    txt = (region or raw.get("REGION") or raw.get("region") or "").lower()
+    if any(x in txt for x in ["antofagasta", "ii región", "ii region"]):  return 6
+    if any(x in txt for x in ["atacama", "iii región", "iii region"]):    return 5
+    if any(x in txt for x in ["tarapacá", "tarapaca", "i región"]):       return 5
+    if any(x in txt for x in ["coquimbo", "iv región", "iv region"]):     return 4
+    if any(x in txt for x in ["arica", "parinacota"]):                    return 3
+    if any(x in txt for x in ["o'higgins", "ohiggins", "vi región"]):    return 3
+    return 0
+
+
+def _temporal_score(item: dict) -> int:
+    """Boost/penalización según antigüedad. Recientes suben, viejos sin actividad bajan."""
+    now = datetime.now(timezone.utc)
+    best_date = None
+    for field in ("updated_at", "last_signal_at", "published_at", "created_at", "entry"):
+        v = item.get(field)
+        if not v:
+            continue
+        if isinstance(v, str):
+            try:
+                v = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except Exception:
+                continue
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            if best_date is None or v > best_date:
+                best_date = v
+    if best_date is None:
+        return 0
+    days = (now - best_date).days
+    if days <= 30:    return 8
+    if days <= 90:    return 5
+    if days <= 180:   return 2
+    if days <= 365:   return 0
+    if days <= 548:   return -5
+    if days <= 730:   return -10
+    return -15
+
+
+def _monto_titulo(title: str) -> int:
+    """Detecta montos en el título (UF, MM USD, MUSD) para scoring extra."""
+    t = title.lower()
+    for pat, pts in [
+        (r"(?:us\$?|usd)\s*[\d,.]+\s*(?:mill|bn|billon)", 10),
+        (r"[\d,.]+\s*(?:musd|mmusd|mm\s*usd)", 8),
+        (r"[\d,.]+\s*(?:mill[oi]ones?\s*(?:de\s*)?(?:dólar|dollar|usd))", 8),
+        (r"[\d,.]+\s*(?:uf|unidades?\s*de\s*fomento)", 4),
+        (r"[\d,.]+\s*(?:millones?\s*(?:de\s*)?peso)", 3),
+    ]:
+        if re.search(pat, t):
+            return pts
+    return 0
+
+
 def calc_score(item: Dict[str, Any]) -> int:
     """
-    Calcula score 0–100 para un proyecto/licitación minera.
-    Representa probabilidad de oportunidad comercial para proveedores.
+    Calcula score 0–100 para un proyecto/licitación minera. v2.
 
     Componentes:
-      BASE_TIPO    : tipo de registro y estado (30–65)
-      MINERAL      : relevancia del mineral (3–20)
-      MANDANTE     : tamaño/relevancia del mandante (0–15)
-      INVERSION    : monto USD si disponible (0–15, solo SEA)
+      BASE_TIPO    : fuente + estado (8–71)
+      MINERAL      : mineral estratégico (3–20)
+      MANDANTE     : tamaño del mandante (0–15)
+      INVERSIÓN    : monto USD estructurado (0–15)
       SEÑAL_CRUZADA: signal_score existente (0–10)
+      KEYWORDS     : palabras clave del título (-20 / +10)
+      REGIÓN       : región minera estratégica (0–6)
+      TEMPORAL     : antigüedad del registro (-15 / +8)
+      MONTO_TÍTULO : montos detectados en texto (0–10)
     """
     source  = (item.get("source") or "").strip()
     phase   = (item.get("phase")  or "").strip()
     company = (item.get("company") or "").strip()
     raw     = item.get("raw") or {}
     title   = item.get("title") or ""
+    region  = item.get("region") or ""
     signal  = item.get("signal_score") or 0
 
-    # ── Noticias y empleos siempre 0 ─────────────────────────────────────────
     NEWS_SOURCES = {
         "Portal Minero", "BioBioChile", "Emol", "Cooperativa",
         "Minería Chilena", "COCHILCO Noticias", "Diario Financiero",
         "Revista EI", "Radio U. de Chile", "Radio Universidad de Chile",
         "RSS", "Lithium Chile", "InfoMineria", "Mundo Minería",
         "MLP Proveedores", "BHP Careers", "AMSA Careers",
+        "Lundin Careers", "Collahuasi Careers", "Teck Careers",
     }
     if source in NEWS_SOURCES or phase == "Noticia":
         return 0
 
-    # ── BASE según tipo de fuente y estado ───────────────────────────────────
     if source in ("ENAMI", "Codelco"):
-        # Licitaciones directas de mandantes grandes — siempre oportunidad real
         tipo = (raw.get("tipo") or "").lower()
         op   = (raw.get("operacion") or "").lower()
         base = 65
-        # Servicios valen más que bienes (más trabajo proveedor)
-        if "servicio" in tipo:     base = 68
-        elif "bien" in tipo:       base = 62
-        # Operaciones clave Codelco
+        if "servicio" in tipo:   base = 68
+        elif "bien" in tipo:     base = 62
         if any(x in op for x in ["chuquicamata", "andina", "teniente", "minis", "gabriela"]):
             base += 3
 
     elif source == "SEA":
         estado = (phase or raw.get("ESTADO_EVALUACION") or "").lower()
-        if "calificacion" in estado or "calificación" in estado:   base = 58
-        elif "admision" in estado or "admisión" in estado:         base = 48
-        elif "ingreso voluntario" in estado:                       base = 42
+        if "calificacion" in estado or "calificación" in estado:            base = 58
+        elif "admision" in estado or "admisión" in estado:                  base = 48
+        elif "ingreso voluntario" in estado:                                base = 42
         elif any(x in estado for x in ["desistido", "rechazado", "no admitido"]): base = 8
-        else:                                                      base = 35
+        else:                                                               base = 35
 
     elif source == "SIGEX":
         phase_l = phase.lower() if phase else ""
-        if "tramite" in phase_l or "trámite" in phase_l:          base = 40
-        elif "aprobado" in phase_l:                                base = 32
-        elif "evaluacion" in phase_l or "evaluación" in phase_l:  base = 36
-        elif "concesion" in phase_l or "concesión" in phase_l:    base = 28
-        else:                                                      base = 25
+        if "tramite" in phase_l or "trámite" in phase_l:        base = 40
+        elif "aprobado" in phase_l:                              base = 32
+        elif "evaluacion" in phase_l or "evaluación" in phase_l: base = 36
+        elif "concesion" in phase_l or "concesión" in phase_l:   base = 28
+        else:                                                    base = 25
 
     elif source == "manual":
-        base = item.get("score") or 50  # mantener score manual
+        base = item.get("score") or 50
 
     else:
-        base = 30  # fuente desconocida
+        base = 30
 
-    # ── MINERAL ───────────────────────────────────────────────────────────────
-    recurso = raw.get("recurso") or raw.get("RECURSO") or ""
-    mineral = _mineral_score(recurso, title)
-
-    # ── MANDANTE ──────────────────────────────────────────────────────────────
+    recurso  = raw.get("recurso") or raw.get("RECURSO") or ""
+    mineral  = _mineral_score(recurso, title)
     mandante = _mandante_size(company)
+    keywords = _title_keywords_score(title)
+    reg      = _region_score(region, raw)
+    temporal = _temporal_score(item)
+    monto_t  = _monto_titulo(title)
 
-    # ── INVERSIÓN USD (solo SEA) ──────────────────────────────────────────────
     inversion = 0
     if source == "SEA":
         inv = raw.get("INVERSION_US") or 0
         try:
             inv = float(inv)
-            if inv >= 1_000_000_000:   inversion = 15   # > $1.000M
-            elif inv >= 100_000_000:   inversion = 10   # $100M–$1.000M
-            elif inv >= 10_000_000:    inversion = 6    # $10M–$100M
-            elif inv >= 1_000_000:     inversion = 3    # $1M–$10M
+            if inv >= 1_000_000_000:   inversion = 15
+            elif inv >= 100_000_000:   inversion = 10
+            elif inv >= 10_000_000:    inversion = 6
+            elif inv >= 1_000_000:     inversion = 3
         except (TypeError, ValueError):
             pass
 
-    # ── SEÑAL CRUZADA ─────────────────────────────────────────────────────────
     senal = min(int(signal / 3), 10) if signal > 0 else 0
 
-    total = base + mineral + mandante + inversion + senal
-    return max(0, min(total, 99))  # cap en 99 para reservar 100 a overrides manuales
-
+    total = base + mineral + mandante + keywords + reg + temporal + inversion + senal + monto_t
+    return max(0, min(total, 99))
 
 def recalc_all_scores() -> Dict[str, Any]:
     """
