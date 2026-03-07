@@ -558,7 +558,7 @@ function renderPagination(containerId, total, currentPg, onPage) {
 
 function renderFiltered() {
   const filtered = applyFilters(allItems);
-  let projects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews);
+  let projects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
 
   // Apply region quick-filter chip
   if (window._activeRegion) {
@@ -780,11 +780,58 @@ async function loadEmpleos() {
   }
 }
 
-function renderEmpleos(empresas) {
+// Normaliza nombres de empresa BHP/AMSA antes de agrupar
+const BHP_NORM = {
+  "bhp":                    "BHP CHILE INC",
+  "bhp chile":              "BHP CHILE INC",
+  "bhp chile inc":          "BHP CHILE INC",
+  "minera escondida":       "BHP CHILE INC",
+  "escondida":              "BHP CHILE INC",
+  "minera spence":          "BHP CHILE INC",
+  "spence":                 "BHP CHILE INC",
+  "cas plazo fijo":         "BHP CHILE INC",
+  "bhp billiton":           "BHP CHILE INC",
+  "minera centinela":       "MINERA CENTINELA",
+  "centinela":              "MINERA CENTINELA",
+  "minera los pelambres":   "MINERA LOS PELAMBRES",
+  "pelambres":              "MINERA LOS PELAMBRES",
+  "antofagasta minerals":   "ANTOFAGASTA MINERALS",
+  "amsa":                   "ANTOFAGASTA MINERALS",
+  "amsa - corporativo":     "ANTOFAGASTA MINERALS",
+};
+
+function normalizeEmpresa(name) {
+  const k = (name || '').toLowerCase().trim();
+  return BHP_NORM[k] || name;
+}
+
+function mergeEmpresas(empresas) {
+  const merged = {};
+  empresas.forEach(e => {
+    const key = normalizeEmpresa(e.company || e.empresa || '');
+    if (!merged[key]) {
+      merged[key] = { ...e, company: key, empresa: key, total_jobs: 0, areas: {} };
+    }
+    merged[key].total_jobs += (e.total_jobs || 0);
+    // Merge areas
+    Object.entries(e.areas || {}).forEach(([area, n]) => {
+      merged[key].areas[area] = (merged[key].areas[area] || 0) + n;
+    });
+    // Keep highest signal
+    if ((e.top_signal || 0) > (merged[key].top_signal || 0)) {
+      merged[key].top_signal = e.top_signal;
+      merged[key].ultima_senal = e.ultima_senal;
+    }
+  });
+  return Object.values(merged).sort((a, b) => b.total_jobs - a.total_jobs);
+}
+
+function renderEmpleos(empresasRaw) {
   const grid  = document.getElementById('empleos-grid');
   const badge = document.getElementById('badge-empleos');
   if (!grid) return;
 
+  const empresas = mergeEmpresas(empresasRaw);
   const activos = empresas.filter(e => (e.total_jobs || 0) > 0);
 
   if (!activos.length) {
