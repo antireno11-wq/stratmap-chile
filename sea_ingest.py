@@ -222,6 +222,14 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[ingest] AMSA Careers error: {e}")
 
+    # ── Teck Careers ──────────────────────────────────────────────────────────
+    try:
+        r = _req.post("http://localhost:8000/admin/run-teck-careers", timeout=60)
+        result = r.json()
+        print(f"[ingest] Teck Careers: {result}")
+    except Exception as e:
+        print(f"[ingest] Teck Careers error: {e}")
+
     # ── Collahuasi Careers ────────────────────────────────────────────────────
     try:
         r = _req.post("http://localhost:8000/admin/run-collahuasi-careers", timeout=60)
