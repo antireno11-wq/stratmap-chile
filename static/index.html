@@ -264,7 +264,8 @@
 
     <div class="sidebar-section">Plataforma</div>
     <div class="sidebar-item active"><span class="icon">⚡</span> Radar</div>
-    <div class="sidebar-item"><span class="icon">🏗</span> Proyectos <span class="sidebar-count" id="sc-projects">—</span></div>
+    <div class="sidebar-item"><span class="icon">📋</span> Licitaciones <span class="sidebar-count" id="sc-licitaciones">—</span></div>
+    <div class="sidebar-item"><span class="icon">⛏️</span> Concesiones <span class="sidebar-count" id="sc-projects">—</span></div>
     <div class="sidebar-item"><span class="icon">📰</span> Noticias <span class="sidebar-count" id="sc-news">—</span></div>
     <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
@@ -338,7 +339,7 @@
 
       <div class="stats-row">
         <div class="stat-card blue">
-          <div class="stat-label">Proyectos activos</div>
+          <div class="stat-label">Licitaciones + Concesiones</div>
           <div class="stat-value" id="stat-projects">—</div>
           <div class="stat-sub">en base de datos</div>
         </div>
@@ -385,17 +386,57 @@
         </div>
       </div>
 
+      <!-- ── LICITACIONES (Codelco / ENAMI / SEA) ──────────────────────────────── -->
       <div class="section-card">
         <div id="region-chips" style="padding:10px 18px 0;display:flex;gap:6px;flex-wrap:wrap;min-height:0;transition:all 0.2s"></div>
         <div class="section-head">
-          <span class="section-icon">🏗</span>
-          <span class="section-title">Proyectos</span>
+          <span class="section-icon">📋</span>
+          <span class="section-title">Licitaciones</span>
+          <span class="section-badge" id="badge-licitaciones">—</span>
+          <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">Codelco · ENAMI · SEA</span>
+          <span class="section-updated" id="upd-licitaciones"></span>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <colgroup><col style="width:64px"><col style="width:auto"><col style="width:90px"><col style="width:200px"><col style="width:120px"><col style="width:110px"><col style="width:80px"><col style="width:44px"></colgroup>
+            <thead><tr>
+              <th class="col-score sortable" onclick="setSortBy('score')" title="Ordenar por score">Score <span class="sort-arrow" id="arr-score-l"></span></th>
+              <th class="sortable" onclick="setSortBy('title')">Licitación</th>
+              <th>Fuente</th>
+              <th class="sortable" onclick="setSortBy('company')">Mandante</th>
+              <th class="sortable" onclick="setSortBy('region')">Región</th>
+              <th>Pipeline</th>
+              <th class="sortable" onclick="setSortBy('date')">Fecha</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="tbody-licitaciones"><tr><td colspan="8" class="muted-row">Cargando...</td></tr></tbody>
+          </table>
+          <div id="pagination-licitaciones"></div>
+        </div>
+      </div>
+
+      <!-- ── CONCESIONES SIGEX ───────────────────────────────────────────────── -->
+      <div class="section-card">
+        <div class="section-head">
+          <span class="section-icon">⛏️</span>
+          <span class="section-title">Concesiones</span>
           <span class="section-badge" id="badge-projects">—</span>
+          <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">SIGEX · pertenencias y exploración</span>
           <span class="section-updated" id="upd-projects"></span>
         </div>
         <div class="tableWrap">
           <table>
-            <thead><tr><th class="col-score sortable" onclick="setSortBy('score')" title="Ordenar por score">Score <span class="sort-arrow" id="arr-score"></span></th><th class="sortable" onclick="setSortBy('title')" title="Ordenar por nombre">Proyecto <span class="sort-arrow" id="arr-title"></span></th><th>Fuente</th><th class="sortable" onclick="setSortBy('company')" title="Ordenar por mandante">Mandante <span class="sort-arrow" id="arr-company"></span></th><th class="sortable" onclick="setSortBy('region')" title="Ordenar por región">Región <span class="sort-arrow" id="arr-region"></span></th><th>Pipeline</th><th class="sortable" onclick="setSortBy('date')" title="Ordenar por fecha">Fecha <span class="sort-arrow" id="arr-date"></span></th><th></th></tr></thead>
+            <colgroup><col style="width:64px"><col style="width:auto"><col style="width:90px"><col style="width:200px"><col style="width:120px"><col style="width:110px"><col style="width:80px"><col style="width:44px"></colgroup>
+            <thead><tr>
+              <th class="col-score sortable" onclick="setSortBy('score')" title="Ordenar por score">Score <span class="sort-arrow" id="arr-score"></span></th>
+              <th class="sortable" onclick="setSortBy('title')">Proyecto <span class="sort-arrow" id="arr-title"></span></th>
+              <th>Fuente</th>
+              <th class="sortable" onclick="setSortBy('company')">Mandante <span class="sort-arrow" id="arr-company"></span></th>
+              <th class="sortable" onclick="setSortBy('region')">Región <span class="sort-arrow" id="arr-region"></span></th>
+              <th>Pipeline</th>
+              <th class="sortable" onclick="setSortBy('date')">Fecha <span class="sort-arrow" id="arr-date"></span></th>
+              <th></th>
+            </tr></thead>
             <tbody id="tbody-projects"><tr><td colspan="8" class="muted-row">Cargando...</td></tr></tbody>
           </table>
           <div id="pagination-projects"></div>
