@@ -443,10 +443,7 @@ def get_mandantes():
             ), 0)                                       AS avg_score,
             MAX(COALESCE(signal_score, 0))              AS top_signal,
             SUM(COALESCE(jobs_count, 0))                AS total_jobs,
-            COUNT(*) FILTER (
-                WHERE published_at > NOW() - INTERVAL '90 days'
-                AND source IN ({NEWS_SOURCES})
-            ) AS n_news_recent,
+            0 AS n_news_recent,
             MAX(COALESCE(published_at, created_at))     AS last_activity
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
@@ -496,6 +493,40 @@ def get_mandantes():
             with conn.cursor() as cur:
                 cur.execute(sql)
                 rows = [dict(r) for r in cur.fetchall()]
+
+        # ── Enriquecer con conteo de noticias por keyword ──────────────────
+        # Un solo query trae todas las noticias recientes; luego matcheamos en Python
+        try:
+            cur.execute("""
+                SELECT title, company
+                FROM opportunities
+                WHERE published_at > NOW() - INTERVAL '90 days'
+                  AND source NOT IN (
+                      'SIGEX','ENAMI','Codelco','SEA','sea','manual',
+                      'BHP Careers','AMSA Careers','Lundin Careers',
+                      'Collahuasi Careers','Teck Careers'
+                  )
+                  AND title IS NOT NULL
+            """)
+            recent_news = cur.fetchall()
+            news_titles = [(r["title"] or "").lower() for r in recent_news]
+
+            STOPWORDS_N = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
+                           'los','las','y','en','por','para','con','una','uno',
+                           'minera','minero','compania','compañia','inversiones',
+                           'chile','norte','sur','este','oeste'}
+            for row in rows:
+                name = row.get("company") or ""
+                # keywords: palabras > 3 letras no stopword
+                kws = [w.lower() for w in name.replace("."," ").replace(","," ").split()
+                       if len(w) > 3 and w.lower() not in STOPWORDS_N]
+                if not kws:
+                    continue
+                count = sum(1 for t in news_titles if any(k in t for k in kws))
+                row["n_news_recent"] = count
+        except Exception as ne:
+            print(f"[mandantes] news count error: {ne}")
+
         # Serialize dates + convert arrays
         for r in rows:
             if r.get("last_activity"):
