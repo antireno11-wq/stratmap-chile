@@ -858,6 +858,10 @@ def get_empleos_resumen():
                     'compañía minera zaldívar'
                 ) THEN 'MINERA ZALDIVAR'
                 WHEN LOWER(TRIM(company)) IN (
+                    'minera candelaria','candelaria','scm minera lumina copper chile',
+                    'lumina copper','lundin mining'
+                ) THEN 'MINERA CANDELARIA'
+                WHEN LOWER(TRIM(company)) IN (
                     'codelco','corporacion nacional del cobre','corporación nacional del cobre'
                 ) THEN 'CODELCO'
                 ELSE UPPER(TRIM(company))
@@ -1349,6 +1353,193 @@ def admin_recalcular_scores():
     try:
         result = recalc_all_scores()
         return {"ok": True, **result}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
+
+
+@app.post("/admin/run-lundin-careers")
+def run_lundin_careers():
+    """Scraping de empleos Lundin Mining Chile — Minera Candelaria (Tierra Amarilla)."""
+    import traceback as tb, requests as _req, re as _re, json as _json
+    from bs4 import BeautifulSoup
+    from datetime import datetime, timezone
+
+    BASE_URL  = "https://jobs.lundinmining.com"
+    # Filtrar solo Chile — país CL
+    SEARCH_URL = BASE_URL + "/search/?createNewAlert=false&q=&optionsFacetsDD_country=CL"
+    HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "Accept-Language": "es-CL,es;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    # Mapeo de Business Unit → empresa canónica Stratmap
+    LUNDIN_COMPANIES = {
+        "candelaria":  "MINERA CANDELARIA",
+        "lumina":      "SCM MINERA LUMINA COPPER CHILE",
+        "lundin":      "MINERA CANDELARIA",
+    }
+
+    AREA_KW = {
+        "Operaciones":   ["operador","operadora","mina","produccion","extraccion","planta","minero"],
+        "Mantenimiento": ["mantenedor","mantenci","electrico","eléctrico","mecanico","instrumentista","mecánico"],
+        "Ingeniería":    ["engineer","ingeniero","ingeniera","specialist","especialista","senior","tecnic","metalurgista"],
+        "Geología":      ["geolog","geoscien","geotecnia","hidrogeol","exploracion","geologo"],
+        "Finanzas":      ["finance","finanza","financiero","reporting","planning","gestor","contador"],
+        "TI / Datos":    ["digital","data","sistemas","software","ti ","tecnolog","it "],
+        "RRHH":          ["training","capacit","rrhh","people","talento","personas","recursos humanos"],
+        "Supervisión":   ["supervisor","superintendente","gerente","jefe","coordinador","superintendenta","lider","líder"],
+        "HSE":           ["seguridad","safety","ambiente","hse","salud","prevencion","prevención"],
+        "Proyectos":     ["project","proyecto","inversiones","construccion","ejecucion","construcción"],
+        "Supply Chain":  ["supply","cadena","logistic","logística","compras","abastecimiento","bodega"],
+        "Procesamiento": ["procesamiento","processamento","metalurg","hidrometalurg","pirometalurg"],
+    }
+
+    def classify(title):
+        t = title.lower()
+        for area, kws in AREA_KW.items():
+            if any(k in t for k in kws): return area
+        return "Otros"
+
+    def empresa_from_bu(business_unit, location):
+        bu = (business_unit or "").lower()
+        loc = (location or "").lower()
+        for key, name in LUNDIN_COMPANIES.items():
+            if key in bu or key in loc: return name
+        return "MINERA CANDELARIA"  # Default Chile = Candelaria
+
+    try:
+        # Borrar registros anteriores
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM opportunities WHERE source = 'Lundin Careers'")
+                deleted = cur.rowcount
+            conn.commit()
+
+        session = _req.Session()
+        jobs = []
+
+        def parse_page(soup):
+            # SuccessFactors: cada empleo es un <li> con un <a href="/job/...">
+            for li in soup.select("ul.jobs-list li, #career-section li, li[class*='job']"):
+                a = li.select_one("a[href*='/job/']")
+                if not a:
+                    continue
+                title = a.get_text(strip=True)
+                if not title or len(title) < 4:
+                    continue
+                href = a.get("href", "")
+                job_url = (BASE_URL + href) if href.startswith("/") else href
+
+                # Extraer metadata del li
+                text = li.get_text(separator=" ", strip=True)
+                # Business Unit y location
+                bu_m  = _re.search(r'Business Unit\s+(\S[^\n]+?)(?:\s{2,}|Department|Location|$)', text)
+                loc_m = _re.search(r'Location\s+(\S[^\n]+?)(?:\s{2,}|Business|Department|$)', text)
+                bu    = bu_m.group(1).strip() if bu_m else ""
+                loc   = loc_m.group(1).strip() if loc_m else ""
+                empresa = empresa_from_bu(bu, loc)
+                jobs.append({
+                    "title": title, "empresa": empresa,
+                    "area": classify(title), "url": job_url,
+                    "bu": bu, "loc": loc,
+                })
+
+        # Página 1
+        r = session.get(SEARCH_URL, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        parse_page(soup)
+
+        # Detectar paginación
+        pager_text = soup.get_text()
+        m = _re.search(r'[Ss]howing\s+\d+\s+to\s+\d+\s+of\s+(\d+)', pager_text)
+        total = int(m.group(1)) if m else len(jobs)
+        per_page = 10  # SuccessFactors default
+        total_pages = max(1, -(-total // per_page))  # ceil division
+
+        for page in range(2, total_pages + 1):
+            r2 = session.get(SEARCH_URL + f"&page={page}", headers=HEADERS, timeout=20)
+            r2.raise_for_status()
+            soup2 = BeautifulSoup(r2.text, "html.parser")
+            parse_page(soup2)
+
+        # Si parse falló (0 jobs), intentar selector alternativo
+        if not jobs:
+            # Fallback: buscar todos los links /job/ en la página
+            for a in soup.find_all("a", href=_re.compile(r"/job/")):
+                title = a.get_text(strip=True)
+                if not title or len(title) < 4:
+                    continue
+                href = a.get("href", "")
+                job_url = (BASE_URL + href) if href.startswith("/") else href
+                # Extraer empresa de la URL o texto cercano
+                container = a.parent
+                for _ in range(5):
+                    if container and container.name in ("li", "div", "tr", "article"):
+                        break
+                    container = container.parent if container else None
+                meta = container.get_text(separator=" ", strip=True) if container else ""
+                empresa = empresa_from_bu(meta, meta)
+                jobs.append({
+                    "title": title, "empresa": empresa,
+                    "area": classify(title), "url": job_url,
+                    "bu": "", "loc": "",
+                })
+            # Deduplicar por URL
+            seen = set()
+            unique = []
+            for j in jobs:
+                if j["url"] not in seen:
+                    seen.add(j["url"])
+                    unique.append(j)
+            jobs = unique
+
+        if not jobs:
+            return {"ok": True, "msg": "Sin empleos encontrados en Lundin Mining Chile", "deleted": deleted}
+
+        # Agrupar por empresa
+        from collections import defaultdict
+        by_emp = defaultdict(list)
+        for j in jobs:
+            by_emp[j["empresa"]].append(j)
+
+        now = datetime.now(timezone.utc)
+        opps = []
+        for empresa, emp_jobs in by_emp.items():
+            total_emp = len(emp_jobs)
+            areas = {}
+            for j in emp_jobs:
+                areas[j["area"]] = areas.get(j["area"], 0) + 1
+            cargo_list = "\n".join(f"• {j['title']} ({j['area']})" for j in emp_jobs)
+            slug = empresa.lower().replace(" ", "-").replace(".", "")
+            opps.append({
+                "source":      "Lundin Careers",
+                "title":       f"Empleos Lundin Mining Chile — {empresa} ({total_emp} cargos)",
+                "company":     empresa,
+                "industry":    "Minería",
+                "phase":       "Contratación activa",
+                "region":      "Atacama",
+                "score":       0,
+                "url":         f"https://jobs.lundinmining.com/chile/{slug}",
+                "published_at": now.isoformat(),
+                "entry":       f"{empresa}: {total_emp} cargos disponibles.\n\n{cargo_list}",
+                "jobs_count":  total_emp,
+                "signal_score": min(total_emp * 3, 40),
+                "last_signal_at": now.isoformat(),
+                "signal_detail": _json.dumps({"by_area": areas, "total": total_emp, "fuente": "Lundin Careers"}, ensure_ascii=False),
+                "raw":         {"by_area": areas, "empleos": [j["url"] for j in emp_jobs]},
+            })
+
+        inserted, updated = db.upsert_opportunities(opps)
+        return {
+            "ok": True,
+            "deleted_old": deleted,
+            "jobs_encontrados": len(jobs),
+            "empresas": {e: len(j) for e, j in by_emp.items()},
+            "inserted": inserted,
+            "updated": updated,
+        }
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
