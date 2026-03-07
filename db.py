@@ -187,6 +187,211 @@ def db_health() -> Tuple[bool, str]:
         return False, f"db error: {type(e).__name__}: {e}"
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SCORING ENGINE — Piedra angular de Stratmap
+# Calcula la probabilidad de oportunidad comercial para proveedores mineros.
+# Score 0–100 donde 100 = oportunidad directa activa con gran mandante.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Mandantes grandes conocidos → bonus de relevancia
+_MANDANTES_GRANDES = {
+    "bhp", "bhp chile", "bhp chile inc", "codelco", "enami",
+    "anglo american", "angloamerican", "antofagasta minerals", "amsa",
+    "freeport", "freeport-mcmoran", "mra freeport", "teck", "teck resources",
+    "teck resources chile", "minera centinela", "minera escondida",
+    "minera los pelambres", "pelambres", "escondida", "spence", "minera spence",
+    "minera zaldívar", "minera zaldivar", "compania minera zaldivar",
+    "sqm", "sqm s.a.", "albemarle", "sumitomo", "glencore",
+    "rio tinto", "vale", "barrick", "kinross", "yamana",
+    "gold fields", "agnico eagle", "newmont", "lundin", "capstone",
+    "compania minera dona ines de collahuasi", "collahuasi",
+    "minera candelaria", "first quantum", "lumina copper",
+    "minera san cristobal", "quantum pacific",
+}
+
+def _mandante_size(company: str) -> int:
+    """Retorna bonus de mandante: 15 si grande, 8 si mediano conocido, 0 si desconocido."""
+    if not company:
+        return 0
+    c = company.lower().strip()
+    if any(m in c for m in _MANDANTES_GRANDES):
+        return 15
+    # Heurística: si tiene "minera" o "compañía minera" probablemente es mediano
+    if "minera" in c or "compania minera" in c or "compañía minera" in c:
+        return 8
+    return 3
+
+
+def _mineral_score(recurso: str, title: str) -> int:
+    """Bonus por mineral estratégico según relevancia de mercado actual."""
+    txt = (recurso or title or "").lower()
+    if any(x in txt for x in ["li ", "litio", "li-", "salar"]):          return 20
+    if any(x in txt for x in ["cu", "cobre"]):                           return 15
+    if any(x in txt for x in ["au", "ag", "oro", "plata", "gold"]):      return 12
+    if any(x in txt for x in ["mo", "molibdeno", "re", "renio"]):        return 10
+    if any(x in txt for x in ["fe", "hierro", "zn", "zinc", "ni", "niquel", "cobalto", "co "]):
+        return 8
+    if any(x in txt for x in ["potasio", "yodo", "boro", "nitrato"]):    return 10
+    return 3
+
+
+def calc_score(item: Dict[str, Any]) -> int:
+    """
+    Calcula score 0–100 para un proyecto/licitación minera.
+    Representa probabilidad de oportunidad comercial para proveedores.
+
+    Componentes:
+      BASE_TIPO    : tipo de registro y estado (30–65)
+      MINERAL      : relevancia del mineral (3–20)
+      MANDANTE     : tamaño/relevancia del mandante (0–15)
+      INVERSION    : monto USD si disponible (0–15, solo SEA)
+      SEÑAL_CRUZADA: signal_score existente (0–10)
+    """
+    source  = (item.get("source") or "").strip()
+    phase   = (item.get("phase")  or "").strip()
+    company = (item.get("company") or "").strip()
+    raw     = item.get("raw") or {}
+    title   = item.get("title") or ""
+    signal  = item.get("signal_score") or 0
+
+    # ── Noticias y empleos siempre 0 ─────────────────────────────────────────
+    NEWS_SOURCES = {
+        "Portal Minero", "BioBioChile", "Emol", "Cooperativa",
+        "Minería Chilena", "COCHILCO Noticias", "Diario Financiero",
+        "Revista EI", "Radio U. de Chile", "Radio Universidad de Chile",
+        "RSS", "Lithium Chile", "InfoMineria", "Mundo Minería",
+        "MLP Proveedores", "BHP Careers", "AMSA Careers",
+    }
+    if source in NEWS_SOURCES or phase == "Noticia":
+        return 0
+
+    # ── BASE según tipo de fuente y estado ───────────────────────────────────
+    if source in ("ENAMI", "Codelco"):
+        # Licitaciones directas de mandantes grandes — siempre oportunidad real
+        tipo = (raw.get("tipo") or "").lower()
+        op   = (raw.get("operacion") or "").lower()
+        base = 65
+        # Servicios valen más que bienes (más trabajo proveedor)
+        if "servicio" in tipo:     base = 68
+        elif "bien" in tipo:       base = 62
+        # Operaciones clave Codelco
+        if any(x in op for x in ["chuquicamata", "andina", "teniente", "minis", "gabriela"]):
+            base += 3
+
+    elif source == "SEA":
+        estado = (phase or raw.get("ESTADO_EVALUACION") or "").lower()
+        if "calificacion" in estado or "calificación" in estado:   base = 58
+        elif "admision" in estado or "admisión" in estado:         base = 48
+        elif "ingreso voluntario" in estado:                       base = 42
+        elif any(x in estado for x in ["desistido", "rechazado", "no admitido"]): base = 8
+        else:                                                      base = 35
+
+    elif source == "SIGEX":
+        phase_l = phase.lower() if phase else ""
+        if "tramite" in phase_l or "trámite" in phase_l:          base = 40
+        elif "aprobado" in phase_l:                                base = 32
+        elif "evaluacion" in phase_l or "evaluación" in phase_l:  base = 36
+        elif "concesion" in phase_l or "concesión" in phase_l:    base = 28
+        else:                                                      base = 25
+
+    elif source == "manual":
+        base = item.get("score") or 50  # mantener score manual
+
+    else:
+        base = 30  # fuente desconocida
+
+    # ── MINERAL ───────────────────────────────────────────────────────────────
+    recurso = raw.get("recurso") or raw.get("RECURSO") or ""
+    mineral = _mineral_score(recurso, title)
+
+    # ── MANDANTE ──────────────────────────────────────────────────────────────
+    mandante = _mandante_size(company)
+
+    # ── INVERSIÓN USD (solo SEA) ──────────────────────────────────────────────
+    inversion = 0
+    if source == "SEA":
+        inv = raw.get("INVERSION_US") or 0
+        try:
+            inv = float(inv)
+            if inv >= 1_000_000_000:   inversion = 15   # > $1.000M
+            elif inv >= 100_000_000:   inversion = 10   # $100M–$1.000M
+            elif inv >= 10_000_000:    inversion = 6    # $10M–$100M
+            elif inv >= 1_000_000:     inversion = 3    # $1M–$10M
+        except (TypeError, ValueError):
+            pass
+
+    # ── SEÑAL CRUZADA ─────────────────────────────────────────────────────────
+    senal = min(int(signal / 3), 10) if signal > 0 else 0
+
+    total = base + mineral + mandante + inversion + senal
+    return max(0, min(total, 99))  # cap en 99 para reservar 100 a overrides manuales
+
+
+def recalc_all_scores() -> Dict[str, Any]:
+    """
+    Recalcula scores para todos los proyectos en la BD.
+    Retorna estadísticas del resultado.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, source, phase, company, raw, title, signal_score, score
+                FROM opportunities
+            """)
+            rows = cur.fetchall()
+
+        updates = []
+        for row in rows:
+            item = dict(row)
+            new_score = calc_score(item)
+            if new_score != (item.get("score") or 0):
+                updates.append((new_score, item["id"]))
+
+        if updates:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "UPDATE opportunities SET score = %s, updated_at = NOW() WHERE id = %s",
+                    updates
+                )
+            conn.commit()
+
+    # Estadísticas
+    dist = {"0": 0, "1-30": 0, "31-50": 0, "51-70": 0, "71-85": 0, "86-99": 0}
+    by_source: Dict[str, Dict] = {}
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT source, score FROM opportunities ORDER BY source")
+            for row in cur.fetchall():
+                s, sc = row["source"], row["score"] or 0
+                if sc == 0:          dist["0"] += 1
+                elif sc <= 30:       dist["1-30"] += 1
+                elif sc <= 50:       dist["31-50"] += 1
+                elif sc <= 70:       dist["51-70"] += 1
+                elif sc <= 85:       dist["71-85"] += 1
+                else:                dist["86-99"] += 1
+                if s not in by_source:
+                    by_source[s] = {"n": 0, "scores": []}
+                by_source[s]["n"] += 1
+                by_source[s]["scores"].append(sc)
+
+    summary = {}
+    for src, d in by_source.items():
+        sc = d["scores"]
+        summary[src] = {
+            "n": d["n"],
+            "avg": round(sum(sc) / len(sc)) if sc else 0,
+            "min": min(sc),
+            "max": max(sc),
+        }
+
+    return {
+        "total_updated": len(updates),
+        "total_rows": len(rows),
+        "distribution": dist,
+        "by_source": summary,
+    }
+
+
 def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     inserted = 0
     updated = 0
@@ -215,10 +420,18 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     for it in items:
         it.setdefault("company", None); it.setdefault("contractor", None)
         it.setdefault("industry", None); it.setdefault("region", None)
-        it.setdefault("phase", None); it.setdefault("score", 0); it.setdefault("entry", None)
+        it.setdefault("phase", None); it.setdefault("entry", None)
         it.setdefault("published_at", None)
         it.setdefault("jobs_count", 0); it.setdefault("signal_score", 0)
         it.setdefault("signal_detail", None); it.setdefault("last_signal_at", None)
+
+        # ── Calcular score automáticamente (salvo manual override > 0) ────────
+        existing_score = it.get("score") or 0
+        if it.get("source") == "manual" and existing_score > 0:
+            it["score"] = existing_score  # respetar scores manuales
+        else:
+            it["score"] = calc_score(it)
+
         raw = it.get("raw")
         if isinstance(raw, (dict, list)): it["raw"] = Json(raw)
         elif raw is None: it["raw"] = None
