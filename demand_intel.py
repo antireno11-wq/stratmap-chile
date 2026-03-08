@@ -281,7 +281,14 @@ def run(
     skipped = 0
 
     for i, row in enumerate(rows):
-        opp_id, title, phase, company, region, raw, source, score = row
+        opp_id  = row["id"]
+        title   = row["title"]
+        phase   = row["phase"]
+        company = row["company"]
+        region  = row["region"]
+        raw     = row["raw"]
+        source  = row["source"]
+        score   = row["score"]
 
         project = {
             "id": opp_id,
