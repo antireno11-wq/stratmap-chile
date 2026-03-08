@@ -139,11 +139,12 @@ window.openOppDrawer = async function(oppId) {
   el("drawer").classList.add("open");
   el("drawer-overlay").classList.add("open");
 
-  // Cargar pipeline y notas en paralelo
-  const [pipelineRes, notesRes, aiFitRes] = await Promise.all([
+  // Cargar pipeline, notas y servicios en paralelo
+  const [pipelineRes, notesRes, aiFitRes, servicesRes] = await Promise.all([
     fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
     fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
     fetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
+    fetch(`/opportunities/${oppId}/services`).then(r => r.json()).catch(()=>({})),
   ]);
 
   const score = item.radar_score ?? item.score ?? 0;
@@ -193,6 +194,8 @@ window.openOppDrawer = async function(oppId) {
       ${item.url ? `<a href="${item.url}" target="_blank" class="contact-link" style="margin-top:4px">🔗 Ver fuente original</a>` : ""}
       ${buildMapLink(item)}
     </div>
+
+    ${renderServicesBlock(servicesRes, oppId)}
   `;
 };
 
@@ -264,6 +267,76 @@ window.submitNewContact = async function(company) {
   });
   const contacts = await fetchContacts(company);
   el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+};
+
+function renderServicesBlock(servicesData, oppId) {
+  const sn = servicesData?.services_needed;
+
+  const PRIORITY_COLOR = { alta: '#dc2626', media: '#d97706', baja: '#16a34a' };
+  const PRIORITY_BG    = { alta: '#fef2f2', media: '#fffbeb', baja: '#f0fdf4' };
+
+  if (!sn) {
+    return `
+      <div style="margin-top:20px">
+        <div class="drawer-section-title">🔍 Servicios que se van a necesitar</div>
+        <div style="background:#f8fafc;border-radius:10px;padding:14px;text-align:center;border:1.5px dashed #e2e8f0">
+          <div style="font-size:13px;color:#94a3b8;margin-bottom:8px">Análisis aún no disponible</div>
+          <button onclick="analyzeServices(${oppId})" style="font-size:11px;padding:5px 12px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">
+            ✨ Analizar con IA
+          </button>
+        </div>
+      </div>`;
+  }
+
+  // Agrupar por categoría
+  const byCategory = {};
+  (sn.services || []).forEach(s => {
+    const cat = s.category || "Otros";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(s);
+  });
+
+  const cats = Object.entries(byCategory).map(([cat, svcs]) => `
+    <div style="margin-bottom:12px">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:6px">${escapeHTML(cat)}</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${svcs.map(s => {
+          const pc = PRIORITY_COLOR[s.priority] || '#64748b';
+          const pb = PRIORITY_BG[s.priority] || '#f8fafc';
+          return `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:${pb};border-radius:8px;border:1px solid ${pc}22">
+            <span style="font-size:9px;font-weight:800;color:${pc};background:${pc}18;padding:2px 6px;border-radius:99px;white-space:nowrap;margin-top:1px">${(s.priority||'').toUpperCase()}</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;color:#1e293b">${escapeHTML(s.name||"")}</div>
+              ${s.description ? `<div style="font-size:11px;color:#64748b;margin-top:2px">${escapeHTML(s.description)}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div style="margin-top:20px">
+      <div class="drawer-section-title">🔍 Servicios que se van a necesitar</div>
+      <div style="background:linear-gradient(135deg,#1e3a5f08,#0ea5e908);border:1.5px solid #0ea5e920;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:#0369a1">${escapeHTML(sn.phase_label||"")} · Horizonte: ~${sn.horizon_months || '?'} meses</div>
+        ${sn.summary ? `<div style="font-size:11px;color:#475569;margin-top:3px">${escapeHTML(sn.summary)}</div>` : ''}
+      </div>
+      ${cats}
+    </div>`;
+}
+
+window.analyzeServices = async function(oppId) {
+  const btn = event.target;
+  btn.textContent = "Analizando...";
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/admin/run-demand-intel?batch_size=1&max_batches=1&source=`, {method:'POST'});
+    // Re-abrir el drawer para refrescar
+    await openOppDrawer(oppId);
+  } catch(e) {
+    btn.textContent = "Error — reintentar";
+    btn.disabled = false;
+  }
 };
 
 function renderContactsList(contacts, company) {
