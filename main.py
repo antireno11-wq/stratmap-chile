@@ -72,6 +72,12 @@ async def lifespan(app: FastAPI):
         db.init_ai_db()
     except Exception as e:
         print(f"[startup] init_ai_db warning: {e}")
+    try:
+        import demand_intel
+        demand_intel.init_demand_intel_db()
+        print("[startup] demand_intel DB inicializada")
+    except Exception as e:
+        print(f"[startup] demand_intel init warning: {e}")
     # Recalcular scores con el scoring engine al arrancar
     try:
         result = recalc_all_scores()
@@ -1959,6 +1965,100 @@ def run_ai_scoring_all():
             import traceback; traceback.print_exc()
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Scoring IA masivo iniciado"}
+
+
+@app.post("/admin/run-demand-intel")
+def run_demand_intel(
+    batch_size: int = Query(default=30, ge=5, le=100),
+    max_batches: int = Query(default=10, ge=1, le=50),
+    force: bool = Query(default=False),
+    source: Optional[str] = Query(default=None),
+):
+    """Analiza proyectos mineros y genera la lista de servicios necesarios con IA."""
+    try:
+        import demand_intel
+        result = demand_intel.run(
+            batch_size=batch_size,
+            max_batches=max_batches,
+            force_reanalyze=force,
+            source_filter=source,
+        )
+        return {"ok": True, **result}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+@app.get("/opportunities/{opp_id}/services")
+def get_opportunity_services(opp_id: int):
+    """Retorna los servicios necesarios analizados para un proyecto."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, title, company, region, phase, score, services_needed
+                    FROM opportunities WHERE id = %s
+                """, (opp_id,))
+                row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+        opp_id_, title, company, region, phase, score, services = row
+        return {
+            "id": opp_id_,
+            "title": title,
+            "company": company,
+            "region": region,
+            "phase": phase,
+            "score": score,
+            "services_needed": services,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/opportunities/services/search")
+def search_by_service(
+    q: str = Query(..., description="Rubro o servicio a buscar (ej: 'sondaje', 'campamento')"),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Busca proyectos que van a necesitar un servicio específico."""
+    try:
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, title, company, region, phase, score, services_needed
+                    FROM opportunities
+                    WHERE services_needed IS NOT NULL
+                      AND services_needed::text ILIKE %s
+                    ORDER BY score DESC
+                    LIMIT %s
+                """, (f"%{q}%", limit))
+                rows = cur.fetchall()
+        results = []
+        for row in rows:
+            oid, title, company, region, phase, score, services = row
+            # Filtrar solo los servicios que hacen match con la búsqueda
+            matched_services = []
+            if services and "services" in services:
+                for svc in services["services"]:
+                    if q.lower() in (svc.get("name","") + svc.get("description","") + svc.get("category","")).lower():
+                        matched_services.append(svc)
+            results.append({
+                "id": oid,
+                "title": title,
+                "company": company,
+                "region": region,
+                "phase": phase,
+                "score": score,
+                "matched_services": matched_services,
+                "horizon_months": services.get("horizon_months") if services else None,
+                "phase_label": services.get("phase_label") if services else None,
+            })
+        return {"results": results, "count": len(results), "query": q}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/admin/run-ai-scorer")
