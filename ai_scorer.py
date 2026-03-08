@@ -1,14 +1,14 @@
 """
-ai_scorer.py — Scoring IA para proyectos en zona gris (score 45–65).
+ai_scorer.py — Scoring IA para proyectos mineros.
 
-Claude evalúa lotes de proyectos ambiguos y devuelve ajustes de score
-con justificación. Se ejecuta como POST /admin/run-ai-scorer.
+Claude evalúa proyectos y devuelve ajustes de score con justificación.
+Se ejecuta como POST /admin/run-ai-scorer.
 
 Flujo:
-  1. Consulta BD: proyectos con score entre 45 y 65
-  2. Los envía en lotes de 20 a Claude
-  3. Claude devuelve JSON con {id, ajuste (-10 a +10), razon}
-  4. Se persiste en campo `ai_score_boost` y `ai_score_reason` en raw
+  1. Consulta BD: proyectos ordenados por prioridad (sin score IA, más recientes)
+  2. Los envía en lotes a Claude con contexto enriquecido
+  3. Claude devuelve JSON con {id, ajuste (-15 a +15), razon}
+  4. Se persiste en raw.ai_score_reason y raw.ai_scored_at
 """
 
 import json
@@ -22,41 +22,76 @@ import db
 # ── Campos útiles para enviar a Claude ────────────────────────────────────────
 FIELDS = ("id", "title", "company", "source", "phase", "region", "score", "raw")
 
-SYSTEM_PROMPT = """Eres un experto en licitaciones y proyectos de minería chilena.
+SYSTEM_PROMPT = """Eres un experto senior en licitaciones y proyectos de minería chilena con 20 años de experiencia.
 Tu tarea es evaluar oportunidades comerciales para proveedores de servicios y bienes mineros.
 
-Para cada proyecto recibirás: título, empresa mandante, fuente, fase, región, score actual (0-100).
-El score actual viene de un sistema de reglas. Tu trabajo es ajustarlo basándote en contexto que las reglas no capturan.
+Para cada proyecto recibirás: título, empresa mandante, fuente, fase, región, score actual (0-100),
+inversión estimada, estado de evaluación, temperatura del mandante (heat) y días sin actividad.
 
-CRITERIOS DE AJUSTE:
-- +8 a +10: Proyecto claramente activo, en fase de contratación, mandante relevante, región clave
-- +4 a +7: Señales moderadamente positivas, proyecto viable pero con incertidumbre
-- 0: Score correcto, no hay información adicional para ajustar
-- -4 a -7: Proyecto estancado, información contradictoria, mandante menor
-- -8 a -10: Proyecto claramente inactivo, rechazado, o de muy bajo valor comercial
+El score actual viene de un sistema de reglas. Tu trabajo es ajustarlo usando criterios que las reglas no capturan:
+conocimiento del mercado minero chileno, señales de actividad real, probabilidad efectiva de contratación.
+
+CRITERIOS DE AJUSTE (rango -15 a +15):
+- +12 a +15: Proyecto claramente activo o próximo a licitar. Mandante grande (Codelco, BHP, SQM, etc.),
+             fase de construcción o ingeniería de detalle, inversión >100M USD, mandante con heat >70.
+- +6 a +11:  Señales moderadamente positivas. Proyecto viable, mandante conocido, región minera clave,
+             actividad reciente, mandante caliente.
+- 0:         Score correcto. Sin información adicional para ajustar.
+- -6 a -11:  Señales débiles. Proyecto estancado, mandante desconocido, sin actividad en 6+ meses,
+             fase muy temprana sin inversión confirmada.
+- -12 a -15: Proyecto inactivo, rechazado, desistido, o claramente sin valor comercial.
+
+CONTEXTO MINERO CHILE que las reglas no capturan:
+- Proyectos SEA "En Calificación" con mandante grande y >500M USD son oportunidades reales aunque tardías
+- Proyectos SIGEX en trámite son señales tempranas de exploración → potencial en 2-4 años
+- Mandantes con heat >70 están activamente contratando RIGHT NOW
+- Fases de modificación/ampliación de faenas existentes tienen contratación más rápida que proyectos nuevos
 
 RESPONDE SOLO con un array JSON válido, sin texto adicional:
 [
-  {"id": 123, "ajuste": 5, "razon": "Proyecto en fase de construcción con mandante Codelco"},
-  {"id": 456, "ajuste": -8, "razon": "Estado desistido, sin actividad reciente"},
+  {"id": 123, "ajuste": 12, "razon": "BHP en construcción, inversión 1.2B USD, heat=85, contratación activa"},
+  {"id": 456, "ajuste": -12, "razon": "Estado desistido, sin actividad 2 años, mandante sin heat"},
   ...
 ]
 """
 
 
-def _build_prompt(batch: List[Dict]) -> str:
+def _build_prompt(batch: List[Dict], heat_map: dict) -> str:
     lines = []
     for p in batch:
         raw = p.get("raw") or {}
+        company = p.get("company") or "?"
+        heat = heat_map.get((company or "").lower().strip(), 0)
+        heat_str = f"{heat}/100" if heat else "sin datos"
+
+        # Calcular días sin actividad
+        dias_inactivo = "?"
+        for field in ("updated_at", "last_signal_at"):
+            v = p.get(field)
+            if v:
+                try:
+                    from datetime import timezone
+                    if isinstance(v, str):
+                        from datetime import datetime as _dt
+                        v = _dt.fromisoformat(v.replace("Z", "+00:00"))
+                    if v.tzinfo is None:
+                        from datetime import timezone
+                        v = v.replace(tzinfo=timezone.utc)
+                    from datetime import datetime as _dt2, timezone as _tz
+                    dias_inactivo = (_dt2.now(_tz.utc) - v).days
+                    break
+                except Exception:
+                    pass
+
         lines.append(
-            f"ID:{p['id']} | {p.get('title','')[:80]} | "
-            f"Empresa: {p.get('company','?')} | "
-            f"Fuente: {p.get('source','?')} | "
-            f"Fase: {p.get('phase','?')} | "
-            f"Región: {p.get('region','?')} | "
-            f"Score actual: {p.get('score',0)} | "
+            f"ID:{p['id']} | {p.get('title','')[:90]} | "
+            f"Mandante: {company} | Fuente: {p.get('source','?')} | "
+            f"Fase: {p.get('phase','?')} | Región: {p.get('region','?')} | "
+            f"Score: {p.get('score',0)} | "
             f"Inversión USD: {raw.get('INVERSION_US','?')} | "
-            f"Estado evaluación: {raw.get('ESTADO_EVALUACION','?')}"
+            f"Estado SEA: {raw.get('ESTADO_EVALUACION','?')} | "
+            f"Heat mandante: {heat_str} | "
+            f"Días sin actividad: {dias_inactivo}"
         )
     return "Evalúa estos proyectos mineros chilenos:\n\n" + "\n".join(lines)
 
@@ -103,48 +138,66 @@ def _call_claude(prompt: str, retries: int = 2) -> List[Dict]:
                 raise
 
 
-def run(score_min: int = 45, score_max: int = 65, batch_size: int = 20,
-        max_batches: int = 5) -> Dict[str, Any]:
+NEWS_SOURCES = (
+    'Portal Minero','BioBioChile','Emol','Cooperativa',
+    'Minería Chilena','COCHILCO Noticias','Diario Financiero',
+    'Revista EI','Radio U. de Chile','Radio Universidad de Chile',
+    'RSS','Lithium Chile','InfoMineria','Mundo Minería',
+    'MLP Proveedores','BHP Careers','AMSA Careers',
+    'Lundin Careers','Collahuasi Careers','Teck Careers'
+)
+
+
+def run(score_min: int = 10, score_max: int = 85, batch_size: int = 20,
+        max_batches: int = 10, only_unscored: bool = False) -> Dict[str, Any]:
     """
-    Corre AI scoring para proyectos en zona gris.
+    Corre AI scoring para proyectos mineros.
 
     Args:
-        score_min: Score mínimo a evaluar (default 45)
-        score_max: Score máximo a evaluar (default 65)
+        score_min: Score mínimo a evaluar (default 10, excluye noticias en 0)
+        score_max: Score máximo a evaluar (default 85, excluye scores perfectos)
         batch_size: Proyectos por llamada a Claude (default 20)
-        max_batches: Máximo de llamadas API (default 5 = 100 proyectos)
+        max_batches: Máximo de llamadas API (default 10 = 200 proyectos)
+        only_unscored: Si True, solo proyectos sin score IA previo (más eficiente)
     """
-    # 1. Buscar proyectos en zona gris
+    # 1. Pre-cargar heat map de mandantes
+    heat_map: Dict[str, int] = {}
     with db.get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, title, company, source, phase, region, score, raw, updated_at
+            cur.execute("SELECT company, heat_score FROM mandante_heat")
+            for r in cur.fetchall():
+                if r["company"]:
+                    heat_map[r["company"].lower().strip()] = r["heat_score"] or 0
+
+    # 2. Buscar proyectos a evaluar — priorizando sin score IA y más recientes
+    ai_filter = "AND (raw->>'ai_scored_at') IS NULL" if only_unscored else ""
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT id, title, company, source, phase, region, score, raw,
+                       updated_at, last_signal_at
                 FROM opportunities
                 WHERE score BETWEEN %s AND %s
-                  AND source NOT IN (
-                    'Portal Minero','BioBioChile','Emol','Cooperativa',
-                    'Minería Chilena','COCHILCO Noticias','Diario Financiero',
-                    'Revista EI','Radio U. de Chile','Radio Universidad de Chile',
-                    'RSS','Lithium Chile','InfoMineria','Mundo Minería',
-                    'MLP Proveedores','BHP Careers','AMSA Careers',
-                    'Lundin Careers','Collahuasi Careers','Teck Careers'
-                  )
-                ORDER BY COALESCE(updated_at, created_at) DESC
+                  AND source NOT IN %s
+                  {ai_filter}
+                ORDER BY
+                  CASE WHEN (raw->>'ai_scored_at') IS NULL THEN 0 ELSE 1 END,
+                  COALESCE(updated_at, created_at) DESC
                 LIMIT %s
-            """, (score_min, score_max, batch_size * max_batches))
+            """, (score_min, score_max, NEWS_SOURCES, batch_size * max_batches))
             proyectos = [dict(r) for r in cur.fetchall()]
 
     if not proyectos:
         return {"ok": True, "msg": "Sin proyectos en zona gris", "evaluados": 0, "actualizados": 0}
 
-    # 2. Procesar en batches
-    updates: List[Tuple[int, int, str]] = []  # (new_score, id, razon)
+    # 3. Procesar en batches
+    updates: List[Tuple[int, int, str]] = []  # (new_score, razon, id)
     errors = []
     batches_procesados = 0
 
     for i in range(0, len(proyectos), batch_size):
         batch = proyectos[i:i + batch_size]
-        prompt = _build_prompt(batch)
+        prompt = _build_prompt(batch, heat_map)
         id_to_score = {p["id"]: p["score"] for p in batch}
 
         try:
@@ -155,7 +208,7 @@ def run(score_min: int = 45, score_max: int = 65, batch_size: int = 20,
                 razon = r.get("razon", "")
                 if pid not in id_to_score:
                     continue
-                ajuste = max(-10, min(10, int(ajuste)))  # clamp
+                ajuste = max(-15, min(15, int(ajuste)))  # clamp extendido ±15
                 new_score = max(0, min(99, id_to_score[pid] + ajuste))
                 if new_score != id_to_score[pid]:
                     updates.append((new_score, razon, pid))

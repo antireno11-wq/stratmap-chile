@@ -152,6 +152,9 @@ def init_pipeline_db() -> None:
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
         status TEXT NOT NULL DEFAULT 'Detectada',
+        outcome TEXT NULL,
+        outcome_date TIMESTAMPTZ NULL,
+        outcome_notes TEXT NULL,
         assignee TEXT NULL,
         notes TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -174,6 +177,10 @@ def init_pipeline_db() -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
+            # Migración: agregar columnas outcome si no existen (para BDs existentes)
+            cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome TEXT NULL;")
+            cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome_date TIMESTAMPTZ NULL;")
+            cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome_notes TEXT NULL;")
         conn.commit()
 
 
@@ -325,7 +332,17 @@ def _monto_titulo(title: str) -> int:
     return 0
 
 
-def calc_score(item: Dict[str, Any]) -> int:
+def _mandante_heat_boost(heat_score: int) -> int:
+    """Boost basado en temperatura del mandante (0–10 puntos).
+    Un mandante muy activo (noticias + empleos + proyectos) indica
+    mayor probabilidad de contratación a corto plazo."""
+    if heat_score >= 80: return 10
+    if heat_score >= 60: return 6
+    if heat_score >= 40: return 3
+    return 0
+
+
+def calc_score(item: Dict[str, Any], mandante_heat: int = 0) -> int:
     """
     Calcula score 0–100 para un proyecto/licitación minera. v2.
 
@@ -339,6 +356,7 @@ def calc_score(item: Dict[str, Any]) -> int:
       REGIÓN       : región minera estratégica (0–6)
       TEMPORAL     : antigüedad del registro (-15 / +8)
       MONTO_TÍTULO : montos detectados en texto (0–10)
+      HEAT_MANDANTE: temperatura IA del mandante (0–10)
     """
     source  = (item.get("source") or "").strip()
     phase   = (item.get("phase")  or "").strip()
@@ -411,19 +429,30 @@ def calc_score(item: Dict[str, Any]) -> int:
             pass
 
     senal = min(int(signal / 3), 10) if signal > 0 else 0
+    heat  = _mandante_heat_boost(mandante_heat)
 
-    total = base + mineral + mandante + keywords + reg + temporal + inversion + senal + monto_t
+    total = base + mineral + mandante + keywords + reg + temporal + inversion + senal + monto_t + heat
     return max(0, min(total, 99))
 
 def recalc_all_scores() -> Dict[str, Any]:
     """
     Recalcula scores para todos los proyectos en la BD.
+    Incluye temperatura del mandante (mandante_heat) como componente del score.
     Retorna estadísticas del resultado.
     """
     with get_conn() as conn:
+        # Pre-cargar heat scores de mandantes para evitar N+1 queries
+        heat_map: Dict[str, int] = {}
+        with conn.cursor() as cur:
+            cur.execute("SELECT company, heat_score FROM mandante_heat")
+            for r in cur.fetchall():
+                if r["company"]:
+                    heat_map[r["company"].lower().strip()] = r["heat_score"] or 0
+
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, source, phase, company, raw, title, signal_score, score
+                SELECT id, source, phase, company, raw, title, signal_score, score,
+                       updated_at, last_signal_at, published_at, created_at, entry
                 FROM opportunities
             """)
             rows = cur.fetchall()
@@ -431,7 +460,9 @@ def recalc_all_scores() -> Dict[str, Any]:
         updates = []
         for row in rows:
             item = dict(row)
-            new_score = calc_score(item)
+            company_key = (item.get("company") or "").lower().strip()
+            heat = heat_map.get(company_key, 0)
+            new_score = calc_score(item, mandante_heat=heat)
             if new_score != (item.get("score") or 0):
                 updates.append((new_score, item["id"]))
 
@@ -1156,3 +1187,179 @@ def get_all_mandante_heat() -> list:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM mandante_heat ORDER BY heat_score DESC")
             return [dict(r) for r in cur.fetchall()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RADAR FUTURO — Vista de demanda anticipada por hitos SEA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_radar_futuro(
+    horizon_months: int = 36,
+    min_score: int = 40,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """
+    Retorna proyectos SEA ordenados por fecha estimada de contratación.
+    Solo incluye proyectos con sea_milestone calculado.
+
+    Args:
+        horizon_months: Máximo de meses hacia adelante (default 36)
+        min_score: Score mínimo del proyecto (default 40)
+        limit: Límite de resultados
+    """
+    sql = """
+    SELECT
+        o.id, o.title, o.company, o.region, o.phase, o.score,
+        o.signal_score, o.url,
+        (o.score + COALESCE(o.signal_score, 0)) AS radar_score,
+        o.raw->'sea_milestone' AS milestone,
+        (o.raw->'sea_milestone'->>'predicted_contracting_date') AS predicted_date,
+        (o.raw->'sea_milestone'->>'predicted_contracting_months')::int AS months_out,
+        (o.raw->'sea_milestone'->>'confidence') AS confidence,
+        (o.raw->'sea_milestone'->>'milestone_reason') AS milestone_reason,
+        o.raw->>'INVERSION_US' AS inversion_usd,
+        mh.heat_score AS mandante_heat,
+        mh.heat_label AS mandante_heat_label
+    FROM opportunities o
+    LEFT JOIN mandante_heat mh ON LOWER(TRIM(mh.company)) = LOWER(TRIM(o.company))
+    WHERE o.source = 'SEA'
+      AND o.raw ? 'sea_milestone'
+      AND (o.raw->'sea_milestone'->>'predicted_contracting_months')::int <= %(horizon)s
+      AND o.score >= %(min_score)s
+      AND NOT (o.phase ILIKE '%%desistido%%' OR o.phase ILIKE '%%rechazado%%')
+    ORDER BY
+      (o.raw->'sea_milestone'->>'predicted_contracting_months')::int ASC,
+      (o.score + COALESCE(o.signal_score, 0)) DESC
+    LIMIT %(limit)s
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"horizon": horizon_months, "min_score": min_score, "limit": limit})
+            rows = cur.fetchall()
+
+    results = []
+    for r in rows:
+        row = dict(r)
+        # Convertir JSONB a dict si viene como string
+        for k in ("milestone",):
+            if isinstance(row.get(k), str):
+                try:
+                    import json as _json
+                    row[k] = _json.loads(row[k])
+                except Exception:
+                    pass
+        results.append(row)
+    return results
+
+
+def get_radar_futuro_buckets(horizon_months: int = 36, min_score: int = 40) -> Dict[str, Any]:
+    """Agrupa el radar futuro en buckets de tiempo para vista de dashboard."""
+    all_projects = get_radar_futuro(horizon_months=horizon_months, min_score=min_score, limit=500)
+    buckets: Dict[str, List] = {
+        "0-6":   [],   # contratando ahora o muy pronto
+        "6-18":  [],   # corto plazo
+        "18-36": [],   # mediano plazo
+    }
+    for p in all_projects:
+        m = p.get("months_out") or 999
+        if m <= 6:    buckets["0-6"].append(p)
+        elif m <= 18: buckets["6-18"].append(p)
+        else:         buckets["18-36"].append(p)
+
+    return {
+        "total": len(all_projects),
+        "buckets": {
+            k: {"count": len(v), "projects": v}
+            for k, v in buckets.items()
+        },
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PIPELINE OUTCOME — Feedback loop desde CRM
+# ══════════════════════════════════════════════════════════════════════════════
+
+VALID_OUTCOMES = {"won", "lost", "stalled", "in_progress"}
+
+
+def set_pipeline_outcome(
+    opportunity_id: int,
+    outcome: str,
+    notes: str = "",
+) -> bool:
+    """
+    Registra el resultado de un proyecto en el pipeline.
+    Retorna True si actualizó, False si el pipeline no existe.
+
+    outcome: 'won' | 'lost' | 'stalled' | 'in_progress'
+    """
+    if outcome not in VALID_OUTCOMES:
+        raise ValueError(f"outcome debe ser uno de {VALID_OUTCOMES}")
+
+    sql = """
+    UPDATE opportunity_pipeline
+    SET outcome = %(outcome)s,
+        outcome_date = NOW(),
+        outcome_notes = %(notes)s,
+        updated_at = NOW()
+    WHERE opportunity_id = %(opp_id)s
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {
+                "outcome": outcome,
+                "notes": notes[:1000],
+                "opp_id": opportunity_id,
+            })
+            updated = cur.rowcount
+        conn.commit()
+    return updated > 0
+
+
+def get_outcome_stats() -> Dict[str, Any]:
+    """
+    Estadísticas de outcomes para calibración del scoring.
+    Muestra qué distribución de scores tienen los proyectos que se ganaron vs perdieron.
+    """
+    sql = """
+    SELECT
+        p.outcome,
+        COUNT(*) as n,
+        ROUND(AVG(o.score)) as avg_score,
+        ROUND(AVG(o.signal_score)) as avg_signal,
+        MIN(o.score) as min_score,
+        MAX(o.score) as max_score
+    FROM opportunity_pipeline p
+    JOIN opportunities o ON o.id = p.opportunity_id
+    WHERE p.outcome IS NOT NULL
+    GROUP BY p.outcome
+    ORDER BY p.outcome
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            rows = [dict(r) for r in cur.fetchall()]
+    return {"outcomes": rows}
+
+
+def _compute_confidence(item: Dict[str, Any]) -> str:
+    """
+    Calcula nivel de confianza del score basado en calidad de datos.
+    'high' = múltiples fuentes, inversión confirmada, empresa conocida.
+    'medium' = datos parciales.
+    'low' = datos mínimos.
+    """
+    score = 0
+    raw = item.get("raw") or {}
+
+    if raw.get("INVERSION_US"):                   score += 2
+    if item.get("company"):                       score += 1
+    if item.get("region"):                        score += 1
+    if item.get("phase"):                         score += 1
+    if raw.get("cross_source_confirmed"):         score += 3   # confirmado multi-fuente
+    if raw.get("sea_milestone"):                  score += 1
+    if (item.get("signal_score") or 0) > 10:     score += 1
+
+    if score >= 7:  return "high"
+    if score >= 4:  return "medium"
+    return "low"
