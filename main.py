@@ -1993,24 +1993,24 @@ def run_demand_intel(
 def get_opportunity_services(opp_id: int):
     """Retorna los servicios necesarios analizados para un proyecto."""
     try:
-        with db.get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id, title, company, region, phase, score, services_needed
-                    FROM opportunities WHERE id = %s
-                """, (opp_id,))
-                row = cur.fetchone()
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, title, company, region, phase, score, services_needed
+                FROM opportunities WHERE id = %s
+            """, (opp_id,))
+            row = cur.fetchone()
+        conn.close()
         if not row:
             raise HTTPException(status_code=404, detail="Proyecto no encontrado")
-        opp_id_, title, company, region, phase, score, services = row
         return {
-            "id": opp_id_,
-            "title": title,
-            "company": company,
-            "region": region,
-            "phase": phase,
-            "score": score,
-            "services_needed": services,
+            "id": row["id"],
+            "title": row["title"],
+            "company": row["company"],
+            "region": row["region"],
+            "phase": row["phase"],
+            "score": row["score"],
+            "services_needed": row["services_needed"],  # None si aún no se analizó
         }
     except HTTPException:
         raise
@@ -2025,33 +2025,33 @@ def search_by_service(
 ):
     """Busca proyectos que van a necesitar un servicio específico."""
     try:
-        with db.get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id, title, company, region, phase, score, services_needed
-                    FROM opportunities
-                    WHERE services_needed IS NOT NULL
-                      AND services_needed::text ILIKE %s
-                    ORDER BY score DESC
-                    LIMIT %s
-                """, (f"%{q}%", limit))
-                rows = cur.fetchall()
+        conn = db.get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, title, company, region, phase, score, services_needed
+                FROM opportunities
+                WHERE services_needed IS NOT NULL
+                  AND services_needed::text ILIKE %s
+                ORDER BY score DESC
+                LIMIT %s
+            """, (f"%{q}%", limit))
+            rows = cur.fetchall()
+        conn.close()
         results = []
         for row in rows:
-            oid, title, company, region, phase, score, services = row
-            # Filtrar solo los servicios que hacen match con la búsqueda
+            services = row["services_needed"]
             matched_services = []
             if services and "services" in services:
                 for svc in services["services"]:
                     if q.lower() in (svc.get("name","") + svc.get("description","") + svc.get("category","")).lower():
                         matched_services.append(svc)
             results.append({
-                "id": oid,
-                "title": title,
-                "company": company,
-                "region": region,
-                "phase": phase,
-                "score": score,
+                "id": row["id"],
+                "title": row["title"],
+                "company": row["company"],
+                "region": row["region"],
+                "phase": row["phase"],
+                "score": row["score"],
                 "matched_services": matched_services,
                 "horizon_months": services.get("horizon_months") if services else None,
                 "phase_label": services.get("phase_label") if services else None,
