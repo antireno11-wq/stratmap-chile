@@ -99,6 +99,33 @@ function scoreColor(s) {
   return ["#475569","#f1f5f9"];
 }
 
+// ── Company logo helpers ───────────────────────────────────────────────────
+const COMPANY_COLORS = {
+  codelco:    "#1e3a5f", bhp:        "#d97706",
+  antofagasta:"#7c3aed", sqm:        "#0891b2",
+  collahuasi: "#dc2626", teck:       "#15803d",
+  enami:      "#b45309", lundin:     "#9333ea",
+  escondida:  "#d97706", centinela:  "#0f766e",
+  pelambres:  "#1d4ed8", candelaria: "#0f766e",
+  spence:     "#d97706", andacollo:  "#7c3aed",
+};
+function companyColor(name) {
+  const lower = (name || "").toLowerCase();
+  for (const [k, c] of Object.entries(COMPANY_COLORS)) {
+    if (lower.includes(k)) return c;
+  }
+  let h = 0;
+  for (let i = 0; i < (name||"").length; i++) h = (name.charCodeAt(i) + ((h<<5)-h)) | 0;
+  return ["#1e3a5f","#7c3aed","#0891b2","#dc2626","#15803d","#d97706","#db2777","#0f766e"][Math.abs(h)%8];
+}
+function companyInitials(name) {
+  if (!name) return "?";
+  const clean = name.replace(/\b(minera|mining|compañía|compania|sociedad|s\.a\.|ltda\.?|spa\.?|chile)\b/gi, "").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return clean.substring(0, 2).toUpperCase();
+}
+
 function itemDate(item) {
   // Prefer published_at (real publication date) over updated_at (ingestion date)
   return item.published_at || item.updated_at || item.created_at || null;
@@ -518,43 +545,43 @@ function aiFitBadge(oppId) {
 }
 
 function projectRow(item) {
-  const score = item.radar_score ?? item.score ?? 0;
-  const [c,bg] = scoreColor(score);
-  const signals = item.signal_score > 0
+  const score    = item.radar_score ?? item.score ?? 0;
+  const [c, bg]  = scoreColor(score);
+  const signals  = item.signal_score > 0
     ? `<span class="signal-badge" title="${item.signal_detail ? '📊 ' + item.signal_detail : 'Señal activa'}">⚡ +${item.signal_score}</span>` : "";
-  const phase = item.phase ? `<span class="phase-chip">${escapeHTML(item.phase)}</span>` : "—";
+  const initials = companyInitials(item.company);
+  const logoColor = companyColor(item.company);
+  const region = item.region
+    ? `<span class="proj-card-region">${escapeHTML(item.region)}</span>` : "";
+  const status = item.pipeline_status ? statusChip(item.pipeline_status) : "";
 
-  const companyKey = item.company ? drawerKey("company", item.company) : null;
-  const regionKey  = item.region  ? drawerKey("region",  item.region)  : null;
-
-  const company = companyKey
-    ? `<span class="clickable-link" onclick="openDrawerByKey('${companyKey}')">${escapeHTML(item.company)}</span>`
-    : "—";
-  const region = regionKey
-    ? `<span class="clickable-link" onclick="openDrawerByKey('${regionKey}')">${escapeHTML(item.region)}</span>`
-    : "—";
-
-  return `<tr>
-    ${isLoggedIn ? `<td class="col-score"><span class="score-badge" style="color:${c};background:${bg}">${score}</span>${signals}</td>` : ''}
-    <td><span class="proj-title clickable-link" onclick="openOppDrawer(${item.id})">${escapeHTML(item.title||"")}</span>
-        <span class="proj-industry">${escapeHTML(item.industry||"")}</span></td>
-    <td>${sourceChip(item.source||"")}</td>
-    <td>${company}</td>
-    <td>${region}</td>
-    <td>${statusChip(item.pipeline_status)}</td>
-    <td>${fmtDate(itemDate(item))}</td>
-    <td><a class="row-link" href="${item.url||"#"}" target="_blank" rel="noreferrer">ver →</a></td>
-  </tr>`;
-}
+  return `
+    <div class="proj-card" onclick="openOppDrawer(${item.id})">
+      <div class="proj-card-score-col">
+        ${isLoggedIn ? `<div class="proj-card-score" style="color:${c};background:${bg}">${score}</div>` : ""}
+      </div>
+      <div class="proj-card-logo" style="background:${logoColor}">${escapeHTML(initials)}</div>
+      <div class="proj-card-body">
+        <div class="proj-card-company">${escapeHTML(item.company || "—")}</div>
+        <div class="proj-card-title">${escapeHTML(item.title || "")}</div>
+        <div class="proj-card-meta">
+          ${region}
+          ${sourceChip(item.source || "")}
+          ${signals}
+          ${status}
+        </div>
+      </div>
+    </div>`;
 
 function newsRow(item) {
-  return `<tr>
-    <td><a class="news-title" href="${item.url||"#"}" target="_blank" rel="noreferrer">${escapeHTML(item.title||"")}</a></td>
-    <td>${sourceChip(item.source||"")}</td>
-    <td>${escapeHTML(item.industry||"—")}</td>
-    <td>${fmtDate(itemDate(item))}</td>
-    <td><a class="row-link" href="${item.url||"#"}" target="_blank" rel="noreferrer">ver →</a></td>
-  </tr>`;
+  return `
+    <div class="news-card">
+      <div class="news-card-left">
+        ${sourceChip(item.source || "")}
+        <span class="news-date">${fmtDate(itemDate(item))}</span>
+      </div>
+      <a class="news-card-title" href="${item.url||"#"}" target="_blank" rel="noreferrer">${escapeHTML(item.title||"")}</a>
+    </div>`;
 }
 
 // ── Filters & Data ────────────────────────────────────────────────────────────
@@ -677,16 +704,16 @@ function renderFiltered() {
   if (tbodyLic) {
     tbodyLic.innerHTML = licitPage.length
       ? licitPage.map(projectRow).join('')
-      : `<tr><td colspan="8" class="muted-row">Sin licitaciones activas</td></tr>`;
+      : `<div class="muted-row">Sin licitaciones activas</div>`;
   }
 
   el('tbody-projects').innerHTML = projPage.length
     ? projPage.map(projectRow).join('')
-    : `<tr><td colspan="8" class="muted-row">Sin concesiones</td></tr>`;
+    : `<div class="muted-row">Sin concesiones</div>`;
 
   el('tbody-news').innerHTML = newsPage.length
     ? newsPage.map(newsRow).join('')
-    : `<tr><td colspan="5" class="muted-row">Sin noticias</td></tr>`;
+    : `<div class="muted-row">Sin noticias</div>`;
 
   // Pagination
   renderPagination('pagination-licitaciones', licitaciones.length, currentPage.licitaciones,
