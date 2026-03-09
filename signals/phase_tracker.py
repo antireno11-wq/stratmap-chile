@@ -204,13 +204,13 @@ def run(force_init: bool = True) -> dict:
                     cur.execute("""
                         UPDATE opportunities
                         SET raw = COALESCE(raw, '{}'::jsonb) || jsonb_build_object(
-                                'previous_phase', %(prev)s
+                                'previous_phase', %(prev)s::text
                             ),
-                            signal_score = %(signal_score)s,
+                            signal_score = %(signal_score)s::int,
                             last_signal_at = CASE WHEN %(log_change)s::boolean THEN NOW()
                                              ELSE last_signal_at END,
                             updated_at = NOW()
-                        WHERE id = %(id)s
+                        WHERE id = %(id)s::int
                     """, {
                         "prev": u["prev"],
                         "signal_score": u["signal_score"],
