@@ -207,7 +207,7 @@ def run(force_init: bool = True) -> dict:
                                 'previous_phase', %(prev)s
                             ),
                             signal_score = %(signal_score)s,
-                            last_signal_at = CASE WHEN %(log_change)s THEN NOW()
+                            last_signal_at = CASE WHEN %(log_change)s::boolean THEN NOW()
                                              ELSE last_signal_at END,
                             updated_at = NOW()
                         WHERE id = %(id)s

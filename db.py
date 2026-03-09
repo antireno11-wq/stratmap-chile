@@ -1227,6 +1227,11 @@ def get_radar_futuro(
       AND (o.raw->'sea_milestone'->>'predicted_contracting_months')::int <= %(horizon)s
       AND o.score >= %(min_score)s
       AND NOT (o.phase ILIKE '%%desistido%%' OR o.phase ILIKE '%%rechazado%%')
+      AND (
+          o.industry = 'Minería'
+          OR LOWER(o.title) ~ '(miner|cobre|litio|oro|plata|salar|faena|concentrador|lixiviaci|nitr[oó]geno|molibdeno|hierro|codelco|escondida|collahuasi|sqm)'
+      )
+      AND LOWER(o.title) NOT SIMILAR TO '%%(hidrogeno|hidrógeno|eólico|eolico|solar|fotovoltaic|termosolar|wind|biomasa|geotermia|acuicultura|forestal|pesca|portuario|autopista|aeropuerto|hospital|vivienda|inmobiliaria)%%'
     ORDER BY
       (o.raw->'sea_milestone'->>'predicted_contracting_months')::int ASC,
       (o.score + COALESCE(o.signal_score, 0)) DESC
