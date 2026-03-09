@@ -572,6 +572,7 @@ function projectRow(item) {
         </div>
       </div>
     </div>`;
+}
 
 function newsRow(item) {
   return `
