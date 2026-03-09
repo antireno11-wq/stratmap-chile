@@ -7,58 +7,209 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
   <header class="top">
     <div class="brand">
       <div class="logo">S</div>
       <div>
         <div class="title">Stratmap</div>
-        <div class="subtitle">Oportunidades (SEA primero)</div>
+        <div class="subtitle">Inteligencia minera</div>
       </div>
+    </div>
+
+    <div class="top-search">
+      <input id="q" class="input" placeholder="Buscar proyectos, empresas, regiones…" />
+      <select id="limit" class="input input-sm">
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+      </select>
+      <button class="btn primary" id="btnRefresh">Actualizar</button>
     </div>
 
     <div class="right">
-      <a class="btn" href="/docs" target="_blank">API Docs</a>
-      <button class="btn primary" id="btnRefresh">Actualizar</button>
+      <button id="theme-toggle" class="btn icon-btn" onclick="toggleTheme()" title="Cambiar tema">🌙</button>
+      <div id="userMenu" style="position:relative">
+        <button id="userAvatarBtn" class="btn user-avatar-btn" onclick="toggleUserMenu()">
+          <span id="userAvatarIcon">👤</span>
+          <span id="userAvatarLabel">Mi cuenta</span>
+          <span class="user-avatar-dot"></span>
+        </button>
+        <div id="userDropdown" class="user-dropdown">
+          <div class="dropdown-header">
+            <div id="dropdownStatus" class="dropdown-name">Sin sesión</div>
+            <div id="dropdownSubtitle" class="dropdown-sub">Ingresa para ver scores</div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <a id="menu-login-link" href="/ingresar.html" class="dropdown-item">Ingresar</a>
+          <a id="menu-prefs-link" href="/preferences.html" class="dropdown-item" style="display:none">Mis preferencias</a>
+          <a id="menu-services-link" href="/onboarding.html" class="dropdown-item" style="display:none">Mis servicios</a>
+          <div id="menu-divider" class="dropdown-divider" style="display:none"></div>
+          <button id="menu-logout-btn" class="dropdown-item dropdown-item-danger" onclick="resetSession()" style="display:none">Cerrar sesión</button>
+        </div>
+      </div>
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="card">
-      <div class="row">
-        <input id="q" class="input" placeholder="Buscar (título, empresa, región, industria…)" />
-        <select id="limit" class="input">
-          <option value="25">25</option>
-          <option value="50" selected>50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-        <button class="btn" id="btnSearch">Buscar</button>
+  <!-- ── No session banner ───────────────────────────────────────────────── -->
+  <div id="no-session-banner" class="no-session-banner" style="display:none">
+    <span>Ingresa para ver scores personalizados y señales activas</span>
+    <a href="/ingresar.html" class="btn primary btn-sm">Ingresar</a>
+  </div>
+
+  <!-- ── App shell ───────────────────────────────────────────────────────── -->
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="#section-mandantes">
+          🏭 Mandantes <span id="sc-mandantes" class="sidebar-count"></span>
+        </a>
+        <a class="sidebar-item" href="#section-licitaciones">
+          📋 Licitaciones <span id="sc-licitaciones" class="sidebar-count"></span>
+        </a>
+        <a class="sidebar-item" href="#section-projects">
+          ⛏ Proyectos <span id="sc-projects" class="sidebar-count"></span>
+        </a>
+        <a class="sidebar-item" href="#section-empleos">
+          👷 Empleos
+        </a>
+        <a class="sidebar-item" href="#section-news">
+          📰 Noticias <span id="sc-news" class="sidebar-count"></span>
+        </a>
+      </nav>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-filters">
+        <div class="filter-label">Industria</div>
+        <div id="filter-industry" class="filter-group"></div>
+
+        <div class="filter-label">Región</div>
+        <div id="filter-region" class="filter-group"></div>
+
+        <div class="filter-label">Fuente</div>
+        <div id="filter-source" class="filter-group"></div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <!-- Stats bar -->
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-projects">—</div>
+          <div class="stat-lbl">Proyectos</div>
+        </div>
+        <div class="stat-card" id="stat-signals-card">
+          <div class="stat-val" id="stat-signals">—</div>
+          <div class="stat-lbl">Score &gt;50</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-empleos">—</div>
+          <div class="stat-lbl">Empleos activos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-news">—</div>
+          <div class="stat-lbl">Noticias</div>
+        </div>
+        <div class="stat-status" id="status"></div>
       </div>
 
-      <div class="status" id="status"></div>
-    </section>
+      <!-- Region chips -->
+      <div id="region-chips" class="region-chips"></div>
 
-    <section class="card">
-      <div class="tableWrap">
-        <table class="table" id="table">
-          <thead>
-            <tr>
-              <th>Score</th>
-              <th>Título</th>
-              <th>Empresa</th>
-              <th>Industria</th>
-              <th>Región</th>
-              <th>Fuente</th>
-              <th>Link</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="7" class="muted">Cargando...</td></tr>
-          </tbody>
-        </table>
+      <!-- ── Mandantes ─────────────────────────────────────────────────── -->
+      <section id="section-mandantes" class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">
+            Mandantes
+            <span id="badge-mandantes" class="badge"></span>
+          </h2>
+          <a href="/mandantes.html" class="section-link">Ver todos →</a>
+        </div>
+        <div id="mandantes-grid" class="mandantes-grid">
+          <div class="muted-hint">Cargando…</div>
+        </div>
+      </section>
+
+      <!-- ── Licitaciones ──────────────────────────────────────────────── -->
+      <section id="section-licitaciones" class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">
+            Licitaciones activas
+            <span id="badge-licitaciones" class="badge"></span>
+          </h2>
+          <span class="section-upd" id="upd-licitaciones"></span>
+        </div>
+        <div id="tbody-licitaciones" class="proj-card-grid">
+          <div class="muted-hint">Cargando…</div>
+        </div>
+        <div id="pagination-licitaciones"></div>
+      </section>
+
+      <!-- ── Proyectos / Concesiones ────────────────────────────────────── -->
+      <section id="section-projects" class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">
+            Proyectos / Concesiones
+            <span id="badge-projects" class="badge"></span>
+          </h2>
+          <span class="section-upd" id="upd-projects"></span>
+        </div>
+        <div id="tbody-projects" class="proj-card-grid">
+          <div class="muted-hint">Cargando…</div>
+        </div>
+        <div id="pagination-projects"></div>
+      </section>
+
+      <!-- ── Empleos ───────────────────────────────────────────────────── -->
+      <section id="section-empleos" class="section-card" style="display:none">
+        <div class="section-header">
+          <h2 class="section-title">
+            Empleos activos
+            <span id="badge-empleos" class="badge"></span>
+          </h2>
+        </div>
+        <div id="empleos-grid"></div>
+      </section>
+
+      <!-- ── Noticias ──────────────────────────────────────────────────── -->
+      <section id="section-news" class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">
+            Noticias del sector
+            <span id="badge-news" class="badge"></span>
+          </h2>
+          <span class="section-upd" id="upd-news"></span>
+        </div>
+        <div id="tbody-news" class="news-card-list">
+          <div class="muted-hint">Cargando…</div>
+        </div>
+        <div id="pagination-news"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── Drawer overlay ─────────────────────────────────────────────────── -->
+  <div id="drawer-overlay" class="drawer-overlay"></div>
+
+  <!-- ── Drawer ─────────────────────────────────────────────────────────── -->
+  <div id="drawer" class="drawer">
+    <div class="drawer-header">
+      <div class="drawer-header-text">
+        <div id="drawer-title" class="drawer-title-text"></div>
+        <div id="drawer-subtitle" class="drawer-subtitle-text"></div>
       </div>
-    </section>
-  </main>
+      <button id="drawer-close" class="drawer-close-btn">✕</button>
+    </div>
+    <div id="drawer-body" class="drawer-body-content"></div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
