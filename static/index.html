@@ -117,28 +117,15 @@
     .section-badge { background: var(--orange-light); color: var(--orange); font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; border: 1px solid rgba(249,115,22,0.2); }
     .section-updated { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
 
-    /* ── Table ── */
+    /* ── Table (usada en drawer y otros contextos) ── */
     .tableWrap { overflow-x: auto; max-width: 100%; }
-    table { table-layout: fixed; width: 100%; word-break: break-word; }
-    table th:nth-child(1) { width: 60px; }   /* score */
-    table th:nth-child(2) { width: 35%; }     /* title */
-    table th:nth-child(3) { width: 70px; }    /* fuente */
-    table th:nth-child(4) { width: 22%; }     /* mandante */
-    table th:nth-child(5) { width: 12%; }     /* region */
-    table th:nth-child(6) { width: 80px; }    /* estado */
-    table th:nth-child(7) { width: 80px; }    /* fecha */
-    table th:nth-child(8) { width: 50px; }    /* ver */
-    table { width: 100%; border-collapse: collapse; }
+    table { table-layout: fixed; width: 100%; border-collapse: collapse; word-break: break-word; }
     th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; background: #fafbfc; }
     td { font-size: 13px; padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #fafbff; }
-    .proj-title { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(300px, 28vw); display: block; letter-spacing: -0.2px; font-size: 13px; }
-    .proj-industry { font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-    .news-title { color: var(--blue); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(640px, 55vw); display: block; text-decoration: none; font-weight: 600; }
-    .news-title:hover { text-decoration: underline; }
     .score-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 3px 9px; font-size: 12px; font-weight: 800; border-radius: 6px; letter-spacing: -0.2px; }
-    .source-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+    .source-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
     .status-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
     .phase-chip { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 5px; background: var(--blue-light); color: var(--blue); font-weight: 600; }
     .signal-badge { display: inline-flex; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #fef3c7; color: #92400e; margin-left: 4px; }
@@ -147,6 +134,36 @@
     .muted-row { color: var(--muted); text-align: center; padding: 32px 0; font-size: 13px; font-weight: 500; }
     .clickable-link { color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 600; }
     .clickable-link:hover { text-decoration: underline; }
+
+    /* ── Cards de proyectos / licitaciones ── */
+    .cards-wrap { padding: 6px 0; }
+    .proj-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 18px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.12s;
+    }
+    .proj-card:last-child { border-bottom: none; }
+    .proj-card:hover { background: #f5f7ff; }
+    .proj-card-score-col { width: 46px; flex-shrink: 0; display: flex; justify-content: center; }
+    .proj-card-score { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; font-size: 13px; font-weight: 900; border-radius: 10px; letter-spacing: -0.5px; }
+    .proj-card-logo { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0; letter-spacing: -0.5px; }
+    .proj-card-body { flex: 1; min-width: 0; }
+    .proj-card-company { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+    .proj-card-title { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.2px; }
+    .proj-card-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .proj-card-region { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+    /* ── Cards de noticias ── */
+    .news-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 11px 18px; border-bottom: 1px solid var(--border);
+    }
+    .news-card:last-child { border-bottom: none; }
+    .news-card:hover { background: #f5f7ff; }
+    .news-card-left { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 180px; }
+    .news-date { font-size: 11px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+    .news-card-title { font-size: 13px; font-weight: 600; color: var(--blue); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+    .news-card-title:hover { text-decoration: underline; }
 
 
     /* ── Mandantes ─────────────────────────────────────────────────── */
@@ -396,21 +413,8 @@
           <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">Codelco · ENAMI · SEA</span>
           <span class="section-updated" id="upd-licitaciones"></span>
         </div>
-        <div class="tableWrap">
-          <table>
-            <colgroup><col style="width:64px"><col style="width:auto"><col style="width:90px"><col style="width:200px"><col style="width:120px"><col style="width:110px"><col style="width:80px"><col style="width:44px"></colgroup>
-            <thead><tr>
-              <th class="col-score sortable" onclick="setSortBy('score')" title="Ordenar por score">Score <span class="sort-arrow" id="arr-score-l"></span></th>
-              <th class="sortable" onclick="setSortBy('title')">Licitación</th>
-              <th>Fuente</th>
-              <th class="sortable" onclick="setSortBy('company')">Mandante</th>
-              <th class="sortable" onclick="setSortBy('region')">Región</th>
-              <th>Pipeline</th>
-              <th class="sortable" onclick="setSortBy('date')">Fecha</th>
-              <th></th>
-            </tr></thead>
-            <tbody id="tbody-licitaciones"><tr><td colspan="8" class="muted-row">Cargando...</td></tr></tbody>
-          </table>
+        <div class="cards-wrap">
+          <div id="tbody-licitaciones"><div class="muted-row">Cargando...</div></div>
           <div id="pagination-licitaciones"></div>
         </div>
       </div>
@@ -424,21 +428,8 @@
           <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">SIGEX · pertenencias y exploración</span>
           <span class="section-updated" id="upd-projects"></span>
         </div>
-        <div class="tableWrap">
-          <table>
-            <colgroup><col style="width:64px"><col style="width:auto"><col style="width:90px"><col style="width:200px"><col style="width:120px"><col style="width:110px"><col style="width:80px"><col style="width:44px"></colgroup>
-            <thead><tr>
-              <th class="col-score sortable" onclick="setSortBy('score')" title="Ordenar por score">Score <span class="sort-arrow" id="arr-score"></span></th>
-              <th class="sortable" onclick="setSortBy('title')">Proyecto <span class="sort-arrow" id="arr-title"></span></th>
-              <th>Fuente</th>
-              <th class="sortable" onclick="setSortBy('company')">Mandante <span class="sort-arrow" id="arr-company"></span></th>
-              <th class="sortable" onclick="setSortBy('region')">Región <span class="sort-arrow" id="arr-region"></span></th>
-              <th>Pipeline</th>
-              <th class="sortable" onclick="setSortBy('date')">Fecha <span class="sort-arrow" id="arr-date"></span></th>
-              <th></th>
-            </tr></thead>
-            <tbody id="tbody-projects"><tr><td colspan="8" class="muted-row">Cargando...</td></tr></tbody>
-          </table>
+        <div class="cards-wrap">
+          <div id="tbody-projects"><div class="muted-row">Cargando...</div></div>
           <div id="pagination-projects"></div>
         </div>
       </div>
@@ -450,18 +441,8 @@
           <span class="section-badge" id="badge-news">—</span>
           <span class="section-updated" id="upd-news"></span>
         </div>
-        <div class="tableWrap">
-          <table style="table-layout:fixed;width:100%">
-            <colgroup>
-              <col style="width:55%">
-              <col style="width:110px">
-              <col style="width:100px">
-              <col style="width:80px">
-              <col style="width:44px">
-            </colgroup>
-            <thead><tr><th>Titular</th><th>Fuente</th><th>Industria</th><th>Fecha</th><th></th></tr></thead>
-            <tbody id="tbody-news"><tr><td colspan="5" class="muted-row">Cargando...</td></tr></tbody>
-          </table>
+        <div class="cards-wrap">
+          <div id="tbody-news"><div class="muted-row">Cargando...</div></div>
           <div id="pagination-news"></div>
         </div>
       </div>
