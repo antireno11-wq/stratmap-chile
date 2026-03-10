@@ -429,10 +429,43 @@ function buildMapLink(item) {
 }
 
 
+// ── Company alias matching (espejo de sea_signals.py) ─────────────────────
+const SEA_COMPANY_ALIASES = {
+  "codelco":             ["codelco", "corporación nacional del cobre", "corp. nac. del cobre"],
+  "bhp":                 ["bhp", "escondida", "minera escondida", "bhp billiton"],
+  "sqm":                 ["sqm", "soquimich", "sociedad química y minera"],
+  "collahuasi":          ["collahuasi", "doña inés de collahuasi"],
+  "antofagasta minerals":["antofagasta minerals", "antofagasta plc", "los pelambres", "centinela", "zaldívar", "antucoya"],
+  "teck":                ["teck", "quebrada blanca", "carmen de andacollo"],
+  "kinross":             ["kinross", "la coipa", "maricunga"],
+  "barrick":             ["barrick", "pascua-lama", "veladero"],
+  "glencore":            ["glencore", "lomas bayas"],
+  "enami":               ["enami", "empresa nacional de minería", "empresa nacional de mineria"],
+  "angloamerican":       ["anglo american", "angloamerican", "los bronces", "el soldado"],
+};
+
+function seaMatchesCompany(seaCompany, queryCompany) {
+  const sc = (seaCompany || "").toLowerCase().trim();
+  const qc = (queryCompany || "").toLowerCase().trim();
+  if (!sc || !qc) return false;
+  if (sc.includes(qc) || qc.includes(sc)) return true;
+  for (const variants of Object.values(SEA_COMPANY_ALIASES)) {
+    const scMatch = variants.some(v => sc.includes(v));
+    const qcMatch = variants.some(v => qc.includes(v));
+    if (scMatch && qcMatch) return true;
+  }
+  return sc.split(" ").filter(w => w.length > 5).some(w => qc.includes(w));
+}
+
 async function openDrawer(type, value) {
   const items = type === "company"
     ? allItems.filter(i => (i.company||"") === value)
     : allItems.filter(i => (i.region||"") === value);
+
+  // SEA prospectos: match fuzzy por nombre de empresa (solo en drawer de empresa)
+  const seaItems = type === "company"
+    ? allItems.filter(i => isSea(i) && seaMatchesCompany(i.company, value) && (i.company||"") !== value)
+    : [];
 
   const projects = items.filter(i => !isNews(i));
   const news = items.filter(i => isNews(i));
@@ -472,6 +505,17 @@ async function openDrawer(type, value) {
     </tr>`;
   }).join("");
 
+  const seaRows = seaItems.slice(0, 10).map(i => {
+    const pts = i.score ?? 0;
+    const phase = escapeHTML(i.phase || "En evaluación");
+    return `<tr>
+      <td><span class="phase-chip" style="background:#dcfce7;color:#15803d">${phase}</span></td>
+      <td><a class="row-link" href="${i.url||"#"}" target="_blank" style="font-weight:600;color:var(--text);text-decoration:none">${escapeHTML(i.title||"")}</a></td>
+      <td>${escapeHTML(i.region||"—")}</td>
+      <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+    </tr>`;
+  }).join("");
+
   el("drawer-title").textContent = value;
   el("drawer-subtitle").textContent = type === "company" ? "Mandante" : "Región";
   el("drawer-body").innerHTML = `
@@ -492,6 +536,14 @@ async function openDrawer(type, value) {
         <tbody>${projRows || "<tr><td colspan='5' class='muted-row'>Sin proyectos</td></tr>"}</tbody>
       </table>
     </div>
+    ${seaItems.length > 0 ? `
+    <div class="drawer-section-title">🌿 Prospectos SEA (${seaItems.length})</div>
+    <div class="tableWrap" style="margin-bottom:20px">
+      <table>
+        <thead><tr><th>Estado</th><th>Proyecto</th><th>Región</th><th></th></tr></thead>
+        <tbody>${seaRows}</tbody>
+      </table>
+    </div>` : ""}
     ${type === "company" ? `
     <div class="drawer-section-title">Contactos</div>
     <div id="drawer-contacts"><p class="drawer-empty">Cargando...</p></div>` : ""}
