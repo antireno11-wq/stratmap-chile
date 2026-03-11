@@ -192,10 +192,17 @@
       }
     }
 
+    const LICIT_SRC = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores','Ariba Codelco','Chile Compra','MOP','COCHILCO']);
+
     function renderMandante(empresa, data, summaryData) {
-      const proyectos = data.proyectos || [];
-      const sea = data.sea_prospectos || [];
-      const noticias = data.noticias || [];
+      const proyectos  = data.proyectos || [];
+      const sea        = data.sea_prospectos || [];
+      const noticias   = data.noticias || [];
+
+      // Split proyectos into licitaciones vs concesiones SIGEX
+      const licitaciones = proyectos.filter(p => LICIT_SRC.has(p.source));
+      const concesiones  = proyectos.filter(p => !LICIT_SRC.has(p.source));
+
       const score = calcConsolidado(proyectos, sea, noticias);
       const [sc, sbg] = scoreColor(score);
       const totalSignal = proyectos.reduce((s,p) => s + (p.signal_score||0), 0);
@@ -272,11 +279,15 @@
           </div>
           <div class="mandante-stats">
             <div class="mstat">
-              <div class="mstat-val" style="color:var(--blue)">${proyectos.length}</div>
-              <div class="mstat-lbl">Proyectos activos</div>
+              <div class="mstat-val" style="color:var(--blue)">${licitaciones.length}</div>
+              <div class="mstat-lbl">Licitaciones</div>
             </div>
             <div class="mstat">
-              <div class="mstat-val" style="color:#7c3aed">${sea.length}</div>
+              <div class="mstat-val" style="color:#7c3aed">${concesiones.length}</div>
+              <div class="mstat-lbl">Concesiones SIGEX</div>
+            </div>
+            <div class="mstat">
+              <div class="mstat-val" style="color:#059669">${sea.length}</div>
               <div class="mstat-lbl">Prospectos SEA</div>
             </div>
             <div class="mstat">
@@ -289,29 +300,39 @@
           </div>
         </div>`;
 
-      // Proyectos activos
-      html += `<div class="section-card">
-        <div class="section-title">🏗 Proyectos activos <span class="section-badge">${proyectos.length}</span></div>`;
-      if (proyectos.length) {
-        html += `<table><thead><tr><th>Score</th><th>Proyecto</th><th>Región</th><th>Fase</th><th>Señales</th><th>Fecha</th></tr></thead><tbody>`;
-        proyectos.forEach(p => {
+      // Helper: render a proyectos table
+      function proyectosTable(items, emptyMsg) {
+        if (!items.length) return `<div class="empty-state">${emptyMsg}</div>`;
+        let t = `<table><thead><tr><th>Score</th><th>Proyecto</th><th>Fuente</th><th>Región</th><th>Fase</th><th>Señales</th><th>Fecha</th></tr></thead><tbody>`;
+        items.forEach(p => {
           const radar = (p.score||0) + (p.signal_score||0);
           const [c,bg] = scoreColor(radar);
           const sig = p.signal_score > 0
             ? `<span class="signal-badge" title="${escapeHTML(p.signal_detail||'')}">⚡ +${p.signal_score}</span>` : '—';
-          html += `<tr>
+          t += `<tr>
             <td><span class="score-badge" style="color:${c};background:${bg}">${radar}</span></td>
             <td><a class="row-link" href="${escapeHTML(p.url||'#')}" target="_blank">${escapeHTML(p.title)}</a></td>
+            <td style="color:var(--muted);font-size:12px">${escapeHTML(p.source||'—')}</td>
             <td>${escapeHTML(p.region||'—')}</td>
             <td>${phaseBadge(p.phase)}</td>
             <td>${sig}</td>
             <td style="color:var(--muted);font-size:12px">${formatDate(p.published_at)}</td>
           </tr>`;
         });
-        html += '</tbody></table>';
-      } else {
-        html += '<div class="empty-state">Sin proyectos activos registrados aún</div>';
+        t += '</tbody></table>';
+        return t;
       }
+
+      // Licitaciones
+      html += `<div class="section-card">
+        <div class="section-title">📋 Licitaciones <span class="section-badge">${licitaciones.length}</span></div>`;
+      html += proyectosTable(licitaciones, 'Sin licitaciones activas registradas');
+      html += '</div>';
+
+      // Concesiones SIGEX
+      html += `<div class="section-card">
+        <div class="section-title">⛏️ Concesiones SIGEX <span class="section-badge">${concesiones.length}</span></div>`;
+      html += proyectosTable(concesiones, 'Sin concesiones SIGEX registradas');
       html += '</div>';
 
       // Prospectos SEA
