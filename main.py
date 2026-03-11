@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 import db
 from db import (db_health, init_db_safe, list_opportunities, upsert_opportunities,
-                recalc_all_scores,
+                recalc_all_scores, expire_stale_opportunities,
                 create_user, get_user_by_email, save_preferences, get_preferences,
                 create_contact, update_contact, delete_contact,
                 get_contacts_by_company, list_contacts, bulk_import_contacts,
@@ -49,9 +49,10 @@ async def _rss_scheduler():
         result = await loop.run_in_executor(None, _run_rss_ingest)
         print(f"[scheduler] RSS done: {result}")
 
-        # AI scorer una vez al día (cada 4 ciclos de 6h)
+        # Tareas diarias (cada 4 ciclos de 6h = 24h)
         cycle += 1
         if cycle % 4 == 0:
+            # AI scorer zona gris
             print("[scheduler] Corriendo AI scorer zona gris...")
             try:
                 import ai_scorer
@@ -61,6 +62,14 @@ async def _rss_scheduler():
                 print(f"[scheduler] AI scorer done: {ai_result}")
             except Exception as e:
                 print(f"[scheduler] AI scorer error: {e}")
+
+            # Expiración de licitaciones obsoletas
+            print("[scheduler] Expirando licitaciones obsoletas...")
+            try:
+                expire_result = await loop.run_in_executor(None, expire_stale_opportunities)
+                print(f"[scheduler] Expire done: {expire_result}")
+            except Exception as e:
+                print(f"[scheduler] Expire error: {e}")
 
         await asyncio.sleep(6 * 3600)
 
@@ -2174,6 +2183,15 @@ def run_rss_manual():
     """Ingesta manual de noticias RSS (Portal Minero, Revista EI, InfoMinería, etc.)."""
     result = _run_rss_ingest()
     return result
+
+
+@app.post("/admin/run-expire-stale")
+def run_expire_stale():
+    """Marca como inactivas las licitaciones cuyo updated_at supera el TTL por fuente.
+    Ejecuta el mismo proceso que corre automáticamente cada 24h en el scheduler.
+    """
+    result = expire_stale_opportunities()
+    return {"ok": True, **result}
 
 
 @app.post("/admin/run-sigex")

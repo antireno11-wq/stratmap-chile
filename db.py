@@ -69,6 +69,7 @@ def init_db() -> None:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS last_signal_at TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS strategy TEXT NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;")
         conn.commit()
 
 
@@ -533,6 +534,7 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
       signal_detail = EXCLUDED.signal_detail,
       last_signal_at = COALESCE(EXCLUDED.last_signal_at, opportunities.last_signal_at),
       published_at = CASE WHEN EXCLUDED.published_at IS NOT NULL THEN EXCLUDED.published_at ELSE opportunities.published_at END,
+      is_active = TRUE,
       updated_at = NOW()
     RETURNING (xmax = 0) AS inserted;
     """
@@ -567,28 +569,114 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     return inserted, updated
 
 
-def list_opportunities(q: Optional[str], limit: int) -> List[Dict[str, Any]]:
+# ── TTL por fuente (días). None = nunca expira. ───────────────────────────────
+# Criterio: ciclo real de publicación en cada portal + margen de seguridad.
+SOURCE_TTL_DAYS: Dict[str, int] = {
+    # Portales de licitación / compras
+    "Ariba Codelco":   45,   # procurement ciclo ~30 días
+    "Ariba":           45,
+    "Chile Compra":    45,   # mercado público típico 30-45 días
+    "ChileCompra":     45,
+    "MLP Proveedores": 60,   # ciclos algo más largos
+    # Portales de mineras
+    "Codelco":         60,
+    "ENAMI":           60,
+    # Infraestructura pública
+    "MOP":             90,   # proyectos estado demoran más
+    # Datos de mercado / reportes
+    "COCHILCO":        120,  # estadísticas mensuales
+    # Noticias / RSS (info caduca rápido)
+    "RSS":             30,
+    "Portal Minero":   30,
+    "InfoMinería":     30,
+    "Minería Chilena": 30,
+    "Mundo Minería":   30,
+    "rss_mineria":     30,
+    "BioBioChile":     14,
+    "Emol":            14,
+    "Cooperativa":     14,
+    # Empleos / careers (ya truncan al re-scrape, esto es red de seguridad)
+    "BHP Careers":               14,
+    "AMSA Careers":              14,
+    "Teck Careers":              14,
+    "Lundin Careers":            14,
+    "Collahuasi Careers":        14,
+    "Antofagasta Minerals Careers": 14,
+    "Kinross Careers":           14,
+    "Empleos Indeed":            14,
+    # Fuentes que NUNCA expiran:
+    #   "sea", "SEA"       → aprobaciones ambientales son permanentes
+    #   "SIGEX"            → concesiones mineras duran décadas
+    #   "Sernageomin"      → igual
+    #   "manual"           → ingresadas a mano por el usuario
+}
+
+
+def expire_stale_opportunities() -> Dict[str, Any]:
+    """Marca is_active=FALSE en oportunidades cuyo updated_at supera el TTL
+    configurado por fuente. Retorna cuántos registros se inactivaron por fuente.
+
+    Lógica: updated_at se actualiza en cada UPSERT cuando el ítem sigue
+    apareciendo en el portal. Si updated_at no se ha renovado en N días,
+    el ítem ya desapareció del portal → se marca inactivo.
+    Items que reaparezcan en un fetch futuro son reactivados automáticamente
+    (upsert_opportunities pone is_active=TRUE en el ON CONFLICT).
+    """
+    expired: Dict[str, int] = {}
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for source, ttl_days in SOURCE_TTL_DAYS.items():
+                cur.execute(f"""
+                    UPDATE opportunities
+                    SET is_active = FALSE
+                    WHERE source = %(source)s
+                      AND is_active = TRUE
+                      AND updated_at < NOW() - INTERVAL '{ttl_days} days'
+                """, {"source": source})
+                count = cur.rowcount
+                if count > 0:
+                    expired[source] = count
+        conn.commit()
+    total = sum(expired.values())
+    print(f"[expire] {total} oportunidades inactivadas: {expired}")
+    return {"total_expired": total, "by_source": expired}
+
+
+def list_opportunities(
+    q: Optional[str],
+    limit: int,
+    include_inactive: bool = False,
+) -> List[Dict[str, Any]]:
     limit = max(1, min(int(limit), 2000))
-    base = """
+    conditions: List[str] = []
+    params: Dict[str, Any] = {"limit": limit}
+
+    # Por defecto sólo mostramos oportunidades activas
+    if not include_inactive:
+        conditions.append("o.is_active IS NOT FALSE")
+
+    if q:
+        conditions.append(
+            "(o.title ILIKE %(q)s OR o.url ILIKE %(q)s OR o.company ILIKE %(q)s"
+            " OR o.contractor ILIKE %(q)s OR o.industry ILIKE %(q)s OR o.region ILIKE %(q)s)"
+        )
+        params["q"] = f"%{q}%"
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    sql = f"""
     SELECT o.id, o.source, o.title, o.url, o.company, o.contractor, o.industry, o.region, o.phase,
            o.score, o.signal_score, o.signal_detail, o.jobs_count, o.signals, o.last_signal_at,
-           o.entry, o.raw, o.created_at, o.updated_at,
+           o.entry, o.raw, o.created_at, o.updated_at, o.is_active,
            (o.score + COALESCE(o.signal_score, 0)) AS radar_score,
            p.status AS pipeline_status, p.assignee AS pipeline_assignee
     FROM opportunities o
     LEFT JOIN opportunity_pipeline p ON p.opportunity_id = o.id
+    {where}
+    ORDER BY radar_score DESC, o.updated_at DESC LIMIT %(limit)s;
     """
-    params: Dict[str, Any] = {"limit": limit}
-    if q:
-        base += """
-        WHERE o.title ILIKE %(q)s OR o.url ILIKE %(q)s OR o.company ILIKE %(q)s
-           OR o.contractor ILIKE %(q)s OR o.industry ILIKE %(q)s OR o.region ILIKE %(q)s
-        """
-        params["q"] = f"%{q}%"
-    base += " ORDER BY radar_score DESC, o.updated_at DESC LIMIT %(limit)s;"
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(base, params)
+            cur.execute(sql, params)
             return cur.fetchall()
 
 
