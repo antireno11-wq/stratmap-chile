@@ -3,43 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <title>Mapa · Stratmap</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
-      --sidebar: 220px;
-      --blue: #1a56db;
-      --orange: #e05a1e;
+      --sidebar: 230px;
+      --blue: #2563eb;
+      --orange: #f97316;
       --border: #e8edf2;
       --bg: #f5f7fa;
       --card: #fff;
       --text: #0f172a;
       --muted: #8896a5;
+      --sidebar-bg: #1a1f2e;
+      --sidebar-hover: #232940;
+      --sidebar-active: #2a3355;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
     /* Sidebar */
-    .sidebar { width: var(--sidebar); background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
-    .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-    .sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
-    .sidebar-brand-logo { width: 140px; height: auto; object-fit: contain; }
-    .sidebar-name { font-weight: 700; font-size: 14px; color: var(--text); }
-    .sidebar-tagline { font-size: 10px; color: var(--muted); }
-    .sidebar-section { padding: 16px 14px 4px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.1s; }
-    .sidebar-item:hover { background: var(--bg); color: var(--text); }
-    .sidebar-item.active { background: #eff6ff; color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 16px 18px; border-bottom: 1px solid #2d3548; display: flex; align-items: center; justify-content: center; background: #ffffff; }
+    .sidebar-logo-img { width: 150px; height: auto; object-fit: contain; }
+    .sidebar-section { padding: 20px 18px 5px; font-size: 9px; font-weight: 700; color: #6b7a99; letter-spacing: 0.1em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; font-size: 14px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
+    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; border-left-color: #4b5a7a; }
+    .sidebar-item.active { background: var(--sidebar-active); color: #fff; border-left-color: var(--orange); font-weight: 600; }
     .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
     .filter-group { padding: 4px 14px 8px; }
-    .filter-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
-    .filter-select { width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; outline: none; }
-    .filter-select:focus { border-color: var(--blue); }
-    .filter-range { width: 100%; accent-color: var(--blue); margin-top: 4px; }
-    .sidebar-stat { padding: 3px 14px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
-    .sidebar-stat strong { color: var(--text); font-weight: 600; }
+    .filter-label { font-size: 11px; color: #6b7a99; margin-bottom: 4px; font-weight: 500; }
+    .filter-select { width: 100%; padding: 6px 8px; background: #232940; border: 1px solid #2d3548; border-radius: 7px; color: #d1d5db; font-size: 12px; outline: none; }
+    .filter-select:focus { border-color: var(--orange); }
+    .filter-range { width: 100%; accent-color: var(--orange); margin-top: 4px; }
+    .sidebar-stat { padding: 3px 14px; font-size: 12px; color: #6b7a99; display: flex; justify-content: space-between; }
+    .sidebar-stat strong { color: #d1d5db; font-weight: 600; }
 
     /* Main */
     .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; height: 100vh; }
@@ -108,17 +110,14 @@
 </head>
 <body>
   <aside class="sidebar">
-    <div class="sidebar-brand" style="background:#fff;justify-content:center;padding:14px 16px"><img src="/logo.png" alt="Stratmap" class="sidebar-brand-logo" onerror="this.style.display='none'"></div>
-      <div>
-        <div class="sidebar-name">Stratmap</div>
-        <div class="sidebar-tagline">Inteligencia Minera Chile</div>
-      </div>
+    <div class="sidebar-brand">
+      <a href="/"><img src="/logo.png" alt="Stratmap" class="sidebar-logo-img" onerror="this.style.display='none'" /></a>
     </div>
-
-    <div class="sidebar-section">Vistas</div>
+    <div class="sidebar-section">Plataforma</div>
     <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
     <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item active" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <a class="sidebar-item" href="/mandantes.html"><span class="icon">🏢</span> Mandantes</a>
     <div class="sidebar-section">Configuración</div>
     <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
 

@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <title>Mandante — Stratmap Chile</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -17,14 +19,14 @@
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
     /* Sidebar */
-    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100; }
-    .sidebar-logo { padding: 20px 16px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
-    .sidebar-logo img { height: 36px; display: block; }
-    .sidebar-nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; color: rgba(255,255,255,0.65); font-size: 13px; font-weight: 500; text-decoration: none; transition: all 0.15s; }
-    .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
-    .nav-item.active { background: var(--sidebar-active); color: #fff; font-weight: 700; }
-    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 16px 18px; border-bottom: 1px solid #2d3548; display: flex; align-items: center; justify-content: center; background: #ffffff; }
+    .sidebar-logo-img { width: 150px; height: auto; object-fit: contain; }
+    .sidebar-section { padding: 20px 18px 5px; font-size: 9px; font-weight: 700; color: #6b7a99; letter-spacing: 0.1em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; font-size: 14px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
+    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; border-left-color: #4b5a7a; }
+    .sidebar-item.active { background: var(--sidebar-active); color: #fff; border-left-color: var(--orange); font-weight: 600; }
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
     /* Main */
     .main { margin-left: var(--sidebar); flex: 1; padding: 32px 40px; max-width: 1100px; }
@@ -98,16 +100,16 @@
 </head>
 <body>
   <nav class="sidebar">
-    <div class="sidebar-logo">
-      <img src="/logo.png" alt="Stratmap" onerror="this.style.display='none'" />
+    <div class="sidebar-brand">
+      <a href="/"><img src="/logo.png" alt="Stratmap" class="sidebar-logo-img" onerror="this.style.display='none'" /></a>
     </div>
-    <div class="sidebar-nav">
-      <a class="nav-item" href="/"><span class="nav-icon">📡</span>Radar</a>
-      <a class="nav-item active" href="/"><span class="nav-icon">🏢</span>Mandantes</a>
-      <a class="nav-item" href="/mapa.html"><span class="nav-icon">🗺</span>Mapa</a>
-      <a class="nav-item" href="/kanban.html"><span class="nav-icon">📋</span>Pipeline</a>
-      <a class="nav-item" href="/preferences.html"><span class="nav-icon">⚙️</span>Preferencias</a>
-    </div>
+    <div class="sidebar-section">Plataforma</div>
+    <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
+    <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
+    <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <a class="sidebar-item active" href="/mandantes.html"><span class="icon">🏢</span> Mandantes</a>
+    <div class="sidebar-section">Configuración</div>
+    <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
   </nav>
 
   <main class="main">

@@ -20,7 +20,7 @@
     .sidebar-logo-img { width: 140px; height: auto; }
     .sidebar-section { padding: 20px 18px 5px; font-size: 9px; font-weight: 700; color: #6b7a99; letter-spacing: 0.1em; text-transform: uppercase; }
     .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; font-size: 14px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
-    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; }
+    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; border-left-color: #4b5a7a; }
     .sidebar-item.active { background: var(--sidebar-active); color: #fff; border-left-color: var(--orange); font-weight: 600; }
     .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; }
 
@@ -62,14 +62,14 @@
 <body>
   <nav class="sidebar">
     <div class="sidebar-brand">
-      <img src="/img/logo.png" class="sidebar-logo-img" alt="Stratmap" onerror="this.style.display='none'">
+      <a href="/"><img src="/logo.png" class="sidebar-logo-img" alt="Stratmap" onerror="this.style.display='none'" /></a>
     </div>
     <div class="sidebar-section">Plataforma</div>
     <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
+    <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
     <a class="sidebar-item active" href="/mandantes.html"><span class="icon">🏢</span> Mandantes</a>
-    <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
-    <div class="sidebar-section">Cuenta</div>
+    <div class="sidebar-section">Configuración</div>
     <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
   </nav>
 
