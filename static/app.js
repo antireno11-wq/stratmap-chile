@@ -467,19 +467,21 @@ async function openDrawer(type, value) {
     ? allItems.filter(i => isSea(i) && seaMatchesCompany(i.company, value) && (i.company||"") !== value)
     : [];
 
-  const projects = items.filter(i => !isNews(i));
+  const LICIT_SRC = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores','Ariba Codelco','Chile Compra','MOP','COCHILCO']);
+  const projects    = items.filter(i => !isNews(i));
+  const licitaciones = projects.filter(i =>  LICIT_SRC.has(i.source));
+  const concesiones  = projects.filter(i => !LICIT_SRC.has(i.source));
   const news = items.filter(i => isNews(i));
-  const scores = projects.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
+
+  const scores = licitaciones.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
   const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
   const withSignals = projects.filter(i => (i.signal_score||0) > 0).length;
 
   const distKey = type === "company" ? "industry" : "company";
   const dist = {};
-  projects.forEach(i => { const k = i[distKey]||"Sin datos"; dist[k]=(dist[k]||0)+1; });
-  const phases = {};
-  projects.forEach(i => { const k = i.phase||"Sin fase"; phases[k]=(phases[k]||0)+1; });
+  licitaciones.forEach(i => { const k = i[distKey]||"Sin datos"; dist[k]=(dist[k]||0)+1; });
 
-  const total = Math.max(projects.length, 1);
+  const total = Math.max(licitaciones.length, 1);
   const distRows = Object.entries(dist).sort((a,b)=>b[1]-a[1]).slice(0,6)
     .map(([k,v]) => `<div class="drawer-dist-row">
       <span>${escapeHTML(k)}</span>
@@ -487,23 +489,24 @@ async function openDrawer(type, value) {
       <span class="drawer-dist-n">${v}</span>
     </div>`).join("");
 
-  const phaseRows = Object.entries(phases).sort((a,b)=>b[1]-a[1])
-    .map(([k,v]) => `<span class="phase-chip">${escapeHTML(k)} <strong>${v}</strong></span>`).join(" ");
+  function buildProjRows(list) {
+    return list.slice(0, 15).map(i => {
+      const score = i.radar_score ?? i.score ?? 0;
+      const [c,bg] = scoreColor(score);
+      drawerMap[`opp_${i.id}`] = {type:"opp", id: i.id};
+      return `<tr>
+        <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
+        <td><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
+            <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
+        <td>${statusChip(i.pipeline_status)}</td>
+        <td>${fmtDate(itemDate(i))}</td>
+        <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+      </tr>`;
+    }).join("");
+  }
 
-  const projRows = projects.slice(0,15).map(i => {
-    const score = i.radar_score ?? i.score ?? 0;
-    const [c,bg] = scoreColor(score);
-    const oppKey = `opp_${i.id}`;
-    drawerMap[oppKey] = {type:"opp", id: i.id};
-    return `<tr>
-      <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
-      <td><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
-          <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
-      <td>${statusChip(i.pipeline_status)}</td>
-      <td>${fmtDate(itemDate(i))}</td>
-      <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
-    </tr>`;
-  }).join("");
+  const licitRows    = buildProjRows(licitaciones);
+  const concesRows   = buildProjRows(concesiones);
 
   const seaRows = seaItems.slice(0, 10).map(i => {
     const pts = i.score ?? 0;
@@ -520,22 +523,36 @@ async function openDrawer(type, value) {
   el("drawer-subtitle").textContent = type === "company" ? "Mandante" : "Región";
   el("drawer-body").innerHTML = `
     <div class="drawer-stats">
-      <div class="drawer-stat"><div class="drawer-stat-val">${projects.length}</div><div class="drawer-stat-lbl">Proyectos</div></div>
-      <div class="drawer-stat"><div class="drawer-stat-val">${avgScore}</div><div class="drawer-stat-lbl">Score prom.</div></div>
+      <div class="drawer-stat"><div class="drawer-stat-val">${licitaciones.length}</div><div class="drawer-stat-lbl">Licitaciones</div></div>
+      <div class="drawer-stat"><div class="drawer-stat-val">${concesiones.length}</div><div class="drawer-stat-lbl">Concesiones</div></div>
       <div class="drawer-stat"><div class="drawer-stat-val">${withSignals}</div><div class="drawer-stat-lbl">Con señales ⚡</div></div>
       <div class="drawer-stat"><div class="drawer-stat-val">${news.length}</div><div class="drawer-stat-lbl">Noticias</div></div>
     </div>
-    <div class="drawer-section-title">${type === "company" ? "Por industria" : "Por mandante"}</div>
-    <div class="drawer-dist">${distRows || "<p class='drawer-empty'>Sin datos</p>"}</div>
-    <div class="drawer-section-title">Fases</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${phaseRows || "—"}</div>
-    <div class="drawer-section-title">Proyectos</div>
+
+    ${type === "company" ? `
+    <div class="drawer-section-title">🤖 Resumen IA</div>
+    <div id="drawer-ai-summary" style="padding:4px 0 12px"><p class="drawer-empty">Cargando...</p></div>
+
+    <div class="drawer-section-title">🌡️ Temperatura</div>
+    <div id="drawer-heat" style="padding:4px 0 12px"><p class="drawer-empty">Sin datos de temperatura aún</p></div>
+    ` : ""}
+    ${licitaciones.length > 0 ? `
+    <div class="drawer-section-title">📋 Licitaciones (${licitaciones.length})</div>
+    ${distRows ? `<div class="drawer-dist" style="margin-bottom:12px">${distRows}</div>` : ""}
     <div class="tableWrap" style="margin-bottom:20px">
       <table>
-        <thead><tr><th>Score</th><th>Proyecto</th><th>Pipeline</th><th>Fecha</th><th>Link</th></tr></thead>
-        <tbody>${projRows || "<tr><td colspan='5' class='muted-row'>Sin proyectos</td></tr>"}</tbody>
+        <thead><tr><th>Score</th><th>Licitación</th><th>Pipeline</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>${licitRows}</tbody>
       </table>
-    </div>
+    </div>` : ""}
+    ${concesiones.length > 0 ? `
+    <div class="drawer-section-title">⛏️ Concesiones SIGEX (${concesiones.length})</div>
+    <div class="tableWrap" style="margin-bottom:20px">
+      <table>
+        <thead><tr><th>Score</th><th>Concesión</th><th>Pipeline</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>${concesRows}</tbody>
+      </table>
+    </div>` : ""}
     ${seaItems.length > 0 ? `
     <div class="drawer-section-title">🌿 Prospectos SEA (${seaItems.length})</div>
     <div class="tableWrap" style="margin-bottom:20px">
@@ -545,6 +562,12 @@ async function openDrawer(type, value) {
       </table>
     </div>` : ""}
     ${type === "company" ? `
+    <div class="drawer-section-title">🔧 Servicios que van a necesitar</div>
+    <div id="drawer-services" style="padding:4px 0 12px"><p class="drawer-empty">Cargando...</p></div>
+
+    <div class="drawer-section-title">📊 Mi pipeline con este mandante</div>
+    <div id="drawer-pipeline-dist" style="padding:4px 0 12px"><p class="drawer-empty">Cargando...</p></div>
+
     <div class="drawer-section-title">Contactos</div>
     <div id="drawer-contacts"><p class="drawer-empty">Cargando...</p></div>` : ""}
   `;
@@ -553,9 +576,89 @@ async function openDrawer(type, value) {
   el("drawer-overlay").classList.add("open");
 
   if (type === "company") {
-    const contacts = await fetchContacts(value);
+    // Cargar todo en paralelo
+    const [contacts, detailData, summaryData] = await Promise.allSettled([
+      fetchContacts(value),
+      fetch(`/mandantes/detail?company=${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
+      fetch(`/mandantes/summary/${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
+    ]);
+
+    // ── Contactos ──────────────────────────────────────────────────────────────
     const dcEl = el("drawer-contacts");
-    if (dcEl) dcEl.innerHTML = renderContactsList(contacts, value);
+    if (dcEl) dcEl.innerHTML = renderContactsList(
+      contacts.status === "fulfilled" ? contacts.value : [], value
+    );
+
+    // ── Heat Score (desde mandantesData ya cargado) ────────────────────────────
+    const mData = mandantesData.find(m => (m.company||"").toLowerCase() === value.toLowerCase());
+    if (mData && mData.heat_score > 0) {
+      const heatEl = el("drawer-heat");
+      if (heatEl) {
+        const hColor = mData.heat_score >= 80 ? "#dc2626" : mData.heat_score >= 60 ? "#d97706" : "#0891b2";
+        const topics = (mData.trending_topics || []).slice(0,4)
+          .map(t => `<span style="background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:4px;font-size:11px">${escapeHTML(t)}</span>`).join(" ");
+        heatEl.innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <div style="font-size:28px;font-weight:900;color:${hColor}">${mData.heat_score}</div>
+            <div>
+              <div style="font-weight:700;font-size:13px">${escapeHTML(mData.heat_label||"")}</div>
+              <div style="font-size:11px;color:var(--muted)">${escapeHTML(mData.heat_reason||"")}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">${topics}</div>`;
+      }
+    }
+
+    // ── Resumen IA ─────────────────────────────────────────────────────────────
+    const sumEl = el("drawer-ai-summary");
+    if (sumEl && summaryData.status === "fulfilled" && summaryData.value?.summary) {
+      const s = summaryData.value.summary;
+      const minerales = (s.minerales_principales || []).join(" · ");
+      sumEl.innerHTML = `
+        <div style="font-size:12px;color:var(--text);line-height:1.55;margin-bottom:8px">${escapeHTML(s.descripcion||"")}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${s.tipo ? `<span style="background:#eff6ff;color:#1d4ed8;padding:2px 10px;border-radius:5px;font-size:11px;font-weight:700">${escapeHTML(s.tipo)}</span>` : ""}
+          ${minerales ? `<span style="background:#f0fdf4;color:#15803d;padding:2px 10px;border-radius:5px;font-size:11px;font-weight:600">⛏ ${escapeHTML(minerales)}</span>` : ""}
+        </div>
+        ${s.actividad_reciente ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">${escapeHTML(s.actividad_reciente)}</div>` : ""}`;
+    } else if (sumEl) {
+      sumEl.innerHTML = `<p class="drawer-empty">Sin resumen disponible</p>`;
+    }
+
+    // ── Servicios demandados ───────────────────────────────────────────────────
+    const svcEl = el("drawer-services");
+    if (svcEl && detailData.status === "fulfilled" && detailData.value?.top_services?.length) {
+      const svcs = detailData.value.top_services;
+      const maxCount = svcs[0].count || 1;
+      svcEl.innerHTML = svcs.map(s => `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:12px;min-width:160px;color:var(--text)">${escapeHTML(s.category)}</span>
+          <div style="flex:1;height:6px;background:#e2e8f0;border-radius:3px">
+            <div style="width:${Math.round(s.count/maxCount*100)}%;height:100%;background:#1d4ed8;border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;color:var(--muted);min-width:20px;text-align:right">${s.count}</span>
+        </div>`).join("");
+    } else if (svcEl) {
+      svcEl.innerHTML = `<p class="drawer-empty">Sin análisis de demanda aún</p>`;
+    }
+
+    // ── Mi Pipeline con este mandante ──────────────────────────────────────────
+    const pipeEl = el("drawer-pipeline-dist");
+    if (pipeEl) {
+      const stages = ["En análisis","Postular","Presentada","Adjudicada","Perdida"];
+      const pipeCounts = {};
+      stages.forEach(s => { pipeCounts[s] = 0; });
+      projects.filter(i => i.pipeline_status && stages.includes(i.pipeline_status))
+              .forEach(i => { pipeCounts[i.pipeline_status]++; });
+      const PIPE_COLORS = {"En análisis":"#92400e","Postular":"#15803d","Presentada":"#7c3aed","Adjudicada":"#15803d","Perdida":"#dc2626"};
+      const PIPE_BG    = {"En análisis":"#fef3c7","Postular":"#f0fdf4","Presentada":"#f5f3ff","Adjudicada":"#dcfce7","Perdida":"#fef2f2"};
+      const pipeHtml = stages.filter(s => pipeCounts[s] > 0).map(s =>
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:${PIPE_BG[s]};border-radius:6px;margin-bottom:4px">
+          <span style="font-size:12px;color:${PIPE_COLORS[s]};font-weight:600">${s}</span>
+          <span style="font-size:13px;font-weight:800;color:${PIPE_COLORS[s]}">${pipeCounts[s]}</span>
+        </div>`).join("");
+      pipeEl.innerHTML = pipeHtml || `<p class="drawer-empty">Sin oportunidades en pipeline</p>`;
+    }
   }
 }
 

@@ -14,9 +14,7 @@ from db import (db_health, init_db_safe, list_opportunities, upsert_opportunitie
                 create_contact, update_contact, delete_contact,
                 get_contacts_by_company, list_contacts, bulk_import_contacts,
                 get_pipeline, upsert_pipeline, add_pipeline_note,
-                get_pipeline_notes, list_pipeline, PIPELINE_STATUSES,
-                get_radar_futuro, get_radar_futuro_buckets,
-                set_pipeline_outcome, get_outcome_stats)
+                get_pipeline_notes, list_pipeline, PIPELINE_STATUSES)
 from auth import hash_password, verify_password, create_access_token, decode_token
 
 def _run_rss_ingest():
@@ -51,52 +49,18 @@ async def _rss_scheduler():
         result = await loop.run_in_executor(None, _run_rss_ingest)
         print(f"[scheduler] RSS done: {result}")
 
-        # AI scorer + sea_milestone una vez al día (cada 4 ciclos de 6h)
+        # AI scorer una vez al día (cada 4 ciclos de 6h)
         cycle += 1
         if cycle % 4 == 0:
-            print("[scheduler] Corriendo AI scorer (rango ampliado)...")
+            print("[scheduler] Corriendo AI scorer zona gris...")
             try:
                 import ai_scorer
                 ai_result = await loop.run_in_executor(
-                    None, lambda: ai_scorer.run(score_min=10, score_max=85, batch_size=20, max_batches=10)
+                    None, lambda: ai_scorer.run(score_min=45, score_max=65, batch_size=20, max_batches=3)
                 )
                 print(f"[scheduler] AI scorer done: {ai_result}")
             except Exception as e:
                 print(f"[scheduler] AI scorer error: {e}")
-
-            print("[scheduler] Corriendo SEA milestone predictor...")
-            try:
-                from signals import sea_milestone
-                ms_result = await loop.run_in_executor(None, sea_milestone.run)
-                print(f"[scheduler] SEA milestone done: {ms_result}")
-            except Exception as e:
-                print(f"[scheduler] SEA milestone error: {e}")
-
-            print("[scheduler] Corriendo phase tracker...")
-            try:
-                from signals import phase_tracker
-                pt_result = await loop.run_in_executor(None, phase_tracker.run)
-                print(f"[scheduler] Phase tracker done: {pt_result}")
-            except Exception as e:
-                print(f"[scheduler] Phase tracker error: {e}")
-
-            print("[scheduler] Corriendo cross-source boost...")
-            try:
-                from signals import cross_source_boost
-                cs_result = await loop.run_in_executor(None, cross_source_boost.run)
-                print(f"[scheduler] Cross-source boost done: {cs_result}")
-            except Exception as e:
-                print(f"[scheduler] Cross-source boost error: {e}")
-
-            print("[scheduler] Corriendo CMF hechos esenciales...")
-            try:
-                from connectors.cmf import fetch_cmf
-                cmf_items = await loop.run_in_executor(None, fetch_cmf)
-                if cmf_items:
-                    upsert_opportunities(cmf_items)
-                    print(f"[scheduler] CMF done: {len(cmf_items)} hechos")
-            except Exception as e:
-                print(f"[scheduler] CMF error: {e}")
 
         await asyncio.sleep(6 * 3600)
 
@@ -114,12 +78,6 @@ async def lifespan(app: FastAPI):
         print("[startup] demand_intel DB inicializada")
     except Exception as e:
         print(f"[startup] demand_intel init warning: {e}")
-    try:
-        from signals import phase_tracker
-        phase_tracker._init_phase_history_table()
-        print("[startup] phase_history table inicializada")
-    except Exception as e:
-        print(f"[startup] phase_tracker init warning: {e}")
     # Recalcular scores con el scoring engine al arrancar
     try:
         result = recalc_all_scores()
@@ -893,6 +851,27 @@ def _mandante_detail(company_name: str):
                         """, {"sources": news_sources_in_db})
                         news = [dict(r) for r in cur.fetchall()]
 
+                # Servicios demandados: agrega categorías de services_needed
+                cur.execute("""
+                    SELECT services_needed
+                    FROM opportunities
+                    WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
+                      AND services_needed IS NOT NULL
+                    ORDER BY score DESC LIMIT 30
+                """, {"company": company_name})
+                services_rows = [r["services_needed"] for r in cur.fetchall()]
+
+        # Agregar servicios por categoría
+        from collections import Counter
+        cat_counter = Counter()
+        for sn in services_rows:
+            if isinstance(sn, dict) and "services" in sn:
+                for svc in sn["services"]:
+                    cat = svc.get("category") or svc.get("name") or ""
+                    if cat:
+                        cat_counter[cat] += 1
+        top_services = [{"category": k, "count": v} for k, v in cat_counter.most_common(8)]
+
         # Serialize dates
         for lst in [projects, sea, news]:
             for r in lst:
@@ -907,6 +886,7 @@ def _mandante_detail(company_name: str):
             "sea_prospectos": sea,
             "news": news,
             "noticias": news,
+            "top_services": top_services,
             "summary": {
                 "n_proyectos": len(projects),
                 "n_sea": len(sea),
@@ -2105,17 +2085,15 @@ def search_by_service(
 
 @app.post("/admin/run-ai-scorer")
 def run_ai_scorer(
-    score_min: int = Query(default=10, ge=0, le=99),
-    score_max: int = Query(default=85, ge=0, le=99),
+    score_min: int = Query(default=45, ge=0, le=99),
+    score_max: int = Query(default=65, ge=0, le=99),
     batch_size: int = Query(default=20, ge=5, le=50),
-    max_batches: int = Query(default=10, ge=1, le=30),
-    only_unscored: bool = Query(default=False),
+    max_batches: int = Query(default=5, ge=1, le=20),
 ):
     """
-    Corre AI scoring para proyectos mineros.
+    Corre AI scoring inteligente para proyectos en zona gris.
     Claude evalúa proyectos con score entre score_min y score_max
-    y ajusta ±15 puntos según contexto que las reglas no capturan.
-    Incluye temperatura del mandante (mandante_heat) como contexto adicional.
+    y ajusta ±10 puntos según contexto que las reglas no capturan.
     """
     import threading
     result_container = {}
@@ -2128,7 +2106,6 @@ def run_ai_scorer(
                 score_max=score_max,
                 batch_size=batch_size,
                 max_batches=max_batches,
-                only_unscored=only_unscored,
             )
             result_container.update(result)
             print(f"[ai-scorer] {result}")
@@ -2139,191 +2116,11 @@ def run_ai_scorer(
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
-    t.join(timeout=180)  # esperar hasta 3 min
+    t.join(timeout=120)  # esperar hasta 2 min
 
     if result_container:
         return result_container
     return {"ok": True, "msg": "AI scorer corriendo en background"}
-
-
-@app.post("/admin/run-sea-milestone")
-def run_sea_milestone(force: bool = Query(default=False)):
-    """
-    Corre el predictor de hitos SEA — estima cuándo cada proyecto activo
-    va a necesitar proveedores y actualiza signal_score en consecuencia.
-    Proyectos en construcción suben más que los que aún están en calificación.
-    """
-    import threading
-    result_container = {}
-
-    def _run():
-        try:
-            from signals import sea_milestone
-            result = sea_milestone.run(force_recompute=force)
-            result_container.update(result)
-            print(f"[sea-milestone] {result}")
-        except Exception as e:
-            import traceback
-            result_container.update({"ok": False, "error": str(e)})
-            traceback.print_exc()
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=60)
-
-    if result_container:
-        return result_container
-    return {"ok": True, "msg": "SEA milestone corriendo en background"}
-
-
-@app.post("/admin/run-cmf")
-def run_cmf():
-    """
-    Ingesta hechos esenciales CMF de empresas mineras que cotizan en bolsa.
-    Son señales tempranas de inversión/proyectos semanas antes que otras fuentes.
-    """
-    import threading
-    result_container = {}
-
-    def _run():
-        try:
-            from connectors.cmf import fetch_cmf
-            items = fetch_cmf()
-            if items:
-                inserted, updated = upsert_opportunities(items)
-                recalc_all_scores()
-                result_container.update({"ok": True, "fetched": len(items), "inserted": inserted, "updated": updated})
-            else:
-                result_container.update({"ok": True, "fetched": 0, "msg": "Sin hechos esenciales mineros nuevos"})
-        except Exception as e:
-            import traceback
-            result_container.update({"ok": False, "error": str(e), "trace": traceback.format_exc()[-1000:]})
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=60)
-    return result_container or {"ok": True, "msg": "CMF corriendo en background"}
-
-
-@app.post("/admin/run-phase-tracker")
-def run_phase_tracker():
-    """
-    Detecta cambios de fase en proyectos SEA y genera señales.
-    Registra en phase_history y aplica boost cuando un proyecto avanza
-    (ej: Calificación → Aprobado → Construcción).
-    """
-    import threading
-    result_container = {}
-
-    def _run():
-        try:
-            from signals import phase_tracker
-            result = phase_tracker.run()
-            result_container.update(result)
-        except Exception as e:
-            import traceback
-            result_container.update({"ok": False, "error": str(e), "trace": traceback.format_exc()[-1000:]})
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=60)
-    return result_container or {"ok": True, "msg": "Phase tracker corriendo en background"}
-
-
-@app.post("/admin/run-cross-source-boost")
-def run_cross_source_boost():
-    """
-    Detecta proyectos confirmados por múltiples fuentes (SEA + SIGEX + CMF, etc.)
-    y aplica un boost de confianza al signal_score.
-    """
-    import threading
-    result_container = {}
-
-    def _run():
-        try:
-            from signals import cross_source_boost
-            result = cross_source_boost.run()
-            result_container.update(result)
-        except Exception as e:
-            import traceback
-            result_container.update({"ok": False, "error": str(e)})
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=60)
-    return result_container or {"ok": True, "msg": "Cross-source boost corriendo"}
-
-
-# ── Radar Futuro ──────────────────────────────────────────────────────────────
-
-@app.get("/api/radar-futuro")
-def radar_futuro(
-    horizon_months: int = Query(default=36, ge=1, le=60),
-    min_score: int = Query(default=40, ge=0, le=99),
-    bucket_view: bool = Query(default=True),
-    user_id: Optional[str] = Header(None, alias="X-User-Id"),
-):
-    """
-    Vista de demanda futura anticipada ordenada por fecha de contratación estimada.
-    Usa los hitos calculados por sea_milestone.py para cada proyecto SEA.
-
-    bucket_view=true → agrupa en 0-6, 6-18, 18-36 meses.
-    bucket_view=false → lista plana ordenada por fecha más próxima primero.
-    """
-    try:
-        if bucket_view:
-            return get_radar_futuro_buckets(horizon_months=horizon_months, min_score=min_score)
-        else:
-            projects = get_radar_futuro(horizon_months=horizon_months, min_score=min_score)
-            return {"total": len(projects), "projects": projects}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/phase-changes")
-def get_phase_changes(limit: int = Query(default=50, ge=1, le=200)):
-    """
-    Retorna los cambios de fase recientes de proyectos SEA.
-    Útil para alertas: "Proyecto X pasó de Calificación a Aprobado".
-    """
-    try:
-        from signals import phase_tracker
-        changes = phase_tracker.get_recent_changes(limit=limit)
-        return {"changes": changes, "total": len(changes)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── Pipeline Outcome (Feedback Loop) ─────────────────────────────────────────
-
-@app.post("/api/pipeline/{opportunity_id}/outcome")
-def set_outcome(
-    opportunity_id: int,
-    outcome: str = Query(..., description="won | lost | stalled | in_progress"),
-    notes: str = Query(default=""),
-):
-    """
-    Registra el resultado de un proyecto en el pipeline de ventas.
-    Este feedback alimenta las estadísticas de calibración del scoring.
-
-    outcome: 'won' (ganado), 'lost' (perdido), 'stalled' (estancado), 'in_progress' (en proceso)
-    """
-    try:
-        updated = set_pipeline_outcome(opportunity_id, outcome, notes)
-        if not updated:
-            raise HTTPException(status_code=404, detail="Proyecto no encontrado en el pipeline")
-        return {"ok": True, "opportunity_id": opportunity_id, "outcome": outcome}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/admin/outcome-stats")
-def outcome_stats():
-    """
-    Estadísticas de outcomes del pipeline — sirve para calibrar el scoring.
-    Muestra qué distribución de scores tenían los proyectos ganados vs perdidos.
-    """
-    return get_outcome_stats()
 
 
 @app.post("/admin/mark-onboarding-done")
