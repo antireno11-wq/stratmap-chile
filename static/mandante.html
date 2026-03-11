@@ -74,8 +74,10 @@
     .login-wall { text-align: center; padding: 60px 0; color: var(--muted); }
 
     /* Logo + summary */
-    .company-logo { width:64px;height:64px;border-radius:12px;object-fit:contain;background:#f8fafc;border:1.5px solid var(--border);padding:6px;flex-shrink:0; }
-    .company-logo-placeholder { width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,#1a1f2e,#2a3355);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:white;flex-shrink:0;letter-spacing:-1px; }
+    .company-logo { width:80px;height:80px;border-radius:20px;object-fit:contain;background:#fff;border:1.5px solid var(--border);padding:8px;flex-shrink:0;box-shadow:0 4px 16px rgba(0,0,0,0.08);transition:transform 0.2s,box-shadow 0.2s;cursor:default; }
+    .company-logo:hover { transform:scale(1.06);box-shadow:0 8px 28px rgba(0,0,0,0.14); }
+    .company-logo-placeholder { width:80px;height:80px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:white;flex-shrink:0;letter-spacing:-1px;box-shadow:0 4px 16px rgba(0,0,0,0.15);transition:transform 0.2s,box-shadow 0.2s;cursor:default; }
+    .company-logo-placeholder:hover { transform:scale(1.06);box-shadow:0 8px 28px rgba(0,0,0,0.22); }
     .summary-card { background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:20px; }
     .summary-header { display:flex;align-items:center;gap:18px;margin-bottom:16px; }
     .summary-company-info { flex:1; }
@@ -117,6 +119,24 @@
   </main>
 
   <script>
+    // Generate a consistent gradient from company name
+    const GRADIENTS = [
+      ['#2563eb','#1e40af'], // blue
+      ['#7c3aed','#4c1d95'], // violet
+      ['#059669','#065f46'], // green
+      ['#d97706','#92400e'], // amber
+      ['#dc2626','#991b1b'], // red
+      ['#0891b2','#164e63'], // cyan
+      ['#db2777','#831843'], // pink
+      ['#4f46e5','#312e81'], // indigo
+    ];
+    function companyGradient(name) {
+      if (!name) return GRADIENTS[0];
+      let h = 0;
+      for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+      return GRADIENTS[Math.abs(h) % GRADIENTS.length];
+    }
+
     function escapeHTML(s) {
       if (!s) return '';
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -223,7 +243,9 @@
       const logoUrl = domain
         ? `https://logo.clearbit.com/${domain}`
         : null;
-      const initials = empresa.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0].toUpperCase()).join('');
+      const initials = empresa.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0].toUpperCase()).join('') || empresa.slice(0,2).toUpperCase();
+      const [gc1, gc2] = companyGradient(empresa);
+      const placeholderStyle = `background:linear-gradient(135deg,${gc1},${gc2})`;
 
       // Summary section
       const sm = summaryData && summaryData.summary;
@@ -236,8 +258,8 @@
               ? `<img class="company-logo" src="${logoUrl}"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
                    alt="${escapeHTML(empresa)}">
-                 <div class="company-logo-placeholder" style="display:none">${initials}</div>`
-              : `<div class="company-logo-placeholder">${initials}</div>`
+                 <div class="company-logo-placeholder" style="${placeholderStyle};display:none">${initials}</div>`
+              : `<div class="company-logo-placeholder" style="${placeholderStyle}">${initials}</div>`
             }
             <div class="summary-company-info">
               ${sm ? `<div class="summary-tipo">${escapeHTML(sm.tipo||'Empresa Minera')}</div>` : ''}

@@ -7,29 +7,30 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     :root {
-      --sidebar: 220px;
-      --blue: #1a56db;
+      --sidebar: 230px;
+      --blue: #2563eb;
       --blue-light: #eff6ff;
-      --orange: #e05a1e;
+      --orange: #f97316;
       --border: #e8edf2;
       --bg: #f5f7fa;
       --card: #fff;
       --text: #0f172a;
       --muted: #8896a5;
       --green: #16a34a;
+      --sidebar-bg: #1a1f2e;
+      --sidebar-hover: #232940;
+      --sidebar-active: #2a3355;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', ui-sans-serif, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
 
-    .sidebar { width: var(--sidebar); background: #0d1117; border-right: none; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; }
-    .sidebar-brand { padding: 18px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-    .sidebar-logo { width: 32px; height: 32px; background: linear-gradient(135deg, #2563eb, #f97316); border-radius: 9px; box-shadow: 0 4px 12px rgba(37,99,235,0.4); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
-    .sidebar-name { font-weight: 800; font-size: 14px; color: #fff; }
-    .sidebar-tagline { font-size: 10px; color: #4b5563; }
-    .sidebar-section { padding: 16px 18px 4px; font-size: 9px; font-weight: 700; color: #374151; letter-spacing: 0.08em; text-transform: uppercase; }
-    .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
-    .sidebar-item:hover { background: #161b22; color: #d1d5db; border-left-color: #374151; }
-    .sidebar-item.active { background: #1c2333; color: #fff; border-left-color: #f97316; font-weight: 600; }
+    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 16px 18px; border-bottom: 1px solid #2d3548; display: flex; align-items: center; justify-content: center; background: #ffffff; }
+    .sidebar-logo-img { width: 150px; height: auto; object-fit: contain; }
+    .sidebar-section { padding: 20px 18px 5px; font-size: 9px; font-weight: 700; color: #6b7a99; letter-spacing: 0.1em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; font-size: 14px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
+    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; border-left-color: #4b5a7a; }
+    .sidebar-item.active { background: var(--sidebar-active); color: #fff; border-left-color: var(--orange); font-weight: 600; }
     .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
     .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; }
@@ -80,16 +81,14 @@
 </head>
 <body>
   <aside class="sidebar">
-    <div class="sidebar-brand" style="background:#fff;justify-content:center;padding:14px 16px;border-bottom:1px solid #e8edf2"><img src="/logo.png" alt="Stratmap" style="width:140px;height:auto;object-fit:contain" onerror="this.style.display='none'"></div>
-      <div>
-        <div class="sidebar-name">Stratmap</div>
-        <div class="sidebar-tagline">Inteligencia Minera Chile</div>
-      </div>
+    <div class="sidebar-brand">
+      <img src="/logo.png" alt="Stratmap" class="sidebar-logo-img" onerror="this.style.display='none'" />
     </div>
-    <div class="sidebar-section">Vistas</div>
+    <div class="sidebar-section">Plataforma</div>
     <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
     <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <a class="sidebar-item" href="/mandantes.html"><span class="icon">🏢</span> Mandantes</a>
     <div class="sidebar-section">Configuración</div>
     <a class="sidebar-item active" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
   </aside>
