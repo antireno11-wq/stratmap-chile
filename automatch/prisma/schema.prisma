@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OpportunityScore {
+  VERY_GOOD_DEAL
+  GOOD_DEAL
+  FAIR_PRICE
+  OVERPRICED
+}
+
+enum OfferStatus {
+  NEW
+  CONTACTED
+  NEGOTIATING
+  ACCEPTED
+  REJECTED
+}
+
+enum Transmission {
+  MANUAL
+  AUTOMATIC
+  CVT
+}
+
+enum FuelType {
+  GASOLINE
+  DIESEL
+  ELECTRIC
+  HYBRID
+  GAS
+}
+
+model Source {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  baseUrl     String?
+  logoUrl     String?
+  active      Boolean   @default(true)
+  listings    Listing[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+}
+
+model Vehicle {
+  id               String           @id @default(cuid())
+  brand            String
+  model            String
+  version          String?
+  year             Int
+  mileage          Int
+  transmission     Transmission
+  fuelType         FuelType
+  region           String
+  comuna           String?
+  color            String?
+  doors            Int?
+  engineCC         Int?
+  imageUrls        String[]         @default([])
+  listings         Listing[]
+  offers           Offer[]
+  priceSnapshots   PriceSnapshot[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([brand, model])
+  @@index([year])
+  @@index([region])
+}
+
+model Listing {
+  id               String           @id @default(cuid())
+  externalId       String?
+  vehicle          Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId        String
+  source           Source           @relation(fields: [sourceId], references: [id])
+  sourceId         String
+  listedPrice      Int
+  originalUrl      String?
+  description      String?
+  isActive         Boolean          @default(true)
+  marketEstimate   Int
+  deltaAmount      Int
+  deltaPercentage  Float
+  opportunityScore OpportunityScore
+  confidenceScore  Int
+  scoreExplanation String?
+  offers           Offer[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([vehicleId])
+  @@index([sourceId])
+  @@index([opportunityScore])
+  @@index([listedPrice])
+}
+
+model Offer {
+  id           String      @id @default(cuid())
+  vehicle      Vehicle     @relation(fields: [vehicleId], references: [id])
+  vehicleId    String
+  listing      Listing?    @relation(fields: [listingId], references: [id])
+  listingId    String?
+  name         String
+  email        String
+  phone        String
+  offerAmount  Int
+  financing    Boolean     @default(false)
+  message      String?
+  status       OfferStatus @default(NEW)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([vehicleId])
+  @@index([status])
+}
+
+model PriceSnapshot {
+  id         String   @id @default(cuid())
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId  String
+  price      Int
+  source     String
+  capturedAt DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([capturedAt])
+}
