@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "AutoMatch Dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "automatch", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
