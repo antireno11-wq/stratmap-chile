@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <title>Cotizador · Stratmap</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    :root {
+      --sidebar: 230px; --blue: #2563eb; --blue-light: #eff6ff;
+      --orange: #f97316; --green: #16a34a; --red: #dc2626;
+      --border: #e8edf2; --bg: #f5f7fa; --card: #fff;
+      --text: #0f172a; --muted: #8896a5;
+      --sidebar-bg: #1a1f2e; --sidebar-hover: #232940; --sidebar-active: #2a3355;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', ui-sans-serif, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+    .sidebar { width: var(--sidebar); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-brand { padding: 16px 18px; border-bottom: 1px solid #2d3548; display: flex; align-items: center; justify-content: center; background: #ffffff; }
+    .sidebar-logo-img { width: 150px; height: auto; object-fit: contain; }
+    .sidebar-section { padding: 20px 18px 5px; font-size: 9px; font-weight: 700; color: #6b7a99; letter-spacing: 0.1em; text-transform: uppercase; }
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; font-size: 14px; color: #6b7280; cursor: pointer; border-left: 3px solid transparent; text-decoration: none; transition: all 0.12s; font-weight: 500; }
+    .sidebar-item:hover { background: var(--sidebar-hover); color: #d1d5db; border-left-color: #4b5a7a; }
+    .sidebar-item.active { background: var(--sidebar-active); color: #fff; border-left-color: var(--orange); font-weight: 600; }
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+
+    .main { margin-left: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 22px; height: 52px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; position: sticky; top: 0; z-index: 50; }
+    .topbar-title { font-size: 14px; font-weight: 700; }
+
+    .btn { padding: 6px 14px; border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); display: inline-flex; align-items: center; gap: 5px; }
+    .btn:hover { background: var(--bg); }
+    .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { color: var(--red); border-color: #fecaca; background: none; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+    .tabs { display: flex; border-bottom: 2px solid var(--border); padding: 0 22px; background: var(--card); overflow-x: auto; flex-shrink: 0; }
+    .tab { padding: 12px 16px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+
+    .content { flex: 1; padding: 20px 22px; }
+    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 18px; overflow: hidden; }
+    .section-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .section-title { font-size: 13px; font-weight: 700; }
+    .section-body { padding: 16px; }
+
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th { padding: 7px 10px; text-align: left; font-weight: 600; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); background: var(--bg); white-space: nowrap; }
+    .data-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #fafbfd; }
+    .data-table .total-row td { font-weight: 700; background: #f8fafc; border-top: 2px solid var(--border); border-bottom: none; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .td-input { width: 100%; padding: 4px 8px; border: 1px solid transparent; border-radius: 5px; font-size: 12px; font-family: inherit; background: transparent; color: var(--text); }
+    .td-input:hover { border-color: var(--border); }
+    .td-input:focus { border-color: var(--blue); outline: none; background: var(--card); }
+    .td-input.num { text-align: right; }
+
+    .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+    .config-field { display: flex; flex-direction: column; gap: 4px; }
+    .config-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .config-input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; background: var(--card); color: var(--text); }
+    .config-input:focus { outline: none; border-color: var(--blue); }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .kpi-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .kpi-value { font-size: 17px; font-weight: 800; }
+    .kpi-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .kpi-card.blue { border-color: #bfdbfe; background: var(--blue-light); }
+    .kpi-card.blue .kpi-value { color: var(--blue); }
+    .kpi-card.green { border-color: #bbf7d0; background: #f0fdf4; }
+    .kpi-card.green .kpi-value { color: var(--green); }
+
+    .toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+    .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .toggle .track { position: relative; width: 36px; height: 20px; background: #d1d5db; border-radius: 99px; transition: background .15s; flex-shrink: 0; }
+    .toggle .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s; }
+    .toggle input:checked + .track { background: var(--blue); }
+    .toggle input:checked + .track::after { transform: translateX(16px); }
+
+    /* Presentation styles */
+    .pres-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .pres-head { background: #1a1f2e; color: white; padding: 18px 22px; }
+    .pres-head h2 { font-size: 15px; font-weight: 800; margin-bottom: 2px; }
+    .pres-head p { font-size: 11px; opacity: .7; }
+    .pres-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .pres-table th { background: #f8fafc; padding: 7px 14px; text-align: left; font-weight: 700; font-size: 10px; color: #4b5563; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid #e5e7eb; }
+    .pres-table td { padding: 8px 14px; border-bottom: 1px solid #e5e7eb; }
+    .pres-table .sec-row td { background: #f1f5f9; font-weight: 700; font-size: 11px; color: #374151; }
+    .pres-table .sub-row td { background: var(--blue-light); font-weight: 700; color: var(--blue); }
+    .pres-table .tot-row td { background: #1a1f2e; color: white; font-weight: 800; font-size: 13px; }
+
+    @media print {
+      .sidebar, .topbar, .tabs, .no-print { display: none !important; }
+      .main { margin-left: 0; }
+      .content { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <a href="/"><img src="/logo.png" alt="Stratmap" class="sidebar-logo-img" onerror="this.style.display='none'" /></a>
+    </div>
+    <div class="sidebar-section">Plataforma</div>
+    <a class="sidebar-item" href="/"><span class="icon">⚡</span> Radar</a>
+    <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
+    <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
+    <a class="sidebar-item" href="/mandantes.html"><span class="icon">🏢</span> Mandantes</a>
+    <div class="sidebar-section">Herramientas</div>
+    <a class="sidebar-item active" href="/cotizador.html"><span class="icon">📋</span> Cotizador</a>
+    <div class="sidebar-section">Configuración</div>
+    <a class="sidebar-item" href="/preferences.html"><span class="icon">⚙️</span> Preferencias</a>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">📋 Cotizador de Campamento</div>
+      <span id="client-display" style="font-size:12px;color:var(--muted);font-style:italic"></span>
+      <div style="margin-left:auto;display:flex;gap:8px" class="no-print">
+        <button class="btn btn-sm" onclick="resetToDefaults()">↺ Restablecer</button>
+        <button class="btn btn-sm" onclick="window.print()">🖨️ Imprimir</button>
+        <button class="btn btn-primary btn-sm" onclick="saveState()">💾 Guardado</button>
+      </div>
+    </div>
+
+    <div class="tabs no-print">
+      <div class="tab active" data-tab="config" onclick="switchTab('config')">⚙️ Configuración</div>
+      <div class="tab" data-tab="rrhh" onclick="switchTab('rrhh')">👥 RRHH</div>
+      <div class="tab" data-tab="alimentacion" onclick="switchTab('alimentacion')">🍽️ Alimentación</div>
+      <div class="tab" data-tab="activos" onclick="switchTab('activos')">🏗️ Activos</div>
+      <div class="tab" data-tab="operaciones" onclick="switchTab('operaciones')">⚙️ Operaciones</div>
+      <div class="tab" data-tab="montaje" onclick="switchTab('montaje')">🔨 Montaje</div>
+      <div class="tab" data-tab="resumen" onclick="switchTab('resumen')">📊 Resumen</div>
+    </div>
+
+    <div class="content">
+
+      <!-- ── CONFIG ── -->
+      <div id="tab-config">
+        <div class="section-card">
+          <div class="section-header"><div class="section-title">🔧 Parámetros del Proyecto</div></div>
+          <div class="section-body">
+            <div class="config-grid">
+              <div class="config-field">
+                <label class="config-label">Cliente</label>
+                <input class="config-input" id="cfg-client" type="text" placeholder="Ej: VALE S.A." oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Proyecto</label>
+                <input class="config-input" id="cfg-project" type="text" placeholder="Ej: Campamento Domeyko" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Duración (meses)</label>
+                <input class="config-input" id="cfg-months" type="number" min="1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">N° personas en campamento</label>
+                <input class="config-input" id="cfg-headcount" type="number" min="1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Valor UF ($)</label>
+                <input class="config-input" id="cfg-uf" type="number" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Dólar ($)</label>
+                <input class="config-input" id="cfg-usd" type="number" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Valor traslado por persona ($)</label>
+                <input class="config-input" id="cfg-travel" type="number" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">EPP Invierno</label>
+                <label class="toggle" style="margin-top:10px">
+                  <input type="checkbox" id="cfg-winter" onchange="onCfgChange()" />
+                  <span class="track"></span>
+                  <span id="winter-label" style="font-size:13px;font-weight:500">Activado</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-header"><div class="section-title">📈 Márgenes por Categoría</div></div>
+          <div class="section-body">
+            <div class="config-grid">
+              <div class="config-field">
+                <label class="config-label">RRHH (%)</label>
+                <input class="config-input" id="mg-rrhh" type="number" step="0.1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Operaciones (%)</label>
+                <input class="config-input" id="mg-ops" type="number" step="0.1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Arriendo Activos (%)</label>
+                <input class="config-input" id="mg-rented" type="number" step="0.1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Activos Propios (%)</label>
+                <input class="config-input" id="mg-own" type="number" step="0.1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Alimentación (%)</label>
+                <input class="config-input" id="mg-food" type="number" step="0.1" oninput="onCfgChange()" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Montaje / Desmontaje (%)</label>
+                <input class="config-input" id="mg-assembly" type="number" step="0.1" oninput="onCfgChange()" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── RRHH ── -->
+      <div id="tab-rrhh" style="display:none">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">👥 Personal de Campamento</div>
+            <button class="btn btn-sm no-print" onclick="addRole()">+ Agregar cargo</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cargo</th>
+                  <th class="num">Cant.</th>
+                  <th class="num">Sueldo base</th>
+                  <th class="num">Leyes (42%)</th>
+                  <th class="num">Traslados</th>
+                  <th class="num">EPP (proyecto)</th>
+                  <th class="num">Exámenes (proyecto)</th>
+                  <th class="num">Costo mensual</th>
+                  <th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="rrhh-body"></tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="2">TOTAL RRHH MENSUAL</td>
+                  <td class="num" id="tot-salary"></td>
+                  <td class="num" id="tot-social"></td>
+                  <td class="num" id="tot-transport"></td>
+                  <td class="num" id="tot-epp"></td>
+                  <td class="num" id="tot-exams"></td>
+                  <td class="num" id="tot-rrhh"></td>
+                  <td class="no-print"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ALIMENTACION ── -->
+      <div id="tab-alimentacion" style="display:none">
+        <div class="section-card">
+          <div class="section-header"><div class="section-title">🍽️ Costos de Alimentación</div></div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Servicio</th>
+                  <th class="num">Costo unitario</th>
+                  <th class="num">Margen %</th>
+                  <th class="num">Cant./día</th>
+                  <th class="num">Costo mensual</th>
+                  <th class="num">A cobrar mensual</th>
+                </tr>
+              </thead>
+              <tbody id="food-body"></tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="4">TOTAL ALIMENTACIÓN MENSUAL</td>
+                  <td class="num" id="tot-food-cost"></td>
+                  <td class="num" id="tot-food-cobrar"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ACTIVOS ── -->
+      <div id="tab-activos" style="display:none">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">🏗️ Arriendo de Activos (terceros)</div>
+            <button class="btn btn-sm no-print" onclick="addRented()">+ Agregar</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Zona</th><th>Descripción</th><th>Unidad</th>
+                  <th class="num">Cant.</th><th class="num">Costo unit.</th>
+                  <th class="num">Total mensual</th><th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="rented-body"></tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="5">TOTAL ARRIENDO MENSUAL</td>
+                  <td class="num" id="tot-rented"></td>
+                  <td class="no-print"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">🏢 Activos Propios (amortización mensual)</div>
+            <button class="btn btn-sm no-print" onclick="addOwn()">+ Agregar</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Zona</th><th class="num">Amortización mensual</th><th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="own-body"></tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td>TOTAL ACTIVOS PROPIOS</td>
+                  <td class="num" id="tot-own"></td>
+                  <td class="no-print"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── OPERACIONES ── -->
+      <div id="tab-operaciones" style="display:none">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">⚙️ Costos Operacionales Mensuales</div>
+            <button class="btn btn-sm no-print" onclick="addOp()">+ Agregar</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Categoría</th><th>Servicio</th><th>Unidad</th>
+                  <th class="num">Cant.</th><th class="num">Costo unit.</th>
+                  <th class="num">Total mensual</th><th class="no-print"></th>
+                </tr>
+              </thead>
+              <tbody id="ops-body"></tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="5">TOTAL OPERACIONES MENSUAL</td>
+                  <td class="num" id="tot-ops"></td>
+                  <td class="no-print"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── MONTAJE ── -->
+      <div id="tab-montaje" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+          <div class="section-card">
+            <div class="section-header"><div class="section-title">🔨 Costos de Montaje</div></div>
+            <div class="section-body">
+              <table class="data-table">
+                <thead><tr><th>Concepto</th><th class="num">Monto ($)</th></tr></thead>
+                <tbody>
+                  <tr><td>Mano de obra</td><td><input class="td-input num" id="mt-labor" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Materiales</td><td><input class="td-input num" id="mt-materials" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Movilización</td><td><input class="td-input num" id="mt-mobilization" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Arriendos</td><td><input class="td-input num" id="mt-rentals" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Extras / Contingencia (%)</td><td><input class="td-input num" id="mt-extras" type="number" step="0.1" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Margen sobre M.O. (%)</td><td><input class="td-input num" id="mt-margin" type="number" step="0.1" oninput="recalcMontaje()" /></td></tr>
+                </tbody>
+                <tfoot>
+                  <tr class="total-row"><td>TOTAL A COBRAR MONTAJE</td><td class="num" id="tot-montaje"></td></tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-header"><div class="section-title">🏗️ Costos de Desmontaje</div></div>
+            <div class="section-body">
+              <table class="data-table">
+                <thead><tr><th>Concepto</th><th class="num">Monto ($)</th></tr></thead>
+                <tbody>
+                  <tr><td>Mano de obra</td><td><input class="td-input num" id="dm-labor" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Materiales</td><td><input class="td-input num" id="dm-materials" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Movilización</td><td><input class="td-input num" id="dm-mobilization" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Arriendos</td><td><input class="td-input num" id="dm-rentals" type="number" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Extras / Contingencia (%)</td><td><input class="td-input num" id="dm-extras" type="number" step="0.1" oninput="recalcMontaje()" /></td></tr>
+                  <tr><td>Margen sobre M.O. (%)</td><td><input class="td-input num" id="dm-margin" type="number" step="0.1" oninput="recalcMontaje()" /></td></tr>
+                </tbody>
+                <tfoot>
+                  <tr class="total-row"><td>TOTAL A COBRAR DESMONTAJE</td><td class="num" id="tot-desmontaje"></td></tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── RESUMEN ── -->
+      <div id="tab-resumen" style="display:none">
+        <div class="kpi-grid" id="kpi-grid"></div>
+        <div class="section-card">
+          <div class="section-header"><div class="section-title">📊 Resumen de Costos y Márgenes</div></div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Categoría</th>
+                  <th class="num">Costo Mensual</th>
+                  <th class="num">Margen %</th>
+                  <th class="num">Utilidad $</th>
+                  <th class="num">A Cobrar Mensual</th>
+                  <th class="num">Valor P/P/D</th>
+                </tr>
+              </thead>
+              <tbody id="summary-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="section-card" style="margin-top:18px">
+          <div class="section-header">
+            <div class="section-title">📄 Presentación al Cliente</div>
+            <button class="btn btn-sm no-print" onclick="window.print()">🖨️ Imprimir</button>
+          </div>
+          <div class="pres-wrap">
+            <div class="pres-head">
+              <h2 id="pres-title">COTIZACIÓN DE CAMPAMENTO</h2>
+              <p id="pres-subtitle">Operación mensual + Montaje/Desmontaje</p>
+            </div>
+            <table class="pres-table">
+              <thead>
+                <tr>
+                  <th style="width:36px">N°</th>
+                  <th>Descripción</th>
+                  <th>Unidad</th>
+                  <th style="text-align:right">Valor Unitario</th>
+                  <th style="text-align:right">Total</th>
+                  <th style="text-align:right">P/P/D</th>
+                </tr>
+              </thead>
+              <tbody id="pres-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+
+<script>
+// ── DEFAULT STATE ──────────────────────────────────────────────────────────────
+function defaultState() {
+  return {
+    config: { client:"VALE S.A.", project:"Campamento Domeyko", months:6, headcount:23, uf:39500, usd:950, travel:150000, winter:true },
+    margins: { rrhh:18, ops:22, rented:10, own:15, food:35, assembly:10 },
+    roles: [
+      { name:"Administrador de contrato",  qty:1, salary:2500000, epp:180000, exams:80000,  trips:2 },
+      { name:"Supervisor de campamento",   qty:1, salary:1800000, epp:200000, exams:80000,  trips:2 },
+      { name:"Prevencionista de Riesgos",  qty:1, salary:1600000, epp:250000, exams:80000,  trips:2 },
+      { name:"Recepcionista",              qty:1, salary: 700000, epp:120000, exams:60000,  trips:2 },
+      { name:"Maestro de Cocina",          qty:1, salary: 900000, epp:200000, exams:90000,  trips:2 },
+      { name:"Ayudante de Cocina",         qty:2, salary: 600000, epp:180000, exams:90000,  trips:2 },
+      { name:"Auxiliar de Cocina",         qty:2, salary: 500000, epp:150000, exams:90000,  trips:2 },
+      { name:"Supervisor de Aseo",         qty:1, salary: 700000, epp:150000, exams:60000,  trips:2 },
+      { name:"Campamentero",               qty:4, salary: 550000, epp:200000, exams:60000,  trips:2 },
+      { name:"Conductor Camión",           qty:1, salary: 700000, epp:180000, exams:150000, trips:2 },
+      { name:"Conductor Camioneta",        qty:1, salary: 600000, epp:160000, exams:150000, trips:2 },
+      { name:"Bodeguero",                  qty:1, salary: 600000, epp:180000, exams:60000,  trips:2 },
+      { name:"Eléctrico",                  qty:1, salary: 700000, epp:250000, exams:60000,  trips:2 },
+      { name:"Guardia",                    qty:2, salary: 600000, epp:150000, exams:60000,  trips:2 },
+    ],
+    meals: [
+      { name:"Desayuno",       type:"meal",          unit_cost:3948, margin:35 },
+      { name:"Almuerzo",       type:"meal",          unit_cost:6951, margin:35 },
+      { name:"Cena",           type:"meal",          unit_cost:6951, margin:35 },
+      { name:"Colación día",   type:"colacion_dia",  unit_cost:2500, margin:35 },
+      { name:"Colación noche", type:"colacion_noche",unit_cost:2500, margin:35 },
+    ],
+    rented: [
+      { zone:"Cocina",          name:"Módulo cocina",              unit:"mes", qty:1, unit_cost: 350000 },
+      { zone:"Cocina",          name:"Reefer 40 pies",             unit:"mes", qty:1, unit_cost: 100000 },
+      { zone:"Baños",           name:"Módulo duchas",              unit:"mes", qty:1, unit_cost: 400000 },
+      { zone:"Baños",           name:"Módulo baños WC",            unit:"mes", qty:1, unit_cost: 400000 },
+      { zone:"Infraestructura", name:"Pasillo / Bodega",           unit:"mes", qty:1, unit_cost: 300000 },
+      { zone:"Vehículos",       name:"Camioneta fría",             unit:"mes", qty:1, unit_cost:1500000 },
+      { zone:"Vehículos",       name:"Camión frío",                unit:"mes", qty:1, unit_cost:1750000 },
+      { zone:"Equipamiento",    name:"Radios / Generadores / GPS", unit:"mes", qty:1, unit_cost:5000000 },
+    ],
+    ownAssets: [
+      { zone:"Cocina",           monthly: 271445 },
+      { zone:"Comedor",          monthly:  83333 },
+      { zone:"Baños",            monthly: 185000 },
+      { zone:"Habitaciones",     monthly: 387899 },
+      { zone:"Oficinas",         monthly: 166667 },
+      { zone:"Infraestructura",  monthly: 903667 },
+      { zone:"Policlínico",      monthly:  28333 },
+    ],
+    operations: [
+      { cat:"Servicios",      name:"Transporte de agua",              unit:"viajes", qty:14, unit_cost: 450000 },
+      { cat:"Servicios",      name:"Desratización / sanitización",     unit:"mes",    qty:1,  unit_cost: 120000 },
+      { cat:"Servicios",      name:"Contenedor de residuos",          unit:"mes",    qty:2,  unit_cost: 200000 },
+      { cat:"Servicios",      name:"Combustible",                     unit:"mes",    qty:1,  unit_cost:2000000 },
+      { cat:"Servicios",      name:"Lavandería",                      unit:"mes",    qty:1,  unit_cost: 500000 },
+      { cat:"Servicios",      name:"Hospedaje fuera de faena",        unit:"mes",    qty:1,  unit_cost: 200000 },
+      { cat:"Insumos",        name:"Insumos oficina / aseo / cocina", unit:"mes",    qty:1,  unit_cost:1400000 },
+      { cat:"Comunicaciones", name:"TV / Internet / Satélite",        unit:"mes",    qty:1,  unit_cost: 450000 },
+      { cat:"Mantenciones",   name:"Red agua / red eléctrica",        unit:"mes",    qty:1,  unit_cost: 200000 },
+      { cat:"Seguros",        name:"RC / Accidentes / Garantía",      unit:"mes",    qty:1,  unit_cost: 400000 },
+    ],
+    montaje:    { labor:9533710,  materials:500000, mobilization:28700000, rentals:1620000, extras:3, margin:10 },
+    desmontaje: { labor:6893710,  materials:300000, mobilization:25000000, rentals:1000000, extras:3, margin:10 },
+  };
+}
+
+let state = defaultState();
+
+// ── FORMATTING ─────────────────────────────────────────────────────────────────
+const clp = n => n == null ? "-" : "$" + Math.round(n).toLocaleString("es-CL");
+const pct = n => (n || 0).toFixed(1) + "%";
+const esc = s => String(s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+
+// ── CALCULATION ENGINE ─────────────────────────────────────────────────────────
+function calculate() {
+  const cfg = state.config;
+  const mg  = state.margins;
+  const months    = cfg.months    || 1;
+  const headcount = cfg.headcount || 1;
+
+  // RRHH
+  let hr_salary=0, hr_social=0, hr_transport=0, hr_epp=0, hr_exams=0, hr_monthly=0;
+  const roleCalcs = state.roles.map(r => {
+    const social   = r.salary * 0.42;
+    const transport= cfg.travel * (r.trips||2) * r.qty;
+    const epp_m    = (r.epp  / months) * r.qty;
+    const exams_m  = (r.exams/ months) * r.qty;
+    const monthly  = (r.salary + social) * r.qty + transport + epp_m + exams_m;
+    hr_salary    += r.salary * r.qty;
+    hr_social    += social   * r.qty;
+    hr_transport += transport;
+    hr_epp       += epp_m;
+    hr_exams     += exams_m;
+    hr_monthly   += monthly;
+    return { ...r, social, transport, epp_m, exams_m, monthly };
+  });
+  const hr_cobrar   = hr_monthly * (1 + mg.rrhh/100);
+
+  // Meals
+  let food_cost=0, food_cobrar=0;
+  const mealCalcs = state.meals.map(m => {
+    const qpd = m.type==="colacion_dia" ? headcount*.75 : m.type==="colacion_noche" ? headcount*.25 : headcount;
+    const cost = m.unit_cost * qpd * 30;
+    const cobrar = cost * (1 + (m.margin||35)/100);
+    food_cost   += cost;
+    food_cobrar += cobrar;
+    return { ...m, qpd, cost, cobrar };
+  });
+
+  // Rented
+  let rented_cost=0;
+  const rentedCalcs = state.rented.map(a => {
+    const total = a.qty * a.unit_cost;
+    rented_cost += total;
+    return { ...a, total };
+  });
+  const rented_cobrar = rented_cost * (1 + mg.rented/100);
+
+  // Own assets
+  let own_cost=0;
+  state.ownAssets.forEach(a => { own_cost += a.monthly||0; });
+  const own_cobrar = own_cost * (1 + mg.own/100);
+
+  // Operations
+  let ops_cost=0;
+  const opsCalcs = state.operations.map(op => {
+    const total = op.qty * op.unit_cost;
+    ops_cost += total;
+    return { ...op, total };
+  });
+  const ops_cobrar = ops_cost * (1 + mg.ops/100);
+
+  // Monthly totals
+  const monthly_cost   = hr_monthly + food_cost + rented_cost + own_cost + ops_cost;
+  const monthly_cobrar = hr_cobrar  + food_cobrar + rented_cobrar + own_cobrar + ops_cobrar;
+
+  // Assembly (one-time)
+  const calcAssembly = a => {
+    const base = a.labor + a.materials + a.mobilization + a.rentals;
+    return base * (1 + a.extras/100) + a.labor * (a.margin/100);
+  };
+  const montaje_cost    = state.montaje.labor + state.montaje.materials + state.montaje.mobilization + state.montaje.rentals;
+  const desmontaje_cost = state.desmontaje.labor + state.desmontaje.materials + state.desmontaje.mobilization + state.desmontaje.rentals;
+  const montaje_cobrar    = calcAssembly(state.montaje);
+  const desmontaje_cobrar = calcAssembly(state.desmontaje);
+
+  // Project
+  const project_cost   = monthly_cost   * months + montaje_cost   + desmontaje_cost;
+  const project_cobrar = monthly_cobrar * months + montaje_cobrar + desmontaje_cobrar;
+  const project_util   = project_cobrar - project_cost;
+
+  const vpd = x => x / headcount / 30;
+
+  return {
+    roleCalcs, hr_salary, hr_social, hr_transport, hr_epp, hr_exams,
+    hr_monthly, hr_cobrar,
+    mealCalcs, food_cost, food_cobrar,
+    rentedCalcs, rented_cost, rented_cobrar,
+    own_cost, own_cobrar,
+    opsCalcs, ops_cost, ops_cobrar,
+    monthly_cost, monthly_cobrar,
+    montaje_cost, desmontaje_cost, montaje_cobrar, desmontaje_cobrar,
+    project_cost, project_cobrar, project_util,
+    vpd_hr: vpd(hr_cobrar), vpd_food: vpd(food_cobrar),
+    vpd_rented: vpd(rented_cobrar), vpd_own: vpd(own_cobrar),
+    vpd_ops: vpd(ops_cobrar), vpd_total: vpd(monthly_cobrar),
+  };
+}
+
+// ── TAB SWITCHING ──────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab===name));
+  ["config","rrhh","alimentacion","activos","operaciones","montaje","resumen"].forEach(t => {
+    document.getElementById("tab-"+t).style.display = t===name ? "" : "none";
+  });
+  if (name==="rrhh")        renderRRHH();
+  if (name==="alimentacion") renderFood();
+  if (name==="activos")     { renderRented(); renderOwn(); }
+  if (name==="operaciones") renderOps();
+  if (name==="montaje")     renderMontaje();
+  if (name==="resumen")     renderResumen();
+}
+
+// ── RENDERS ────────────────────────────────────────────────────────────────────
+function renderConfig() {
+  const c = state.config, m = state.margins;
+  document.getElementById("cfg-client").value    = c.client   || "";
+  document.getElementById("cfg-project").value   = c.project  || "";
+  document.getElementById("cfg-months").value    = c.months;
+  document.getElementById("cfg-headcount").value = c.headcount;
+  document.getElementById("cfg-uf").value        = c.uf;
+  document.getElementById("cfg-usd").value       = c.usd;
+  document.getElementById("cfg-travel").value    = c.travel;
+  document.getElementById("cfg-winter").checked  = c.winter;
+  document.getElementById("winter-label").textContent = c.winter ? "Activado" : "Desactivado";
+  document.getElementById("mg-rrhh").value     = m.rrhh;
+  document.getElementById("mg-ops").value      = m.ops;
+  document.getElementById("mg-rented").value   = m.rented;
+  document.getElementById("mg-own").value      = m.own;
+  document.getElementById("mg-food").value     = m.food;
+  document.getElementById("mg-assembly").value = m.assembly;
+  const name = [c.client, c.project].filter(Boolean).join(" · ");
+  document.getElementById("client-display").textContent = name;
+}
+
+function renderRRHH() {
+  const R = calculate();
+  document.getElementById("rrhh-body").innerHTML = R.roleCalcs.map((r,i) => `
+    <tr>
+      <td><input class="td-input" value="${esc(r.name)}" onchange="updateRole(${i},'name',this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${r.qty}" style="width:55px" onchange="updateRole(${i},'qty',+this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${r.salary}" style="width:105px" onchange="updateRole(${i},'salary',+this.value)" /></td>
+      <td class="num" style="color:var(--muted)">${clp(r.social * r.qty)}</td>
+      <td class="num">
+        <input class="td-input num" type="number" value="${r.trips}" style="width:45px" title="N° viajes/mes" onchange="updateRole(${i},'trips',+this.value)" />
+        <span style="font-size:10px;color:var(--muted)"> vj → ${clp(r.transport)}</span>
+      </td>
+      <td class="num"><input class="td-input num" type="number" value="${r.epp}" style="width:105px" onchange="updateRole(${i},'epp',+this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${r.exams}" style="width:105px" onchange="updateRole(${i},'exams',+this.value)" /></td>
+      <td class="num" style="font-weight:600">${clp(r.monthly)}</td>
+      <td class="no-print"><button class="btn btn-sm btn-danger" onclick="removeRole(${i})">✕</button></td>
+    </tr>`).join("");
+  document.getElementById("tot-salary").textContent    = clp(R.hr_salary);
+  document.getElementById("tot-social").textContent    = clp(R.hr_social);
+  document.getElementById("tot-transport").textContent = clp(R.hr_transport);
+  document.getElementById("tot-epp").textContent       = clp(R.hr_epp);
+  document.getElementById("tot-exams").textContent     = clp(R.hr_exams);
+  document.getElementById("tot-rrhh").textContent      = clp(R.hr_monthly);
+}
+
+function renderFood() {
+  const R = calculate();
+  document.getElementById("food-body").innerHTML = R.mealCalcs.map((m,i) => `
+    <tr>
+      <td><input class="td-input" value="${esc(m.name)}" onchange="updateMeal(${i},'name',this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${m.unit_cost}" onchange="updateMeal(${i},'unit_cost',+this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${m.margin}" style="width:65px" onchange="updateMeal(${i},'margin',+this.value)" /></td>
+      <td class="num" style="color:var(--muted)">${Math.round(m.qpd)}</td>
+      <td class="num">${clp(m.cost)}</td>
+      <td class="num" style="font-weight:600">${clp(m.cobrar)}</td>
+    </tr>`).join("");
+  document.getElementById("tot-food-cost").textContent   = clp(R.food_cost);
+  document.getElementById("tot-food-cobrar").textContent = clp(R.food_cobrar);
+}
+
+function renderRented() {
+  const R = calculate();
+  document.getElementById("rented-body").innerHTML = R.rentedCalcs.map((a,i) => `
+    <tr>
+      <td><input class="td-input" value="${esc(a.zone)}" style="width:95px" onchange="updateRented(${i},'zone',this.value)" /></td>
+      <td><input class="td-input" value="${esc(a.name)}" onchange="updateRented(${i},'name',this.value)" /></td>
+      <td><input class="td-input" value="${esc(a.unit)}" style="width:55px" onchange="updateRented(${i},'unit',this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${a.qty}" style="width:55px" onchange="updateRented(${i},'qty',+this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${a.unit_cost}" onchange="updateRented(${i},'unit_cost',+this.value)" /></td>
+      <td class="num" style="font-weight:600">${clp(a.total)}</td>
+      <td class="no-print"><button class="btn btn-sm btn-danger" onclick="removeRented(${i})">✕</button></td>
+    </tr>`).join("");
+  document.getElementById("tot-rented").textContent = clp(R.rented_cost);
+}
+
+function renderOwn() {
+  let total = 0;
+  document.getElementById("own-body").innerHTML = state.ownAssets.map((a,i) => {
+    total += a.monthly||0;
+    return `<tr>
+      <td><input class="td-input" value="${esc(a.zone)}" onchange="updateOwn(${i},'zone',this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${a.monthly}" onchange="updateOwn(${i},'monthly',+this.value)" /></td>
+      <td class="no-print"><button class="btn btn-sm btn-danger" onclick="removeOwn(${i})">✕</button></td>
+    </tr>`;
+  }).join("");
+  document.getElementById("tot-own").textContent = clp(total);
+}
+
+function renderOps() {
+  const R = calculate();
+  document.getElementById("ops-body").innerHTML = R.opsCalcs.map((op,i) => `
+    <tr>
+      <td><input class="td-input" value="${esc(op.cat)}" style="width:110px" onchange="updateOp(${i},'cat',this.value)" /></td>
+      <td><input class="td-input" value="${esc(op.name)}" onchange="updateOp(${i},'name',this.value)" /></td>
+      <td><input class="td-input" value="${esc(op.unit)}" style="width:65px" onchange="updateOp(${i},'unit',this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${op.qty}" style="width:65px" onchange="updateOp(${i},'qty',+this.value)" /></td>
+      <td class="num"><input class="td-input num" type="number" value="${op.unit_cost}" onchange="updateOp(${i},'unit_cost',+this.value)" /></td>
+      <td class="num" style="font-weight:600">${clp(op.total)}</td>
+      <td class="no-print"><button class="btn btn-sm btn-danger" onclick="removeOp(${i})">✕</button></td>
+    </tr>`).join("");
+  document.getElementById("tot-ops").textContent = clp(R.ops_cost);
+}
+
+function renderMontaje() {
+  const mt = state.montaje, dm = state.desmontaje;
+  document.getElementById("mt-labor").value       = mt.labor;
+  document.getElementById("mt-materials").value   = mt.materials;
+  document.getElementById("mt-mobilization").value= mt.mobilization;
+  document.getElementById("mt-rentals").value     = mt.rentals;
+  document.getElementById("mt-extras").value      = mt.extras;
+  document.getElementById("mt-margin").value      = mt.margin;
+  document.getElementById("dm-labor").value       = dm.labor;
+  document.getElementById("dm-materials").value   = dm.materials;
+  document.getElementById("dm-mobilization").value= dm.mobilization;
+  document.getElementById("dm-rentals").value     = dm.rentals;
+  document.getElementById("dm-extras").value      = dm.extras;
+  document.getElementById("dm-margin").value      = dm.margin;
+  const R = calculate();
+  document.getElementById("tot-montaje").textContent    = clp(R.montaje_cobrar);
+  document.getElementById("tot-desmontaje").textContent = clp(R.desmontaje_cobrar);
+}
+
+function renderResumen() {
+  const R = calculate();
+  const cfg = state.config, mg = state.margins;
+  const months = cfg.months||1, hc = cfg.headcount||1;
+
+  // KPI cards
+  document.getElementById("kpi-grid").innerHTML = `
+    <div class="kpi-card blue">
+      <div class="kpi-label">A cobrar total proyecto</div>
+      <div class="kpi-value">${clp(R.project_cobrar)}</div>
+      <div class="kpi-sub">CLP · ${months} meses</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Utilidad total</div>
+      <div class="kpi-value">${clp(R.project_util)}</div>
+      <div class="kpi-sub">${((R.project_util/R.project_cobrar)*100).toFixed(1)}% margen neto</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">A cobrar mensual</div>
+      <div class="kpi-value">${clp(R.monthly_cobrar)}</div>
+      <div class="kpi-sub">${hc} personas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Valor persona / día</div>
+      <div class="kpi-value">${clp(R.vpd_total)}</div>
+      <div class="kpi-sub">Operación mensual</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Montaje + Desmontaje</div>
+      <div class="kpi-value">${clp(R.montaje_cobrar + R.desmontaje_cobrar)}</div>
+      <div class="kpi-sub">Costos únicos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Costo total proyecto</div>
+      <div class="kpi-value">${clp(R.project_cost)}</div>
+      <div class="kpi-sub">Sin utilidad</div>
+    </div>`;
+
+  // Summary table
+  const cats = [
+    { label:"Recursos Humanos",   cost:R.hr_monthly,   mg:mg.rrhh,   cobrar:R.hr_cobrar,     vpd:R.vpd_hr     },
+    { label:"Operaciones",        cost:R.ops_cost,     mg:mg.ops,    cobrar:R.ops_cobrar,    vpd:R.vpd_ops    },
+    { label:"Arriendo Activos",   cost:R.rented_cost,  mg:mg.rented, cobrar:R.rented_cobrar, vpd:R.vpd_rented },
+    { label:"Activos Propios",    cost:R.own_cost,     mg:mg.own,    cobrar:R.own_cobrar,    vpd:R.vpd_own    },
+    { label:"Alimentación",       cost:R.food_cost,    mg:mg.food,   cobrar:R.food_cobrar,   vpd:R.vpd_food   },
+  ];
+  document.getElementById("summary-body").innerHTML = [
+    ...cats.map(c => `<tr>
+      <td>${c.label}</td>
+      <td class="num">${clp(c.cost)}</td>
+      <td class="num">${c.mg}%</td>
+      <td class="num">${clp(c.cobrar - c.cost)}</td>
+      <td class="num" style="font-weight:600">${clp(c.cobrar)}</td>
+      <td class="num">${clp(c.vpd)}</td>
+    </tr>`),
+    `<tr class="total-row">
+      <td>SUBTOTAL MENSUAL</td>
+      <td class="num">${clp(R.monthly_cost)}</td>
+      <td class="num">${((R.monthly_cobrar-R.monthly_cost)/R.monthly_cobrar*100).toFixed(1)}%</td>
+      <td class="num">${clp(R.monthly_cobrar - R.monthly_cost)}</td>
+      <td class="num">${clp(R.monthly_cobrar)}</td>
+      <td class="num">${clp(R.vpd_total)}</td>
+    </tr>`,
+    `<tr><td>Montaje (único)</td><td class="num">${clp(R.montaje_cost)}</td><td class="num">${state.montaje.margin}%</td><td class="num">${clp(R.montaje_cobrar - R.montaje_cost)}</td><td class="num">${clp(R.montaje_cobrar)}</td><td class="num">-</td></tr>`,
+    `<tr><td>Desmontaje (único)</td><td class="num">${clp(R.desmontaje_cost)}</td><td class="num">${state.desmontaje.margin}%</td><td class="num">${clp(R.desmontaje_cobrar - R.desmontaje_cost)}</td><td class="num">${clp(R.desmontaje_cobrar)}</td><td class="num">-</td></tr>`,
+    `<tr class="total-row" style="font-size:13px"><td>TOTAL PROYECTO (${months} meses)</td><td class="num">${clp(R.project_cost)}</td><td class="num">${((R.project_util/R.project_cobrar)*100).toFixed(1)}%</td><td class="num">${clp(R.project_util)}</td><td class="num">${clp(R.project_cobrar)}</td><td class="num">-</td></tr>`,
+  ].join("");
+
+  // Presentation
+  const client = cfg.client||"Cliente", project = cfg.project||"Proyecto";
+  document.getElementById("pres-title").textContent    = `COTIZACIÓN · ${client.toUpperCase()}`;
+  document.getElementById("pres-subtitle").textContent = `${project} · ${months} meses · ${hc} personas`;
+
+  let pres="", n=1;
+
+  pres += `<tr class="sec-row"><td colspan="6">I. OPERACIÓN MENSUAL</td></tr>`;
+  cats.forEach(c => {
+    pres += `<tr><td>${n++}</td><td>${c.label}</td><td>mes</td><td style="text-align:right">${clp(c.cobrar)}</td><td style="text-align:right">${clp(c.cobrar)}</td><td style="text-align:right">${clp(c.vpd)}</td></tr>`;
+  });
+  pres += `<tr class="sub-row"><td colspan="3">Subtotal Operación Mensual</td><td style="text-align:right" colspan="2">${clp(R.monthly_cobrar)}</td><td style="text-align:right">${clp(R.vpd_total)}</td></tr>`;
+
+  pres += `<tr class="sec-row"><td colspan="6">II. MONTAJE (costo único)</td></tr>`;
+  const mtItems = [
+    ["Mano de obra montaje", state.montaje.labor],
+    ["Materiales",           state.montaje.materials],
+    ["Movilización",         state.montaje.mobilization],
+    ["Arriendos montaje",    state.montaje.rentals],
+  ];
+  mtItems.forEach(([label, val]) => {
+    pres += `<tr><td>${n++}</td><td>${label}</td><td>GL</td><td style="text-align:right">${clp(val)}</td><td style="text-align:right">${clp(val)}</td><td style="text-align:right">-</td></tr>`;
+  });
+  pres += `<tr class="sub-row"><td colspan="3">Subtotal Montaje</td><td style="text-align:right" colspan="2">${clp(R.montaje_cobrar)}</td><td style="text-align:right">-</td></tr>`;
+
+  pres += `<tr class="sec-row"><td colspan="6">III. DESMONTAJE (costo único)</td></tr>`;
+  const dmItems = [
+    ["Mano de obra desmontaje", state.desmontaje.labor],
+    ["Materiales",              state.desmontaje.materials],
+    ["Movilización",            state.desmontaje.mobilization],
+    ["Arriendos desmontaje",    state.desmontaje.rentals],
+  ];
+  dmItems.forEach(([label, val]) => {
+    pres += `<tr><td>${n++}</td><td>${label}</td><td>GL</td><td style="text-align:right">${clp(val)}</td><td style="text-align:right">${clp(val)}</td><td style="text-align:right">-</td></tr>`;
+  });
+  pres += `<tr class="sub-row"><td colspan="3">Subtotal Desmontaje</td><td style="text-align:right" colspan="2">${clp(R.desmontaje_cobrar)}</td><td style="text-align:right">-</td></tr>`;
+
+  pres += `<tr class="tot-row"><td colspan="3">TOTAL A COBRAR PROYECTO (${months} meses)</td><td style="text-align:right" colspan="2">${clp(R.project_cobrar)}</td><td style="text-align:right">${clp(R.vpd_total)}</td></tr>`;
+
+  document.getElementById("pres-body").innerHTML = pres;
+}
+
+// ── EVENT HANDLERS ─────────────────────────────────────────────────────────────
+function onCfgChange() {
+  state.config.client    = document.getElementById("cfg-client").value;
+  state.config.project   = document.getElementById("cfg-project").value;
+  state.config.months    = +document.getElementById("cfg-months").value    || 1;
+  state.config.headcount = +document.getElementById("cfg-headcount").value || 1;
+  state.config.uf        = +document.getElementById("cfg-uf").value        || 1;
+  state.config.usd       = +document.getElementById("cfg-usd").value       || 1;
+  state.config.travel    = +document.getElementById("cfg-travel").value    || 0;
+  state.config.winter    =  document.getElementById("cfg-winter").checked;
+  document.getElementById("winter-label").textContent = state.config.winter ? "Activado" : "Desactivado";
+  state.margins.rrhh     = +document.getElementById("mg-rrhh").value     || 0;
+  state.margins.ops      = +document.getElementById("mg-ops").value      || 0;
+  state.margins.rented   = +document.getElementById("mg-rented").value   || 0;
+  state.margins.own      = +document.getElementById("mg-own").value      || 0;
+  state.margins.food     = +document.getElementById("mg-food").value     || 0;
+  state.margins.assembly = +document.getElementById("mg-assembly").value || 0;
+  const name = [state.config.client, state.config.project].filter(Boolean).join(" · ");
+  document.getElementById("client-display").textContent = name;
+  saveState();
+}
+
+function recalcMontaje() {
+  const read = id => +document.getElementById(id).value || 0;
+  state.montaje    = { labor:read("mt-labor"), materials:read("mt-materials"), mobilization:read("mt-mobilization"), rentals:read("mt-rentals"), extras:read("mt-extras"), margin:read("mt-margin") };
+  state.desmontaje = { labor:read("dm-labor"), materials:read("dm-materials"), mobilization:read("dm-mobilization"), rentals:read("dm-rentals"), extras:read("dm-extras"), margin:read("dm-margin") };
+  const R = calculate();
+  document.getElementById("tot-montaje").textContent    = clp(R.montaje_cobrar);
+  document.getElementById("tot-desmontaje").textContent = clp(R.desmontaje_cobrar);
+  saveState();
+}
+
+function updateRole(i,k,v)   { state.roles[i][k]=v;       saveState(); renderRRHH(); }
+function updateMeal(i,k,v)   { state.meals[i][k]=v;       saveState(); renderFood(); }
+function updateRented(i,k,v) { state.rented[i][k]=v;      saveState(); renderRented(); }
+function updateOwn(i,k,v)    { state.ownAssets[i][k]=v;   saveState(); renderOwn(); }
+function updateOp(i,k,v)     { state.operations[i][k]=v;  saveState(); renderOps(); }
+
+function addRole()   { state.roles.push({ name:"Nuevo cargo", qty:1, salary:600000, epp:150000, exams:60000, trips:2 }); renderRRHH(); }
+function addRented() { state.rented.push({ zone:"Zona", name:"Nuevo activo", unit:"mes", qty:1, unit_cost:0 }); renderRented(); }
+function addOwn()    { state.ownAssets.push({ zone:"Nueva zona", monthly:0 }); renderOwn(); }
+function addOp()     { state.operations.push({ cat:"Servicios", name:"Nuevo servicio", unit:"mes", qty:1, unit_cost:0 }); renderOps(); }
+
+function removeRole(i)   { state.roles.splice(i,1);       saveState(); renderRRHH(); }
+function removeRented(i) { state.rented.splice(i,1);      saveState(); renderRented(); }
+function removeOwn(i)    { state.ownAssets.splice(i,1);   saveState(); renderOwn(); }
+function removeOp(i)     { state.operations.splice(i,1);  saveState(); renderOps(); }
+
+// ── PERSISTENCE ────────────────────────────────────────────────────────────────
+function saveState() {
+  try { localStorage.setItem("cotizador_v1", JSON.stringify(state)); } catch(e) {}
+}
+function loadState() {
+  try { const s = localStorage.getItem("cotizador_v1"); if (s) { state = JSON.parse(s); return true; } } catch(e) {}
+  return false;
+}
+function resetToDefaults() {
+  if (!confirm("¿Restablecer todos los datos a los valores predeterminados del Campamento Domeyko?")) return;
+  state = defaultState();
+  renderConfig();
+  renderAll();
+  saveState();
+}
+
+function renderAll() {
+  renderConfig();
+  const active = document.querySelector(".tab.active")?.dataset?.tab || "config";
+  if (active==="rrhh")        renderRRHH();
+  if (active==="alimentacion") renderFood();
+  if (active==="activos")     { renderRented(); renderOwn(); }
+  if (active==="operaciones") renderOps();
+  if (active==="montaje")     renderMontaje();
+  if (active==="resumen")     renderResumen();
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────────
+loadState();
+renderConfig();
+</script>
+</body>
+</html>
