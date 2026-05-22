@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
-import csv, io, asyncio
+import csv, io, asyncio, os
 
 from fastapi import FastAPI, HTTPException, Query, Depends, Header
 from fastapi.staticfiles import StaticFiles
@@ -142,6 +142,13 @@ def get_current_user(authorization: Optional[str] = Header(default=None)):
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     return {"user_id": int(payload["sub"]), "email": payload["email"]}
 
+
+def require_admin(user=Depends(get_current_user)):
+    admin_emails = {e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()}
+    if not admin_emails or user["email"].lower() not in admin_emails:
+        raise HTTPException(status_code=403, detail="Acceso restringido a administradores")
+    return user
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class OpportunityIn(BaseModel):
@@ -212,9 +219,14 @@ class NoteIn(BaseModel):
 
 @app.post("/setup/first-user")
 def setup_first_user(payload: CreateUserPayload):
-    existing = get_user_by_email(payload.email)
-    if existing:
-        raise HTTPException(status_code=400, detail="Ya existe un usuario")
+    if os.getenv("ALLOW_SETUP", "").lower() != "true":
+        raise HTTPException(status_code=403, detail="Setup deshabilitado")
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM users")
+            row = cur.fetchone()
+            if row and int(row["n"]) > 0:
+                raise HTTPException(status_code=403, detail="Setup ya completado: ya existen usuarios")
     password_hash = hash_password(payload.password)
     new_user = create_user(payload.email, password_hash, payload.name)
     return {"ok": True, "user_id": new_user["id"], "email": new_user["email"]}
@@ -234,7 +246,7 @@ def login(payload: LoginPayload):
     token = create_access_token(user["id"], user["email"])
     return {"token": token, "email": user["email"], "name": user.get("name")}
 
-@app.post("/ingest")
+@app.post("/ingest", dependencies=[Depends(require_admin)])
 def ingest(payload: IngestPayload):
     if not payload.items:
         raise HTTPException(status_code=400, detail="No items provided")
@@ -242,7 +254,7 @@ def ingest(payload: IngestPayload):
     inserted, updated = upsert_opportunities(items)
     return {"ok": True, "inserted": inserted, "updated": updated, "total": inserted + updated}
 
-@app.get("/opportunities")
+@app.get("/opportunities", dependencies=[Depends(get_current_user)])
 def opportunities(
     q: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=2000),
@@ -256,7 +268,7 @@ def opportunities(
         result.append(r)
     return {"items": result, "count": len(result)}
 
-@app.get("/noticias")
+@app.get("/noticias", dependencies=[Depends(get_current_user)])
 def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
     """Noticias recientes del sector minero."""
     NEWS_SOURCES = [
@@ -285,7 +297,7 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
-@app.get("/pipeline")
+@app.get("/pipeline", dependencies=[Depends(get_current_user)])
 def get_pipeline_list(status: Optional[str] = Query(default=None)):
     rows = list_pipeline(status=status)
     result = []
@@ -295,11 +307,11 @@ def get_pipeline_list(status: Optional[str] = Query(default=None)):
         result.append(r)
     return {"items": result, "count": len(result), "statuses": PIPELINE_STATUSES}
 
-@app.get("/pipeline/statuses")
+@app.get("/pipeline/statuses", dependencies=[Depends(get_current_user)])
 def get_statuses():
     return {"statuses": PIPELINE_STATUSES}
 
-@app.put("/opportunities/{opportunity_id}/pipeline")
+@app.put("/opportunities/{opportunity_id}/pipeline", dependencies=[Depends(get_current_user)])
 def update_pipeline(opportunity_id: int, payload: PipelineUpdate):
     if payload.status not in PIPELINE_STATUSES:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Opciones: {PIPELINE_STATUSES}")
@@ -308,7 +320,7 @@ def update_pipeline(opportunity_id: int, payload: PipelineUpdate):
     if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
     return row
 
-@app.get("/opportunities/{opportunity_id}/pipeline")
+@app.get("/opportunities/{opportunity_id}/pipeline", dependencies=[Depends(get_current_user)])
 def get_opp_pipeline(opportunity_id: int):
     row = get_pipeline(opportunity_id)
     if not row:
@@ -317,13 +329,13 @@ def get_opp_pipeline(opportunity_id: int):
     if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
     return row
 
-@app.post("/opportunities/{opportunity_id}/notes")
+@app.post("/opportunities/{opportunity_id}/notes", dependencies=[Depends(get_current_user)])
 def add_note(opportunity_id: int, payload: NoteIn):
     row = add_pipeline_note(opportunity_id, payload.note, payload.author)
     if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
     return row
 
-@app.get("/opportunities/{opportunity_id}/notes")
+@app.get("/opportunities/{opportunity_id}/notes", dependencies=[Depends(get_current_user)])
 def get_notes(opportunity_id: int):
     rows = get_pipeline_notes(opportunity_id)
     result = []
@@ -335,7 +347,7 @@ def get_notes(opportunity_id: int):
 
 # ── Contactos ─────────────────────────────────────────────────────────────────
 
-@app.get("/contacts")
+@app.get("/contacts", dependencies=[Depends(get_current_user)])
 def get_contacts(
     q: Optional[str] = Query(default=None),
     company: Optional[str] = Query(default=None),
@@ -353,14 +365,14 @@ def get_contacts(
         result.append(r)
     return {"items": result, "count": len(result)}
 
-@app.post("/contacts")
+@app.post("/contacts", dependencies=[Depends(get_current_user)])
 def add_contact(payload: ContactIn):
     row = create_contact(payload.model_dump())
     for f in ["created_at","updated_at"]:
         if row.get(f): row[f] = row[f].isoformat()
     return row
 
-@app.put("/contacts/{contact_id}")
+@app.put("/contacts/{contact_id}", dependencies=[Depends(get_current_user)])
 def edit_contact(contact_id: int, payload: ContactUpdate):
     data = {k: v for k, v in payload.model_dump().items() if v is not None}
     row = update_contact(contact_id, data)
@@ -370,20 +382,20 @@ def edit_contact(contact_id: int, payload: ContactUpdate):
         if row.get(f): row[f] = row[f].isoformat()
     return row
 
-@app.delete("/contacts/{contact_id}")
+@app.delete("/contacts/{contact_id}", dependencies=[Depends(get_current_user)])
 def remove_contact(contact_id: int):
     ok = delete_contact(contact_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Contacto no encontrado")
     return {"ok": True}
 
-@app.post("/contacts/import")
+@app.post("/contacts/import", dependencies=[Depends(get_current_user)])
 def import_contacts(payload: List[ContactIn]):
     contacts = [c.model_dump() for c in payload]
     inserted, errors = bulk_import_contacts(contacts)
     return {"ok": True, "inserted": inserted, "errors": errors}
 
-@app.get("/contacts/export")
+@app.get("/contacts/export", dependencies=[Depends(get_current_user)])
 def export_contacts():
     rows = list_contacts(limit=10000)
     output = io.StringIO()
@@ -454,12 +466,12 @@ class ServiceProfilePayload(BaseModel):
     known_mandantes: List[str] = []
     onboarding_done: bool = False
 
-@app.get("/me/service-profile")
+@app.get("/me/service-profile", dependencies=[Depends(get_current_user)])
 def get_service_profile_endpoint():
     profile = db.get_service_profile("default")
     return profile or {"company_name": None, "services": []}
 
-@app.put("/me/service-profile")
+@app.put("/me/service-profile", dependencies=[Depends(get_current_user)])
 def update_service_profile(payload: ServiceProfilePayload):
     db.init_ai_db()
     company_key = payload.company_key or "default"
@@ -482,7 +494,7 @@ def update_service_profile(payload: ServiceProfilePayload):
     )
     return {"ok": True, "profile": profile}
 
-@app.get("/mandantes")
+@app.get("/mandantes", dependencies=[Depends(get_current_user)])
 def get_mandantes():
     """
     Ranking de mandantes por actividad consolidada.
@@ -646,7 +658,7 @@ def get_mandantes():
 # Cache en memoria para no regenerar en cada visita
 _company_summaries: dict = {}
 
-@app.get("/mandantes/summary/{company_name}")
+@app.get("/mandantes/summary/{company_name}", dependencies=[Depends(get_current_user)])
 def get_company_summary(company_name: str):
     """
     Genera un resumen ejecutivo del mandante usando IA.
@@ -755,12 +767,12 @@ Responde SOLO JSON sin markdown:
     _company_summaries[key] = result
     return result
 
-@app.get("/mandantes/detail")
+@app.get("/mandantes/detail", dependencies=[Depends(get_current_user)])
 def get_mandante_detail_q(company: str):
     """Detalle de mandante por query param — evita problemas de encoding en path."""
     return _mandante_detail(company)
 
-@app.get("/mandantes/{company_name}")
+@app.get("/mandantes/{company_name}", dependencies=[Depends(get_current_user)])
 def get_mandante_detail(company_name: str):
     """Detalle de un mandante: sus proyectos, SEA y noticias recientes."""
     return _mandante_detail(company_name)
@@ -911,7 +923,7 @@ def _mandante_detail(company_name: str):
 
 _faenas_cache: dict = {"data": [], "ts": 0}
 
-@app.get("/faenas")
+@app.get("/faenas", dependencies=[Depends(get_current_user)])
 def get_faenas():
     """
     Lista de faenas mineras activas con coordenadas.
@@ -933,7 +945,7 @@ def get_faenas():
             return {"faenas": _faenas_cache["data"], "total": len(_faenas_cache["data"]), "cached": True}
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/admin/refresh-faenas")
+@app.post("/admin/refresh-faenas", dependencies=[Depends(require_admin)])
 def refresh_faenas():
     """Fuerza recarga del cache de faenas mineras."""
     global _faenas_cache
@@ -942,7 +954,7 @@ def refresh_faenas():
 
 # ── Empleos por empresa ────────────────────────────────────────────────────────
 
-@app.get("/empleos/resumen")
+@app.get("/empleos/resumen", dependencies=[Depends(get_current_user)])
 def get_empleos_resumen():
     """
     Resumen de empleos disponibles por empresa (mandante).
@@ -1051,7 +1063,7 @@ def get_empleos_resumen():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/empleos/empresa/{company_name}")
+@app.get("/empleos/empresa/{company_name}", dependencies=[Depends(get_current_user)])
 def get_empleos_empresa(company_name: str):
     """Detalle de empleos por proyecto para una empresa específica."""
     sql = """
@@ -1082,7 +1094,7 @@ def get_empleos_empresa(company_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/me/score-projects")
+@app.post("/me/score-projects", dependencies=[Depends(get_current_user)])
 def score_projects(payload: dict):
     """
     Dispara scoring IA personalizado para todos los proyectos contra el perfil de la empresa.
@@ -1102,7 +1114,7 @@ def score_projects(payload: dict):
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Scoring IA iniciado en background", "company_key": company_key}
 
-@app.get("/me/profile")
+@app.get("/me/profile", dependencies=[Depends(get_current_user)])
 def get_profile(company_key: str = "default"):
     """Retorna el perfil completo incluyendo onboarding_done."""
     profile = db.get_service_profile(company_key)
@@ -1110,7 +1122,7 @@ def get_profile(company_key: str = "default"):
         return {"onboarding_done": False, "services": [], "company_name": None}
     return profile
 
-@app.get("/ai/fits")
+@app.get("/ai/fits", dependencies=[Depends(get_current_user)])
 def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 500):
     """Retorna los scores IA calculados para la empresa."""
     try:
@@ -1119,7 +1131,7 @@ def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 5
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/debug-noticias")
+@app.get("/admin/debug-noticias", dependencies=[Depends(require_admin)])
 def debug_noticias(company: str = "Codelco"):
     """Debug: diagnostico completo de noticias en BD."""
     NEWS_LIST = [
@@ -1193,7 +1205,7 @@ def debug_noticias(company: str = "Codelco"):
         import traceback as tb
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[:2000]}
 
-@app.post("/admin/run-bhp-careers")
+@app.post("/admin/run-bhp-careers", dependencies=[Depends(require_admin)])
 def run_bhp_careers():
     """Scraping de empleos BHP Chile — inline, sin módulo externo."""
     import traceback as tb, requests as _req, json as _json
@@ -1317,7 +1329,7 @@ def run_bhp_careers():
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
-@app.post("/admin/run-amsa-careers")
+@app.post("/admin/run-amsa-careers", dependencies=[Depends(require_admin)])
 def run_amsa_careers():
     """Scraping de empleos Antofagasta Minerals (AMSA) — Pelambres, Centinela, Zaldívar, AMSA."""
     import traceback as tb, requests as _req, re as _re, json as _json
@@ -1479,7 +1491,7 @@ def run_amsa_careers():
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
-@app.post("/admin/recalcular-scores")
+@app.post("/admin/recalcular-scores", dependencies=[Depends(require_admin)])
 def admin_recalcular_scores():
     """
     Recalcula scores de todos los proyectos usando el scoring engine de Stratmap.
@@ -1493,7 +1505,7 @@ def admin_recalcular_scores():
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
 
-@app.post("/admin/run-lundin-careers")
+@app.post("/admin/run-lundin-careers", dependencies=[Depends(require_admin)])
 def run_lundin_careers():
     """Scraping de empleos Lundin Mining Chile — Minera Candelaria (Tierra Amarilla)."""
     import traceback as tb, requests as _req, re as _re, json as _json
@@ -1680,7 +1692,7 @@ def run_lundin_careers():
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
 
-@app.post("/admin/run-teck-careers")
+@app.post("/admin/run-teck-careers", dependencies=[Depends(require_admin)])
 def run_teck_careers():
     """Scraping de empleos Teck Chile — Carmen de Andacollo y Quebrada Blanca."""
     import traceback as tb, requests as _req, json as _json
@@ -1844,7 +1856,7 @@ def run_teck_careers():
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
 
-@app.post("/admin/run-collahuasi-careers")
+@app.post("/admin/run-collahuasi-careers", dependencies=[Depends(require_admin)])
 def run_collahuasi_careers():
     """Scraping de empleos Minera Collahuasi — sitio web propio."""
     import traceback as tb, requests as _req, re as _re, json as _json
@@ -1958,7 +1970,7 @@ def run_collahuasi_careers():
         return {"ok": False, "error": str(e), "trace": tb.format_exc()[-2000:]}
 
 
-@app.post("/admin/run-mandante-scorer")
+@app.post("/admin/run-mandante-scorer", dependencies=[Depends(require_admin)])
 def run_mandante_scorer():
     """Dispara scoring de temperatura de mandantes con IA."""
     import threading
@@ -1973,7 +1985,7 @@ def run_mandante_scorer():
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Scoring de temperatura iniciado en background"}
 
-@app.post("/admin/run-ai-scoring")
+@app.post("/admin/run-ai-scoring", dependencies=[Depends(require_admin)])
 def run_ai_scoring_all():
     """Corre scoring IA para todos los perfiles con onboarding completo."""
     import threading
@@ -1998,7 +2010,7 @@ def run_ai_scoring_all():
     return {"ok": True, "msg": "Scoring IA masivo iniciado"}
 
 
-@app.post("/admin/run-demand-intel")
+@app.post("/admin/run-demand-intel", dependencies=[Depends(require_admin)])
 def run_demand_intel(
     batch_size: int = Query(default=30, ge=5, le=100),
     max_batches: int = Query(default=10, ge=1, le=50),
@@ -2020,7 +2032,7 @@ def run_demand_intel(
         return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
 
 
-@app.get("/opportunities/{opp_id}/services")
+@app.get("/opportunities/{opp_id}/services", dependencies=[Depends(get_current_user)])
 def get_opportunity_services(opp_id: int):
     """Retorna los servicios necesarios analizados para un proyecto."""
     try:
@@ -2049,7 +2061,7 @@ def get_opportunity_services(opp_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/opportunities/services/search")
+@app.get("/opportunities/services/search", dependencies=[Depends(get_current_user)])
 def search_by_service(
     q: str = Query(..., description="Rubro o servicio a buscar (ej: 'sondaje', 'campamento')"),
     limit: int = Query(default=20, ge=1, le=100),
@@ -2092,7 +2104,7 @@ def search_by_service(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/admin/run-ai-scorer")
+@app.post("/admin/run-ai-scorer", dependencies=[Depends(require_admin)])
 def run_ai_scorer(
     score_min: int = Query(default=45, ge=0, le=99),
     score_max: int = Query(default=65, ge=0, le=99),
@@ -2132,7 +2144,7 @@ def run_ai_scorer(
     return {"ok": True, "msg": "AI scorer corriendo en background"}
 
 
-@app.post("/admin/mark-onboarding-done")
+@app.post("/admin/mark-onboarding-done", dependencies=[Depends(require_admin)])
 def mark_onboarding_done():
     """Marca todos los perfiles existentes con servicios como onboarding_done=true."""
     try:
@@ -2149,7 +2161,7 @@ def mark_onboarding_done():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/sources-count")
+@app.get("/admin/sources-count", dependencies=[Depends(require_admin)])
 def sources_count():
     """Muestra cuántos registros hay por source — útil para diagnóstico."""
     with db.get_conn() as conn:
@@ -2168,7 +2180,7 @@ def sources_count():
             if r.get(k): r[k] = str(r[k])
     return {"sources": rows}
 
-@app.delete("/admin/delete-source/{source_name}")
+@app.delete("/admin/delete-source/{source_name}", dependencies=[Depends(require_admin)])
 def delete_source(source_name: str):
     """Elimina todos los registros de una fuente específica."""
     with db.get_conn() as conn:
@@ -2178,14 +2190,14 @@ def delete_source(source_name: str):
         conn.commit()
     return {"deleted": deleted, "source": source_name}
 
-@app.post("/admin/run-rss")
+@app.post("/admin/run-rss", dependencies=[Depends(require_admin)])
 def run_rss_manual():
     """Ingesta manual de noticias RSS (Portal Minero, Revista EI, InfoMinería, etc.)."""
     result = _run_rss_ingest()
     return result
 
 
-@app.post("/admin/run-expire-stale")
+@app.post("/admin/run-expire-stale", dependencies=[Depends(require_admin)])
 def run_expire_stale():
     """Marca como inactivas las licitaciones cuyo updated_at supera el TTL por fuente.
     Ejecuta el mismo proceso que corre automáticamente cada 24h en el scheduler.
@@ -2194,7 +2206,7 @@ def run_expire_stale():
     return {"ok": True, **result}
 
 
-@app.post("/admin/run-sigex")
+@app.post("/admin/run-sigex", dependencies=[Depends(require_admin)])
 def run_sigex():
     """Ingesta manual del SIGEX Sernageomin (proyectos de exploración)."""
     import threading

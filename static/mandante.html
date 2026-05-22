@@ -120,6 +120,8 @@
     </div>
   </main>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     // Generate a consistent gradient from company name
     const GRADIENTS = [
@@ -203,8 +205,8 @@
       try {
         // Fetch detail + summary in parallel
         const [detailRes, summaryRes] = await Promise.all([
-          fetch(`/mandantes/detail?company=${encodeURIComponent(empresa)}`),
-          fetch(`/mandantes/summary/${encodeURIComponent(empresa)}`),
+          apiFetch(`/mandantes/detail?company=${encodeURIComponent(empresa)}`),
+          apiFetch(`/mandantes/summary/${encodeURIComponent(empresa)}`),
         ]);
         const data    = await detailRes.json();
         const summary = await summaryRes.json().catch(() => null);

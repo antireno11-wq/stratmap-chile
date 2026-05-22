@@ -78,12 +78,14 @@
     <div id="query-result">—</div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     async function runDiag() {
       const company = document.getElementById('inp').value.trim();
       document.getElementById('log').textContent = 'Cargando...';
       try {
-        const res = await fetch(`/admin/debug-noticias?company=${encodeURIComponent(company)}`);
+        const res = await apiFetch(`/admin/debug-noticias?company=${encodeURIComponent(company)}`);
         const d = await res.json();
         render(d);
         document.getElementById('log').textContent = '';

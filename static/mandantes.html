@@ -89,6 +89,8 @@
     </div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     let allMandantes = [];
 
@@ -150,7 +152,7 @@
     }
 
     async function load() {
-      const res  = await fetch('/mandantes');
+      const res  = await apiFetch('/mandantes');
       const data = await res.json();
       allMandantes = data.mandantes || [];
       document.getElementById('topbar-sub').textContent = `${allMandantes.length} empresas con actividad minera`;

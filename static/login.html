@@ -139,82 +139,80 @@
 
     <div class="error" id="error-msg">Usuario o contraseña incorrectos.</div>
 
-    <label>Usuario</label>
-    <input type="text" id="username" placeholder="usuario@empresa.cl" autocomplete="username" />
+    <label>Email</label>
+    <input type="email" id="username" placeholder="usuario@empresa.cl" autocomplete="username" />
 
     <label>Contraseña</label>
     <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
 
     <button class="btn-login" onclick="doLogin()">Ingresar →</button>
 
-    <div class="demo-hint">
-      <strong>Acceso demo:</strong><br>
-      Usuario: <strong>demo</strong><br>
-      Contraseña: <strong>mineria2026</strong>
-    </div>
-
     <hr class="divider">
-    <a class="link-back" href="/">← Ver radar sin cuenta</a>
+    <a class="link-back" href="/">← Volver</a>
   </div>
 
   <script>
-    // Usuarios hardcodeados (sin backend de auth por ahora)
-    const USERS = {
-      "demo":      { password: "mineria2026", name: "Usuario Demo", role: "demo" },
-      "sebastian": { password: "stratmap2026", name: "Sebastian", role: "admin" },
-    };
-
-    function doLogin() {
-      const user = document.getElementById('username').value.trim().toLowerCase();
-      const pass = document.getElementById('password').value;
+    async function doLogin() {
+      const email = document.getElementById('username').value.trim();
+      const pass  = document.getElementById('password').value;
       const errEl = document.getElementById('error-msg');
+      errEl.style.display = 'none';
 
-      const found = USERS[user];
-      if (!found || found.password !== pass) {
+      if (!email || !pass) {
+        errEl.textContent = 'Ingresa email y contraseña.';
         errEl.style.display = 'block';
         return;
       }
 
-      // Guardar sesión en localStorage
-      const session = {
-        username: user,
-        name: found.name,
-        role: found.role,
-        loggedAt: new Date().toISOString()
-      };
-      localStorage.setItem('stratmap_session', JSON.stringify(session));
+      try {
+        const r = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: pass })
+        });
+        if (!r.ok) {
+          errEl.textContent = 'Email o contraseña incorrectos.';
+          errEl.style.display = 'block';
+          return;
+        }
+        const data = await r.json();
 
-      // Si no tiene prefs, inicializar con defaults para minería
-      const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
-      if (!prefs.industries) {
-        const defaultPrefs = {
-          industries: ['Minería'],
-          keywords: [],
-          preferred_regions: [],
-          companies: [],
-          phases: [],
-          sources: []
-        };
-        localStorage.setItem('stratmap_prefs', JSON.stringify(defaultPrefs));
+        localStorage.setItem('stratmap_session', JSON.stringify({
+          token: data.token,
+          email: data.email,
+          name:  data.name,
+          loggedAt: new Date().toISOString()
+        }));
+
+        // Defaults de prefs si no existen
+        const prefs = JSON.parse(localStorage.getItem('stratmap_prefs') || '{}');
+        if (!prefs.industries) {
+          localStorage.setItem('stratmap_prefs', JSON.stringify({
+            industries: ['Minería'],
+            keywords: [],
+            preferred_regions: [],
+            companies: [],
+            phases: [],
+            sources: []
+          }));
+        }
+
+        window.location.href = '/';
+      } catch (e) {
+        errEl.textContent = 'Error de conexión, intenta de nuevo.';
+        errEl.style.display = 'block';
       }
-
-      // Redirigir al dashboard
-      window.location.href = '/';
     }
 
-    // Enter para hacer login
     document.addEventListener('keydown', e => {
       if (e.key === 'Enter') doLogin();
     });
 
-    // Si ya está logueado, redirigir
-    const sess = localStorage.getItem('stratmap_session');
-    if (sess) {
-      try {
-        const s = JSON.parse(sess);
-        if (s.username) window.location.href = '/';
-      } catch(e) {}
-    }
+    // Si ya hay sesión válida, redirigir
+    try {
+      const s = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
+      if (s.token) window.location.href = '/';
+    } catch (e) {}
   </script>
 </body>
 </html>

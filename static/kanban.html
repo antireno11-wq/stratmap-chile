@@ -124,6 +124,8 @@
     </div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     const STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
     const COL_CLASSES = ["col-detectada","col-analisis","col-postular","col-nopostular","col-presentada","col-adjudicada","col-perdida"];
@@ -201,7 +203,7 @@
       if (!item || item.status === newStatus) return;
       item.status = newStatus;
       buildBoard(Object.values(allCards));
-      await fetch(`/opportunities/${dragOppId}/pipeline`, {
+      await apiFetch(`/opportunities/${dragOppId}/pipeline`, {
         method:"PUT", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({status: newStatus, assignee: item.assignee||null})
       });
@@ -214,7 +216,7 @@
       document.getElementById("modal-sub").textContent = item?.company || "";
       document.getElementById("modal-notes").innerHTML = "<p style='font-size:11px;color:#8896a5'>Cargando...</p>";
       document.getElementById("modal-overlay").classList.add("open");
-      const res = await fetch(`/opportunities/${oppId}/notes`);
+      const res = await apiFetch(`/opportunities/${oppId}/notes`);
       const data = await res.json();
       const notes = data.items || [];
       document.getElementById("modal-notes").innerHTML = notes.length
@@ -236,7 +238,7 @@
       const note = document.getElementById("modal-note-text").value.trim();
       if (!note) return;
       const author = document.getElementById("modal-note-author").value.trim() || null;
-      await fetch(`/opportunities/${modalOppId}/notes`, {
+      await apiFetch(`/opportunities/${modalOppId}/notes`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({note, author})
       });
@@ -249,7 +251,7 @@
     });
 
     async function load() {
-      const res = await fetch("/pipeline");
+      const res = await apiFetch("/pipeline");
       const data = await res.json();
       buildBoard(data.items || []);
     }

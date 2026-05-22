@@ -168,10 +168,10 @@ window.openOppDrawer = async function(oppId) {
 
   // Cargar pipeline, notas y servicios en paralelo
   const [pipelineRes, notesRes, aiFitRes, servicesRes] = await Promise.all([
-    fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
-    fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
-    fetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
-    fetch(`/opportunities/${oppId}/services`).then(r => r.json()).catch(()=>({})),
+    apiFetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
+    apiFetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
+    apiFetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
+    apiFetch(`/opportunities/${oppId}/services`).then(r => r.json()).catch(()=>({})),
   ]);
 
   const score = item.radar_score ?? item.score ?? 0;
@@ -229,7 +229,7 @@ window.openOppDrawer = async function(oppId) {
 window.savePipeline = async function(oppId) {
   const status = el("pipeline-status").value;
   const assignee = el("pipeline-assignee").value.trim() || null;
-  await fetch(`/opportunities/${oppId}/pipeline`, {
+  await apiFetch(`/opportunities/${oppId}/pipeline`, {
     method: "PUT",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({status, assignee})
@@ -247,7 +247,7 @@ window.saveNote = async function(oppId) {
   const note = el("note-text").value.trim();
   const author = el("note-author").value.trim() || null;
   if (!note) return;
-  const res = await fetch(`/opportunities/${oppId}/notes`, {
+  const res = await apiFetch(`/opportunities/${oppId}/notes`, {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({note, author})
@@ -267,7 +267,7 @@ window.saveNote = async function(oppId) {
 
 async function fetchContacts(company) {
   try {
-    const r = await fetch(`/contacts?company=${encodeURIComponent(company)}`);
+    const r = await apiFetch(`/contacts?company=${encodeURIComponent(company)}`);
     const data = await r.json();
     return data.items || [];
   } catch(e) { return []; }
@@ -275,7 +275,7 @@ async function fetchContacts(company) {
 
 window.deleteContact = async function(contactId, company) {
   if (!confirm("¿Eliminar este contacto?")) return;
-  await fetch(`/contacts/${contactId}`, {method:"DELETE"});
+  await apiFetch(`/contacts/${contactId}`, {method:"DELETE"});
   const contacts = await fetchContacts(company);
   el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
 };
@@ -287,7 +287,7 @@ window.submitNewContact = async function(company) {
   const phone = el("nc-phone").value.trim();
   const linkedin = el("nc-linkedin").value.trim();
   if (!name) { alert("El nombre es obligatorio"); return; }
-  await fetch("/contacts", {
+  await apiFetch("/contacts", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({name, company, role:role||null, email:email||null, phone:phone||null, linkedin_url:linkedin||null})
@@ -357,7 +357,7 @@ window.analyzeServices = async function(oppId) {
   btn.textContent = "Analizando...";
   btn.disabled = true;
   try {
-    const r = await fetch(`/admin/run-demand-intel?batch_size=1&max_batches=1&source=`, {method:'POST'});
+    const r = await apiFetch(`/admin/run-demand-intel?batch_size=1&max_batches=1&source=`, {method:'POST'});
     // Re-abrir el drawer para refrescar
     await openOppDrawer(oppId);
   } catch(e) {
@@ -579,8 +579,8 @@ async function openDrawer(type, value) {
     // Cargar todo en paralelo
     const [contacts, detailData, summaryData] = await Promise.allSettled([
       fetchContacts(value),
-      fetch(`/mandantes/detail?company=${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
-      fetch(`/mandantes/summary/${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
+      apiFetch(`/mandantes/detail?company=${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
+      apiFetch(`/mandantes/summary/${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
     ]);
 
     // ── Contactos ──────────────────────────────────────────────────────────────
@@ -675,7 +675,7 @@ const aiFitsCache = {};
 
 async function loadAiFits() {
   try {
-    const res = await fetch('/ai/fits?min_score=1&limit=500');
+    const res = await apiFetch('/ai/fits?min_score=1&limit=500');
     const data = await res.json();
     (data.items || []).forEach(item => {
       aiFitsCache[item.id] = {
@@ -743,7 +743,7 @@ function newsRow(item) {
 // ── Filters & Data ────────────────────────────────────────────────────────────
 
 async function fetchJSON(url) {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const res = await apiFetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -938,7 +938,7 @@ async function loadMandantes() {
   if (section) section.style.display = '';
 
   try {
-    const res = await fetch('/mandantes');
+    const res = await apiFetch('/mandantes');
     const data = await res.json();
     mandantesData = data.mandantes || [];
     renderMandantes();
@@ -1059,7 +1059,7 @@ async function loadEmpleos() {
   if (section) section.style.display = '';
 
   try {
-    const res = await fetch('/empleos/resumen');
+    const res = await apiFetch('/empleos/resumen');
     const data = await res.json();
     window._empleosData = data.empresas || [];
     renderEmpleos(data.empresas || []);
@@ -1199,7 +1199,7 @@ async function toggleEmpleoDetail(slug, row) {
   if (detail.innerHTML) return; // ya cargado
   detail.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">Cargando...</div>';
   try {
-    const res  = await fetch('/empleos/empresa/' + slug);
+    const res  = await apiFetch('/empleos/empresa/' + slug);
     const data = await res.json();
     const proyectos = data.proyectos || [];
     if (!proyectos.length) {
@@ -1230,7 +1230,7 @@ async function toggleEmpleoDetail(slug, row) {
 
 async function checkSession() {
   const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
-  const hasSession = !!(session.username);
+  const hasSession = !!(session.token);
   isLoggedIn = hasSession;
 
   if (hasSession) {
@@ -1240,7 +1240,7 @@ async function checkSession() {
 
     if (!fromOnboarding && companyKey !== 'default') {
       try {
-        const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
+        const res = await apiFetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
         const data = await res.json();
         if (!data.onboarding_done && window.location.pathname === '/') {
           window.location.href = '/onboarding.html';
@@ -1266,7 +1266,7 @@ async function loadPersonalizedScores() {
   const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
   const companyKey = session.company_key || 'default';
   try {
-    const res = await fetch(`/ai/fits?company_key=${encodeURIComponent(companyKey)}&min_score=1&limit=500`);
+    const res = await apiFetch(`/ai/fits?company_key=${encodeURIComponent(companyKey)}&min_score=1&limit=500`);
     const data = await res.json();
     const fits = data.fits || data.items || [];
     if (!fits.length) return;
@@ -1479,14 +1479,7 @@ function resetSession() {
   localStorage.removeItem('stratmap_prefs');
   localStorage.removeItem('stratmap_services');
   localStorage.removeItem('stratmap_session');
-  isLoggedIn = false;
-  currentSort.by = 'date';
-  currentSort.dir = 'desc';
-  updateScoreVisibility();
-  updateUserMenuState();
-  loadMandantes();
-  toggleUserMenu();
-  load();
+  window.location.href = '/login.html';
 }
 
 function updateUserMenuState() {
