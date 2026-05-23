@@ -51,6 +51,25 @@ def run_rss_ingest():
         logger.warning("rss generico failed", extra={"err": str(e)})
         summary["feeds"]["rss_generico_error"] = str(e)
 
+    # 3. Scrapers minería-específicos que antes solo corrían en sea_ingest.main()
+    #    (cada 24h). Ahora corren también cada 6h para mejor refresh de noticias.
+    specific_scrapers = [
+        ("infomineria",   "connectors.infomineria",   "fetch_infomineria",   100),
+        ("mundo_mineria", "connectors.mundo_mineria", "fetch_mundo_mineria", 100),
+        ("lithium_chile", "connectors.lithium_chile", "fetch_lithium_chile",  30),
+    ]
+    for name, mod_path, fn_name, lim in specific_scrapers:
+        try:
+            mod = __import__(mod_path, fromlist=[fn_name])
+            items = getattr(mod, fn_name)(limit=lim)
+            if items:
+                db.upsert_opportunities(items)
+            summary["feeds"][name] = len(items)
+            total_inserted += len(items)
+        except Exception as e:
+            logger.warning(f"{name} failed", extra={"err": str(e)})
+            summary["feeds"][f"{name}_error"] = str(e)
+
     # Pasada de deduplicación post-ingest. Idempotente, marca extras como
     # is_duplicate=TRUE para que las queries de listado los oculten.
     try:

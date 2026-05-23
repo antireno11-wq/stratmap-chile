@@ -121,12 +121,15 @@ def is_mining_relevant(title: str, description: str = "", source: str = "") -> b
     # Positivo fuerte sobrevive
     if has_strong_pos:
         return True
-    # Fuentes mineras especificas pasan aunque no encuentren keyword
+    # Fuentes mineras/industriales específicas: pasan sin keyword obvio porque
+    # su sitio entero es minería/energía/infraestructura.
     mining_specific = {
-        "portal minero", "minería chilena", "mineria chilena",
-        "cochilco noticias", "cochilco", "infomineria",
-        "mundo minería", "mundo mineria", "lithium chile",
-        "revista ei", "revista electricidad", "cchc",
+        "portal minero", "minería chilena", "mineria chilena", "mch online",
+        "cochilco noticias", "cochilco", "reporte minero",
+        "nueva minería y energía", "piso exploración",
+        "mining.com", "mining technology", "construcción minera",
+        "infomineria", "mundo minería", "mundo mineria", "lithium chile",
+        "revista ei", "revista electricidad", "energía estratégica", "cchc",
     }
     if src_l in mining_specific:
         return True
