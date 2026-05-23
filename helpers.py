@@ -3,6 +3,7 @@ import logging
 import traceback
 
 import db
+from mining_filters import is_mining_relevant
 
 logger = logging.getLogger("stratmap.helpers")
 
@@ -29,19 +30,18 @@ def run_rss_ingest():
         summary["feeds"]["rss_mineria_error"] = str(e)
 
     # 2. Feeds genéricos (rss): BioBioChile, Emol, Radio U.de Chile, La Tercera.
-    #    Filtramos por keywords mineras para no llenar la BD de ruido.
+    #    Filtramos via mining_filters.is_mining_relevant() — mejor cobertura que
+    #    keyword-list inline (80+ términos, lista negativa para ruido).
     try:
         from connectors.rss import fetch_rss
         items = fetch_rss(limit=200)
-        MINING_KW = [
-            'mina', 'minera', 'minería', 'cobre', 'litio', 'oro', 'plata', 'molibdeno',
-            'codelco', 'bhp', 'antofagasta', 'escondida', 'teck', 'collahuasi', 'enami',
-            'atacama', 'tarapacá', 'exploración', 'yacimiento', 'faena',
-        ]
         filtered = [
             i for i in items
-            if any(kw in (i.get('title', '') + i.get('raw', {}).get('description', '')).lower()
-                   for kw in MINING_KW)
+            if is_mining_relevant(
+                i.get("title", ""),
+                (i.get("raw") or {}).get("description", ""),
+                i.get("source", ""),
+            )
         ]
         if filtered:
             db.upsert_opportunities(filtered)
@@ -50,6 +50,14 @@ def run_rss_ingest():
     except Exception as e:
         logger.warning("rss generico failed", extra={"err": str(e)})
         summary["feeds"]["rss_generico_error"] = str(e)
+
+    # Pasada de deduplicación post-ingest. Idempotente, marca extras como
+    # is_duplicate=TRUE para que las queries de listado los oculten.
+    try:
+        dup_count = db.mark_duplicates()
+        summary["duplicates_marked"] = dup_count
+    except Exception as e:
+        logger.warning("mark_duplicates failed", extra={"err": str(e)})
 
     summary["total_inserted"] = total_inserted
     return summary

@@ -22,6 +22,113 @@ def get_conn():
     return psycopg.connect(_db_url(), row_factory=dict_row, connect_timeout=8)
 
 
+# ── Normalización de nombres de empresas ──────────────────────────────────────
+# Mismas variantes que aparecen en SEA/SIGEX/Codelco/MOP con razones sociales
+# largas. Mapeamos a una forma canónica (la versión "marca") para no fragmentar
+# el ranking de mandantes y los joins por empresa.
+_COMPANY_ALIASES = {
+    # BHP — Escondida, Spence
+    "bhp":                                                "BHP Chile",
+    "bhp chile":                                          "BHP Chile",
+    "bhp chile inc":                                      "BHP Chile",
+    "bhp chile inc.":                                     "BHP Chile",
+    "bhp chile ltda":                                     "BHP Chile",
+    "bhp billiton":                                       "BHP Chile",
+    "minera escondida":                                   "Escondida",
+    "minera escondida limitada":                          "Escondida",
+    "escondida":                                          "Escondida",
+    "minera spence":                                      "Spence",
+    "minera spence s.a.":                                 "Spence",
+    "spence":                                             "Spence",
+    # AMSA — Pelambres, Centinela, Zaldívar
+    "antofagasta minerals":                               "Antofagasta Minerals",
+    "antofagasta minerals s.a.":                          "Antofagasta Minerals",
+    "amsa":                                               "Antofagasta Minerals",
+    "minera los pelambres":                               "Los Pelambres",
+    "los pelambres":                                      "Los Pelambres",
+    "pelambres":                                          "Los Pelambres",
+    "minera centinela":                                   "Centinela",
+    "centinela":                                          "Centinela",
+    "minera zaldivar":                                    "Zaldívar",
+    "minera zaldívar":                                    "Zaldívar",
+    "compania minera zaldivar":                           "Zaldívar",
+    "compañía minera zaldívar":                           "Zaldívar",
+    # Codelco
+    "codelco":                                            "Codelco",
+    "corporacion nacional del cobre":                     "Codelco",
+    "corporación nacional del cobre":                     "Codelco",
+    "corporacion nacional del cobre de chile":            "Codelco",
+    "corporación nacional del cobre de chile":            "Codelco",
+    "codelco chile":                                      "Codelco",
+    # Collahuasi
+    "compania minera dona ines de collahuasi":            "Collahuasi",
+    "compañía minera doña inés de collahuasi":            "Collahuasi",
+    "doña inés de collahuasi scm":                        "Collahuasi",
+    "minera collahuasi":                                  "Collahuasi",
+    "collahuasi":                                         "Collahuasi",
+    # Teck
+    "compania minera teck quebrada blanca":               "Quebrada Blanca",
+    "compañía minera teck quebrada blanca":               "Quebrada Blanca",
+    "teck quebrada blanca":                               "Quebrada Blanca",
+    "quebrada blanca":                                    "Quebrada Blanca",
+    "teck resources":                                     "Teck",
+    "teck resources chile":                               "Teck",
+    "teck chile":                                         "Teck",
+    "teck":                                               "Teck",
+    "compania minera carmen de andacollo":                "Carmen de Andacollo",
+    "compañía minera carmen de andacollo":                "Carmen de Andacollo",
+    "carmen de andacollo":                                "Carmen de Andacollo",
+    "teck andacollo":                                     "Carmen de Andacollo",
+    "minera andacollo":                                   "Carmen de Andacollo",
+    # Candelaria / Lundin
+    "minera candelaria":                                  "Candelaria",
+    "candelaria":                                         "Candelaria",
+    "scm minera lumina copper chile":                     "Candelaria",
+    "lumina copper":                                      "Candelaria",
+    "lundin mining":                                      "Lundin Mining",
+    # SQM
+    "sqm":                                                "SQM",
+    "sqm s.a.":                                           "SQM",
+    "sociedad quimica y minera de chile":                 "SQM",
+    "sociedad química y minera de chile":                 "SQM",
+    # ENAMI
+    "enami":                                              "ENAMI",
+    "empresa nacional de mineria":                        "ENAMI",
+    "empresa nacional de minería":                        "ENAMI",
+    # MOP
+    "ministerio de obras publicas":                       "MOP",
+    "ministerio de obras públicas":                       "MOP",
+    "direccion general de obras publicas":                "MOP",
+    "dirección general de obras públicas":                "MOP",
+    "mop":                                                "MOP",
+    # Anglo American
+    "anglo american":                                     "Anglo American",
+    "anglo american sur":                                 "Anglo American",
+    "anglo american norte":                               "Anglo American",
+}
+
+
+def normalize_company(name: Optional[str]) -> Optional[str]:
+    """Devuelve la forma canónica de un nombre de empresa, o el input
+    limpiado (trim + collapse spaces) si no hay match. None si vacío."""
+    if not name or not name.strip():
+        return None
+    cleaned = " ".join(name.strip().split())  # collapse whitespace
+    key = cleaned.lower()
+    if key in _COMPANY_ALIASES:
+        return _COMPANY_ALIASES[key]
+    # Sin sufijos legales para reintentar
+    stripped = key
+    for suf in (" s.a.", " s.a", " spa", " ltda", " ltda.", " scm", " ltda ",
+                " s.a. ", " sa ", " inc.", " inc ", " inc"):
+        if stripped.endswith(suf):
+            stripped = stripped[:-len(suf)].rstrip()
+            break
+    if stripped != key and stripped in _COMPANY_ALIASES:
+        return _COMPANY_ALIASES[stripped]
+    return cleaned
+
+
 def init_db_safe() -> None:
     try:
         init_db()
@@ -74,6 +181,15 @@ def init_db() -> None:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS strategy TEXT NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;")
+            # Deduplicación: dedup_key = hash de company+title (normalizado) +
+            # source-category. Cuando dos fuentes reportan lo mismo (Portal Minero
+            # + COCHILCO + DF cubriendo la misma noticia), dedup_key empareja.
+            # is_duplicate=TRUE en las copias para que las queries de listado las
+            # filtren.
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS dedup_key TEXT NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_duplicate BOOLEAN NOT NULL DEFAULT FALSE;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_dedup_key ON opportunities(dedup_key) WHERE dedup_key IS NOT NULL;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_is_duplicate ON opportunities(is_duplicate) WHERE is_duplicate;")
         conn.commit()
 
 
@@ -578,6 +694,58 @@ def recalc_all_scores() -> Dict[str, Any]:
     }
 
 
+def _compute_dedup_key(item: Dict[str, Any]) -> Optional[str]:
+    """Calcula dedup_key = sha1 de title-normalizado + company-canónica.
+
+    Cuando dos sources reportan la misma noticia/proyecto, los títulos suelen
+    coincidir tras normalizar (lowercase, sin signos). Si no, esto no agrupa
+    — es una dedup conservadora.
+    """
+    import hashlib
+    import re
+    title = (item.get("title") or "").lower().strip()
+    if not title:
+        return None
+    # Quitar signos, números sueltos y collapsar espacios
+    title_n = re.sub(r"[^a-záéíóúñü\s]", " ", title)
+    title_n = " ".join(title_n.split())
+    company = (item.get("company") or "").lower().strip()
+    raw = f"{title_n}|{company}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def mark_duplicates() -> int:
+    """Marca como is_duplicate=TRUE las filas con dedup_key compartido salvo
+    una "ganadora" (mayor score, desempate por id menor). Idempotente.
+
+    Devuelve cantidad de filas marcadas como duplicadas en esta corrida.
+    """
+    sql = """
+    WITH ranked AS (
+        SELECT id, dedup_key,
+               ROW_NUMBER() OVER (
+                   PARTITION BY dedup_key
+                   ORDER BY score DESC, id ASC
+               ) AS rn
+        FROM opportunities
+        WHERE dedup_key IS NOT NULL
+    ),
+    targets AS (
+        SELECT id FROM ranked WHERE rn > 1
+    )
+    UPDATE opportunities o
+    SET is_duplicate = TRUE
+    FROM targets t
+    WHERE o.id = t.id AND o.is_duplicate = FALSE;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            n = cur.rowcount
+        conn.commit()
+    return n
+
+
 def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     inserted = 0
     updated = 0
@@ -585,11 +753,11 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     INSERT INTO opportunities
       (source, title, url, company, contractor, industry, region, phase, score,
        entry, raw, published_at, created_at, updated_at,
-       jobs_count, signal_score, signal_detail, last_signal_at)
+       jobs_count, signal_score, signal_detail, last_signal_at, dedup_key)
     VALUES
       (%(source)s, %(title)s, %(url)s, %(company)s, %(contractor)s, %(industry)s,
        %(region)s, %(phase)s, %(score)s, %(entry)s, %(raw)s, %(published_at)s, NOW(), NOW(),
-       %(jobs_count)s, %(signal_score)s, %(signal_detail)s, %(last_signal_at)s)
+       %(jobs_count)s, %(signal_score)s, %(signal_detail)s, %(last_signal_at)s, %(dedup_key)s)
     ON CONFLICT (url) DO UPDATE SET
       source = EXCLUDED.source, title = EXCLUDED.title, company = EXCLUDED.company,
       contractor = EXCLUDED.contractor, industry = EXCLUDED.industry, region = EXCLUDED.region,
@@ -600,6 +768,7 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
       signal_detail = EXCLUDED.signal_detail,
       last_signal_at = COALESCE(EXCLUDED.last_signal_at, opportunities.last_signal_at),
       published_at = CASE WHEN EXCLUDED.published_at IS NOT NULL THEN EXCLUDED.published_at ELSE opportunities.published_at END,
+      dedup_key = COALESCE(EXCLUDED.dedup_key, opportunities.dedup_key),
       is_active = TRUE,
       updated_at = NOW()
     RETURNING (xmax = 0) AS inserted;
@@ -611,6 +780,12 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
         it.setdefault("published_at", None)
         it.setdefault("jobs_count", 0); it.setdefault("signal_score", 0)
         it.setdefault("signal_detail", None); it.setdefault("last_signal_at", None)
+
+        # Normalizar nombre de empresa (forma canónica para joins/rankings)
+        it["company"] = normalize_company(it.get("company"))
+
+        # Calcular dedup_key (lo usa mark_duplicates() post-ingest)
+        it["dedup_key"] = _compute_dedup_key(it)
 
         # ── Calcular score automáticamente (salvo manual override > 0) ────────
         existing_score = it.get("score") or 0
@@ -717,9 +892,10 @@ def list_opportunities(
     conditions: List[str] = []
     params: Dict[str, Any] = {"limit": limit}
 
-    # Por defecto sólo mostramos oportunidades activas
+    # Por defecto sólo mostramos oportunidades activas + canónicas (no duplicadas)
     if not include_inactive:
         conditions.append("o.is_active IS NOT FALSE")
+        conditions.append("o.is_duplicate = FALSE")
 
     if q:
         conditions.append(

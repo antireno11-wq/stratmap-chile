@@ -7,7 +7,7 @@ import db
 from deps import get_current_user, require_admin
 from plans import features_for
 from schemas import IngestPayload
-from source_categories import NOTICIA_SOURCES
+from source_categories import NOTICIA_SOURCES, category_of
 
 router = APIRouter(tags=["opportunities"])
 
@@ -45,6 +45,7 @@ def opportunities(
     result = []
     for row in rows:
         r = dict(row)
+        r["category"] = category_of(r.get("source", ""))
         for f in ["created_at", "updated_at", "last_signal_at"]:
             if r.get(f):
                 r[f] = r[f].isoformat()
@@ -62,7 +63,7 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
                     SELECT id, source, title, url, company, industry, region,
                            score, published_at, created_at
                     FROM opportunities
-                    WHERE source = ANY(%s)
+                    WHERE source = ANY(%s) AND is_duplicate = FALSE
                     ORDER BY COALESCE(published_at, created_at) DESC NULLS LAST
                     LIMIT %s
                 """, (NOTICIA_SOURCES, limit))
@@ -100,6 +101,7 @@ def feed(user=Depends(get_current_user)):
                 if kw.lower() in (r.get("title") or "").lower():
                     boost += 15
         r["feed_score"] = (r.get("score") or 0) + boost
+        r["category"] = category_of(r.get("source", ""))
         for f in ["created_at", "updated_at"]:
             if r.get(f):
                 r[f] = r[f].isoformat()

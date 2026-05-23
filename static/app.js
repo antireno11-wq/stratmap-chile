@@ -1,17 +1,31 @@
+// Las categorías canónicas vienen como `category` en cada row del backend
+// (computadas via source_categories.py). Mantenemos sets como fallback
+// para rows viejas que todavía no traen `category`.
 const NEWS_SOURCES = new Set([
   "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
   "Revista EI","Radio U. de Chile","Radio Universidad de Chile","RSS",
-  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores"
+  "Lithium Chile","InfoMineria","Mundo Minería","CChC","Revista Electricidad","La Tercera"
 ]);
-
-// Fuentes de empleos — aparecen en Empleos activos, NUNCA en Noticias del Sector
 const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers","Lundin Careers","Collahuasi Careers","Teck Careers"]);
+const LICITACION_SOURCES_SET = new Set(["ENAMI","Codelco","MOP","ChileCompra","SICEP","Ariba Codelco","MLP Proveedores"]);
+const CONCESION_SOURCES_SET  = new Set(["SIGEX"]);
+const PROSPECTO_SOURCES_SET  = new Set(["SEA","sea"]);
 
-// Fuentes que SIEMPRE son proyectos, nunca noticias
-const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","SIGEX","ENAMI","Codelco"]);
-// SEA aparece solo como señal (⚡), no como proyecto en la tabla
-const SEA_SOURCES = new Set(["sea","SEA"]);
+function getCategory(item) {
+  if (item.category) return item.category;
+  const s = item.source || "";
+  if (EMPLEOS_SOURCES.has(s))     return "empleo";
+  if (LICITACION_SOURCES_SET.has(s)) return "licitacion";
+  if (CONCESION_SOURCES_SET.has(s))  return "concesion";
+  if (PROSPECTO_SOURCES_SET.has(s))  return "prospecto";
+  if (NEWS_SOURCES.has(s))           return "noticia";
+  if ((item.phase || "").toLowerCase() === "noticia") return "noticia";
+  return "otros";
+}
+
+// Filtro de categoría activo (sidebar). null = mostrar todas las categorías.
+let activeCategory = null;
 
 const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
 
@@ -36,19 +50,11 @@ const NON_MINING_KEYWORDS = [
 ];
 
 function isSea(item) {
-  const src = (item.source || "").toLowerCase();
-  // Solo ocultar items genuinamente del SEA (evaluación ambiental)
-  // ENAMI, Codelco, InfoMineria, etc. tienen su propio source
-  return src === "sea" && (item.phase || "").toLowerCase() !== "licitación";
+  return getCategory(item) === "prospecto";
 }
 
 function isNews(item) {
-  const src = item.source || "";
-  if (isSea(item)) return false;
-  if (PROJECT_SOURCES.has(src)) return false;
-  if (EMPLEOS_SOURCES.has(src)) return false;  // empleos van a sección propia
-  if (item.phase === "Noticia") return true;
-  return NEWS_SOURCES.has(src);
+  return getCategory(item) === "noticia";
 }
 
 function isRelevantNews(item) {
@@ -467,11 +473,10 @@ async function openDrawer(type, value) {
     ? allItems.filter(i => isSea(i) && seaMatchesCompany(i.company, value) && (i.company||"") !== value)
     : [];
 
-  const LICIT_SRC = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores','Ariba Codelco','Chile Compra','MOP','COCHILCO']);
-  const projects    = items.filter(i => !isNews(i));
-  const licitaciones = projects.filter(i =>  LICIT_SRC.has(i.source));
-  const concesiones  = projects.filter(i => !LICIT_SRC.has(i.source));
-  const news = items.filter(i => isNews(i));
+  const projects     = items.filter(i => !isNews(i));
+  const licitaciones = projects.filter(i => getCategory(i) === "licitacion");
+  const concesiones  = projects.filter(i => getCategory(i) === "concesion");
+  const news         = items.filter(i => isNews(i));
 
   const scores = licitaciones.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
   const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
@@ -813,14 +818,17 @@ function renderPagination(containerId, total, currentPg, onPage) {
 }
 
 function renderFiltered() {
-  const filtered = applyFilters(allItems);
+  let filtered = applyFilters(allItems);
 
-  // Separar fuentes: licitaciones (alta señal comercial) vs concesiones SIGEX
-  const LICITACION_SOURCES = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores']);
-  const allProjects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
+  // Filtro de categoría desde sidebar (Radar/Licitaciones/Concesiones/etc.)
+  if (activeCategory) {
+    filtered = filtered.filter(i => getCategory(i) === activeCategory);
+  }
 
-  let licitaciones = allProjects.filter(i => LICITACION_SOURCES.has(i.source));
-  let concesiones  = allProjects.filter(i => !LICITACION_SOURCES.has(i.source));
+  // Separación por categoría (ya viene del backend en row.category)
+  const allProjects  = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
+  let licitaciones   = allProjects.filter(i => getCategory(i) === "licitacion");
+  let concesiones    = allProjects.filter(i => getCategory(i) === "concesion");
 
   // Apply region quick-filter chip to both
   if (window._activeRegion) {
@@ -854,6 +862,10 @@ function renderFiltered() {
   if (scLic) scLic.textContent = licitaciones.length;
   el('sc-projects').textContent = concesiones.length;
   el('sc-news').textContent = news.length;
+  // sc-prospectos: prospectos SEA actuales en allItems (no en filtered, para
+  // que el contador no varíe al cambiar la categoría activa)
+  const scProsp = document.getElementById('sc-prospectos');
+  if (scProsp) scProsp.textContent = allItems.filter(i => getCategory(i) === "prospecto").length;
 
   // Render tables
   const tbodyLic = document.getElementById('tbody-licitaciones');
@@ -1355,18 +1367,18 @@ document.addEventListener("DOMContentLoaded", () => {
   el("drawer-close").addEventListener("click", closeDrawer);
   el("drawer-overlay").addEventListener("click", closeDrawer);
 
-  const sidebarItems = document.querySelectorAll(".sidebar-item");
+  // Sidebar de categorías: data-cat="" = mostrar todo, data-cat="licitacion"
+  // filtra a esa categoría. Solo aplica a items con data-cat definido (los
+  // links a otras páginas como Pipeline/Mapa/Mandantes/Preferencias no tienen).
+  const sidebarItems = document.querySelectorAll(".sidebar-item[data-cat]");
   sidebarItems.forEach(item => {
     item.addEventListener("click", () => {
       sidebarItems.forEach(i => i.classList.remove("active"));
       item.classList.add("active");
+      const cat = item.getAttribute("data-cat") || "";
+      activeCategory = cat || null;
+      renderFiltered();
     });
-  });
-  if (sidebarItems[1]) sidebarItems[1].addEventListener("click", () => {
-    el("tbody-projects")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
-  });
-  if (sidebarItems[2]) sidebarItems[2].addEventListener("click", () => {
-    el("tbody-news")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
   });
 
   load();

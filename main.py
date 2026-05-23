@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
     # - SEA: minúsculas → 'SEA'
     # - Chile Compra (con espacio) → ChileCompra
     # - MOP marcadas mal como 'Minería' → 'Infraestructura'
+    # - Nombres de empresas a forma canónica via db.normalize_company()
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
@@ -90,8 +91,29 @@ async def lifespan(app: FastAPI):
                 n_mop = cur.rowcount
             conn.commit()
         if n_sea or n_cc or n_mop:
-            logger.info("legacy data normalized",
+            logger.info("legacy source/industry normalized",
                         extra={"sea_lowercase": n_sea, "chile_compra": n_cc, "mop_industry": n_mop})
+
+        # Backfill de nombres de empresa: tomamos los distinct y actualizamos
+        # los que cambian al pasarlos por normalize_company. Ligero (1 query
+        # por nombre distinto) y solo afecta filas reales que tengan company.
+        with db.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT DISTINCT company FROM opportunities WHERE company IS NOT NULL AND TRIM(company) != ''")
+                rows = cur.fetchall()
+                n_norm = 0
+                for r in rows:
+                    raw = r["company"]
+                    norm = db.normalize_company(raw)
+                    if norm and norm != raw:
+                        cur.execute(
+                            "UPDATE opportunities SET company = %s WHERE company = %s",
+                            (norm, raw),
+                        )
+                        n_norm += cur.rowcount
+            conn.commit()
+        if n_norm:
+            logger.info("companies normalized", extra={"rows": n_norm})
     except Exception as e:
         logger.warning("legacy normalize failed", extra={"err": str(e)})
 

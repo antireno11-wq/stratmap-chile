@@ -2,34 +2,16 @@
 sea_ingest.py — orquestador principal de ingesta
 """
 from db import upsert_opportunities, init_db_safe
+from mining_filters import is_mining_relevant as _is_mining_relevant
 
-MINING_KEYWORDS = [
-    "mina","minera","minero","cobre","litio","codelco","bhp","sqm","escondida",
-    "collahuasi","relave","mineral","faena","concentradora","sernageomin",
-    "cochilco","antofagasta","atacama","oro","plata","hierro","molibdeno",
-    "exploración","yacimiento","planta","proyecto minero","licitación",
-    "contrato","inversión","ampliación"
-]
-NON_MINING_KEYWORDS = [
-    "fútbol","futbol","deporte","partido","gol","jugador","torneo","baleado",
-    "disparado","pelea","riña","ketamina","droga","detenido","imputado",
-    "alumbrado público","vertedero municipal","dólar cierra","bolsa de",
-    "premundi","sub-20","sede deportiva","concesionado hospital"
-]
 
 def is_mining_relevant(item: dict) -> bool:
-    """Filtra items claramente no relacionados con minería."""
-    title = (item.get("title") or "").lower()
-    # Rechazar si tiene keyword no minera
-    if any(kw in title for kw in NON_MINING_KEYWORDS):
-        return False
-    # Para noticias RSS (fuentes genéricas), exigir al menos un keyword minero
-    generic_sources = {"biobiochile","radio universidad de chile","radio u. de chile",
-                       "cooperativa","emol","diario financiero"}
-    src = (item.get("source") or "").lower()
-    if src in generic_sources:
-        return any(kw in title for kw in MINING_KEYWORDS)
-    return True
+    """Wrapper compatible: extrae campos del dict y delega en mining_filters."""
+    return _is_mining_relevant(
+        item.get("title") or "",
+        (item.get("raw") or {}).get("description", "") if isinstance(item.get("raw"), dict) else "",
+        item.get("source") or "",
+    )
 
 def ingest(items, label):
     if items:
