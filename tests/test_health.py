@@ -6,11 +6,11 @@ def test_health_shape(client):
     r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
-    for key in ("status", "db_ok", "version", "uptime_seconds", "scheduler", "last_scrape_by_source"):
+    for key in ("status", "db_ok", "version", "uptime_seconds", "worker", "last_scrape_by_source"):
         assert key in body, f"missing key: {key}"
     assert body["status"] == "ok"
     assert isinstance(body["uptime_seconds"], int)
-    assert isinstance(body["scheduler"], dict)
+    assert isinstance(body["worker"], dict)
 
 
 def test_health_version_from_env(monkeypatch, client):

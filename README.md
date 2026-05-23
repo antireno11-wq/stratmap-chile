@@ -144,7 +144,11 @@ El scheduler en `main.py` corre RSS cada 6h y AI scorer + expire-stale cada 24h 
 4. **Deploy.** El build usa `nixpacks.toml` (Python 3.12, `pip install -r requirements.txt`, `playwright install chromium --with-deps`). El comando de arranque sale del `Procfile`.
 5. **Crear primer usuario** via `POST /setup/first-user` (ver arriba).
 6. **Borrar `ALLOW_SETUP`** de las variables.
-7. **Worker:** crear un segundo servicio en el mismo proyecto apuntando al mismo repo, con `dockerfile.worker` como build (incluye Playwright + Chromium para scrapers JS-heavy).
+7. **Worker:** crear un segundo servicio en el mismo proyecto apuntando al mismo repo, con `dockerfile.worker` como build (incluye Playwright + Chromium para scrapers JS-heavy). El comando de arranque sale del `Procfile`:
+   - `web: uvicorn main:app --host 0.0.0.0 --port 8080`
+   - `worker: python worker.py` — corre el scheduler RSS cada 6h + full ingest + AI scorer + expire-stale cada 24h.
+
+   La web no corre tareas de background: si la escalás a >1 instancia, no se duplican scrapes. `/health` infiere liveness del worker desde `MAX(updated_at)` en `opportunities` (campo `worker.stale=true` si pasaron >8h sin scrape).
 
 ## Migraciones (Alembic)
 

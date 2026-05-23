@@ -159,7 +159,8 @@ def run_signals():
     except Exception as e:
         print(f"[signals] error: {e}")
 
-if __name__ == "__main__":
+def main() -> None:
+    """Pipeline completo de ingesta. Llamable desde worker.py o como CLI."""
     print("[ingest] Iniciando...")
     init_db_safe()
     run_sea()
@@ -177,26 +178,25 @@ if __name__ == "__main__":
     run_signals()
     print("[ingest] Ingesta completa")
 
-    # ── Scoring IA personalizado ───────────────────────────────────────────
-    # Corre después de cada ingesta para mantener scores actualizados
-    print("[ingest] Iniciando scoring IA...")
+    # ── Scoring IA personalizado por usuario ──────────────────────────────────
+    # Corre después de cada ingesta para mantener scores actualizados.
+    print("[ingest] Iniciando scoring IA por usuario...")
     try:
+        import db as _db
         import ai_matcher
-        with db.get_conn() as conn:
+        with _db.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT company_key FROM service_profiles
+                    SELECT user_id FROM service_profiles
                     WHERE onboarding_done = TRUE
                       AND services IS NOT NULL AND services != '[]'
-                      AND company_key IS NOT NULL
                 """)
-                rows = cur.fetchall()
-        keys = [r[0] for r in rows if r[0]]
-        if keys:
-            print(f"[ingest] Scoring IA para {len(keys)} empresa(s): {keys}")
-            for key in keys:
-                result = ai_matcher.run(company_key=key, limit=500)
-                print(f"[ingest] {key}: {result}")
+                user_ids = [r["user_id"] for r in cur.fetchall()]
+        if user_ids:
+            print(f"[ingest] Scoring IA para {len(user_ids)} usuario(s): {user_ids}")
+            for uid in user_ids:
+                result = ai_matcher.run(user_id=uid, limit=500)
+                print(f"[ingest] user_id={uid}: {result}")
         else:
             print("[ingest] Sin perfiles con onboarding completo, skip scoring IA")
     except Exception as e:
@@ -258,3 +258,7 @@ if __name__ == "__main__":
         import traceback; traceback.print_exc()
 
     print("[ingest] Listo")
+
+
+if __name__ == "__main__":
+    main()

@@ -15,12 +15,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 import db
-from db import db_health, init_db_safe, recalc_all_scores, expire_stale_opportunities
-from helpers import run_rss_ingest
+from db import db_health, init_db_safe, recalc_all_scores
 
 
-# Heartbeat del scheduler: timestamp del último ciclo completo. Lo lee /health.
-_scheduler_last_run_ts: float = 0.0
 _app_started_ts: float = time.time()
 from routers import (
     auth as auth_router,
@@ -35,44 +32,9 @@ from routers import (
 )
 
 
-# ── Background scheduler ──────────────────────────────────────────────────────
-
-async def _rss_scheduler():
-    """Corre RSS cada 6h y tareas diarias (ai scorer + expire stale) cada 24h."""
-    global _scheduler_last_run_ts
-    await asyncio.sleep(10)
-    cycle = 0
-    while True:
-        print("[scheduler] Corriendo RSS ingest...")
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, run_rss_ingest)
-        print(f"[scheduler] RSS done: {result}")
-        _scheduler_last_run_ts = time.time()
-
-        cycle += 1
-        if cycle % 4 == 0:
-            print("[scheduler] Corriendo AI scorer zona gris...")
-            try:
-                import ai_scorer
-                ai_result = await loop.run_in_executor(
-                    None, lambda: ai_scorer.run(score_min=45, score_max=65, batch_size=20, max_batches=3)
-                )
-                print(f"[scheduler] AI scorer done: {ai_result}")
-            except Exception as e:
-                print(f"[scheduler] AI scorer error: {e}")
-
-            print("[scheduler] Expirando licitaciones obsoletas...")
-            try:
-                expire_result = await loop.run_in_executor(None, expire_stale_opportunities)
-                print(f"[scheduler] Expire done: {expire_result}")
-            except Exception as e:
-                print(f"[scheduler] Expire error: {e}")
-
-        await asyncio.sleep(6 * 3600)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Lifespan del proceso web. NO arranca scheduler — eso vive en worker.py."""
     init_db_safe()
     try:
         db.init_ai_db()
@@ -121,8 +83,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[startup] Warning reset news scores: {e}")
 
-    asyncio.create_task(_rss_scheduler())
-    print("[startup] RSS scheduler iniciado (cada 6h)")
+    print("[startup] web listo. Scheduler corre en proceso worker separado (ver Procfile + worker.py).")
     yield
 
 
@@ -185,12 +146,14 @@ async def rate_limit_middleware(request: Request, call_next):
 
 @app.get("/health")
 def health():
-    """Healthcheck robusto: DB, último scrape por fuente, heartbeat scheduler, build SHA."""
+    """Healthcheck: DB, último scrape por fuente, liveness del worker (derivada
+    del MAX(updated_at) en opportunities, ya que el scheduler corre en worker.py
+    y no comparte estado de proceso con la web)."""
     now = time.time()
     db_ok, db_msg = db_health()
 
-    # Último scrape exitoso por fuente (MAX(updated_at) por source en opportunities)
     last_scrape: Dict[str, str] = {}
+    most_recent_scrape_ts: float = 0.0
     if db_ok:
         try:
             with db.get_conn() as conn:
@@ -205,22 +168,20 @@ def health():
                     for r in cur.fetchall():
                         if r.get("last"):
                             last_scrape[r["source"]] = r["last"].isoformat()
+                            most_recent_scrape_ts = max(most_recent_scrape_ts, r["last"].timestamp())
         except Exception as e:
             last_scrape = {"error": f"{type(e).__name__}: {e}"}
 
-    # Scheduler heartbeat
-    if _scheduler_last_run_ts > 0:
-        scheduler = {
-            "last_run": _scheduler_last_run_ts,
-            "seconds_ago": int(now - _scheduler_last_run_ts),
-            "stale": (now - _scheduler_last_run_ts) > 8 * 3600,  # > 8h sin correr
+    # Liveness del worker: si el último scrape (cualquier fuente) fue hace >8h,
+    # asumimos que el worker está caído. Antes de 8h consideramos sano.
+    if most_recent_scrape_ts > 0:
+        worker = {
+            "last_scrape_ts": most_recent_scrape_ts,
+            "seconds_ago": int(now - most_recent_scrape_ts),
+            "stale": (now - most_recent_scrape_ts) > 8 * 3600,
         }
     else:
-        # Tolerar primeros 15 min después del arranque (el scheduler hace sleep(10))
-        scheduler = {
-            "last_run": None,
-            "warming_up": (now - _app_started_ts) < 900,
-        }
+        worker = {"last_scrape_ts": None, "warming_up": True}
 
     return {
         "status": "ok",
@@ -228,7 +189,7 @@ def health():
         "db_msg": db_msg,
         "version": os.getenv("RAILWAY_GIT_COMMIT_SHA", "unknown")[:8],
         "uptime_seconds": int(now - _app_started_ts),
-        "scheduler": scheduler,
+        "worker": worker,
         "last_scrape_by_source": last_scrape,
     }
 
