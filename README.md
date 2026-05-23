@@ -146,6 +146,40 @@ El scheduler en `main.py` corre RSS cada 6h y AI scorer + expire-stale cada 24h 
 6. **Borrar `ALLOW_SETUP`** de las variables.
 7. **Worker:** crear un segundo servicio en el mismo proyecto apuntando al mismo repo, con `dockerfile.worker` como build (incluye Playwright + Chromium para scrapers JS-heavy).
 
+## Migraciones (Alembic)
+
+El repo trae el scaffolding de Alembic (`alembic.ini` + `alembic/`) listo para activar, pero **todavía no maneja la DB de producción**. Hoy las migraciones siguen viviendo como `CREATE TABLE IF NOT EXISTS` + `ALTER ... ADD COLUMN IF NOT EXISTS` dentro de `db.init_*_db()`, que corren en el lifespan.
+
+### Cómo activar Alembic en prod (transición)
+
+1. **Stampear** la DB de prod con la revisión baseline (le decimos a Alembic "este es el estado actual"):
+
+   ```bash
+   DATABASE_URL=$PROD_DATABASE_URL alembic stamp 0001_baseline
+   ```
+
+2. **De aquí en más, todo cambio de schema nuevo va por Alembic:**
+
+   ```bash
+   alembic revision -m "agrego columna foo a contacts"
+   # editás la migración generada en alembic/versions/
+   DATABASE_URL=$LOCAL_DATABASE_URL alembic upgrade head     # probar local
+   DATABASE_URL=$PROD_DATABASE_URL alembic upgrade head      # aplicar en prod
+   ```
+
+3. **Cuando todos los cambios pendientes ya estén tracked por Alembic**, sacar las llamadas `init_*_db()` del `lifespan` y dejar solo `alembic upgrade head` corriendo via Railway pre-deploy command.
+
+Esta transición es opcional: el código actual funciona con o sin Alembic. El scaffolding está para que el primer cambio "post-baseline" sea fácil.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+Tests cubiertos: auth gates (parametrizados sobre 16 endpoints), rate limiter, scoring engine (`calc_score`, `_mandante_size`, etc.), shape de `/health`. CI corre `pytest` en cada push via `.github/workflows/test.yml`.
+
 ## Healthcheck
 
 `GET /health` (público, sin rate limit) devuelve:
