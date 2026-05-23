@@ -522,15 +522,14 @@ class ServiceProfilePayload(BaseModel):
     known_mandantes: List[str] = []
     onboarding_done: bool = False
 
-@app.get("/me/service-profile", dependencies=[Depends(get_current_user)])
-def get_service_profile_endpoint():
-    profile = db.get_service_profile("default")
+@app.get("/me/service-profile")
+def get_service_profile_endpoint(user=Depends(get_current_user)):
+    profile = db.get_service_profile(user["user_id"])
     return profile or {"company_name": None, "services": []}
 
-@app.put("/me/service-profile", dependencies=[Depends(get_current_user)])
-def update_service_profile(payload: ServiceProfilePayload):
+@app.put("/me/service-profile")
+def update_service_profile(payload: ServiceProfilePayload, user=Depends(get_current_user)):
     db.init_ai_db()
-    company_key = payload.company_key or "default"
     # Normalizar services: strings → {"name": str}, objetos → mantener
     def normalize_service(s):
         if isinstance(s, str): return {"name": s, "description": ""}
@@ -539,8 +538,8 @@ def update_service_profile(payload: ServiceProfilePayload):
         return {"name": str(s), "description": ""}
 
     profile = db.upsert_service_profile(
-        user_id=company_key,
-        company_key=company_key,
+        user_id=user["user_id"],
+        company_key=payload.company_key,
         company_name=payload.company_name or "",
         services=[normalize_service(s) for s in payload.services],
         regions=payload.regions or [],
@@ -1150,39 +1149,39 @@ def get_empleos_empresa(company_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/me/score-projects", dependencies=[Depends(get_current_user)])
-def score_projects(payload: dict):
+@app.post("/me/score-projects")
+def score_projects(payload: dict, user=Depends(get_current_user)):
     """
     Dispara scoring IA personalizado para todos los proyectos contra el perfil de la empresa.
     Corre en background — el frontend puede polling /ai/fits para ver cuando hay resultados.
     """
     import threading
-    company_key = payload.get("company_key", "default")
+    uid = user["user_id"]
 
     def _run():
         try:
             import ai_matcher
-            result = ai_matcher.run(company_key=company_key, limit=500)
+            result = ai_matcher.run(user_id=uid, limit=500)
             print(f"[score-projects] {result}")
         except Exception as e:
             import traceback; traceback.print_exc()
 
     threading.Thread(target=_run, daemon=True).start()
-    return {"ok": True, "msg": "Scoring IA iniciado en background", "company_key": company_key}
+    return {"ok": True, "msg": "Scoring IA iniciado en background"}
 
-@app.get("/me/profile", dependencies=[Depends(get_current_user)])
-def get_profile(company_key: str = "default"):
-    """Retorna el perfil completo incluyendo onboarding_done."""
-    profile = db.get_service_profile(company_key)
+@app.get("/me/profile")
+def get_profile(user=Depends(get_current_user)):
+    """Retorna el perfil completo del usuario logueado, incluyendo onboarding_done."""
+    profile = db.get_service_profile(user["user_id"])
     if not profile:
         return {"onboarding_done": False, "services": [], "company_name": None}
     return profile
 
-@app.get("/ai/fits", dependencies=[Depends(get_current_user)])
-def get_ai_fits(company_key: str = "default", min_score: int = 0, limit: int = 500):
-    """Retorna los scores IA calculados para la empresa."""
+@app.get("/ai/fits")
+def get_ai_fits(min_score: int = 0, limit: int = 500, user=Depends(get_current_user)):
+    """Retorna los scores IA calculados para el usuario logueado."""
     try:
-        fits = db.get_ai_fits(user_id=company_key, min_score=min_score, limit=limit)
+        fits = db.get_ai_fits(user_id=user["user_id"], min_score=min_score, limit=limit)
         return {"fits": fits, "total": len(fits)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2050,16 +2049,15 @@ def run_ai_scoring_all():
             with db.get_conn() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        SELECT company_key FROM service_profiles
+                        SELECT user_id FROM service_profiles
                         WHERE onboarding_done = TRUE AND services IS NOT NULL AND services != '[]'
                     """)
-                    rows = cur.fetchall()
-            keys = [r[0] for r in rows if r[0]]
-            print(f"[admin-ai] Perfiles a procesar: {keys}")
+                    user_ids = [r["user_id"] for r in cur.fetchall()]
+            print(f"[admin-ai] user_ids a procesar: {user_ids}")
             import ai_matcher
-            for key in keys:
-                print(f"[admin-ai] Procesando {key}...")
-                ai_matcher.run(company_key=key, limit=500)
+            for uid in user_ids:
+                print(f"[admin-ai] Procesando user_id={uid}...")
+                ai_matcher.run(user_id=uid, limit=500)
         except Exception as e:
             import traceback; traceback.print_exc()
     threading.Thread(target=_run, daemon=True).start()

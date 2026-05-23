@@ -92,25 +92,25 @@ def score_opportunity(
         return None
 
 
-def run(user_id: str = "default") -> None:
-    print(f"[ai_matcher] Iniciando batch para user_id='{user_id}'")
+def run(user_id: int, limit: int = MAX_PER_RUN) -> dict:
+    print(f"[ai_matcher] Iniciando batch para user_id={user_id} (limit={limit})")
 
     # 1. Verificar API key
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         print("[ai_matcher] ERROR: ANTHROPIC_API_KEY no está configurada")
-        sys.exit(1)
+        return {"ok": False, "error": "no_api_key"}
 
     # 2. Cargar perfil de servicios
     profile = db.get_service_profile(user_id)
     if not profile:
-        print(f"[ai_matcher] No hay perfil de servicios para user_id='{user_id}' — abortando")
-        return
+        print(f"[ai_matcher] No hay perfil de servicios para user_id={user_id} — abortando")
+        return {"ok": False, "error": "no_profile"}
 
     services = profile.get("services") or []
     if not services:
         print("[ai_matcher] El perfil no tiene servicios configurados — abortando")
-        return
+        return {"ok": False, "error": "no_services"}
 
     company_name = profile.get("company_name", "Mi empresa")
     print(f"[ai_matcher] Empresa: {company_name} | Servicios: {len(services)}")
@@ -118,12 +118,12 @@ def run(user_id: str = "default") -> None:
         print(f"  · {s['name']}: {s.get('description','')[:60]}")
 
     # 3. Cargar oportunidades pendientes
-    opps = db.list_opportunities_for_ai_scoring(user_id=user_id, limit=MAX_PER_RUN)
+    opps = db.list_opportunities_for_ai_scoring(user_id=user_id, limit=limit)
     print(f"[ai_matcher] {len(opps)} oportunidades pendientes de scoring")
 
     if not opps:
         print("[ai_matcher] Todo al día, nada que procesar")
-        return
+        return {"ok": True, "scored": 0, "errors": 0}
 
     # 4. Procesar con Claude
     client = anthropic.Anthropic(api_key=api_key)
@@ -152,10 +152,13 @@ def run(user_id: str = "default") -> None:
         time.sleep(BATCH_DELAY)
 
     print(f"[ai_matcher] DONE — scored={scored} errors={errors}")
+    return {"ok": True, "scored": scored, "errors": errors}
 
 
 if __name__ == "__main__":
-    # Inicializar tablas AI si no existen
+    # CLI: python ai_matcher.py <user_id>
+    if len(sys.argv) < 2:
+        print("Usage: python ai_matcher.py <user_id>")
+        sys.exit(1)
     db.init_ai_db()
-    user_id = sys.argv[1] if len(sys.argv) > 1 else "default"
-    run(user_id=user_id)
+    run(user_id=int(sys.argv[1]))

@@ -1022,11 +1022,14 @@ def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
 # ── AI Matching ───────────────────────────────────────────────────────────────
 
 def init_ai_db() -> None:
-    sql = """
+    # Esquema actual (instalaciones nuevas): user_id INTEGER REFERENCES users(id).
+    # Para instalaciones existentes que tienen user_id TEXT ('default'), corremos
+    # la migración _migrate_ai_user_id_to_int() más abajo.
+    create_sql = """
     CREATE TABLE IF NOT EXISTS service_profiles (
         id SERIAL PRIMARY KEY,
-        user_id TEXT NOT NULL DEFAULT 'default',
-        company_key TEXT,          -- clave compartida por empresa (ej: "constructora_abc")
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        company_key TEXT,
         company_name TEXT,
         services JSONB NOT NULL DEFAULT '[]',
         regions JSONB NOT NULL DEFAULT '[]',
@@ -1037,22 +1040,16 @@ def init_ai_db() -> None:
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(user_id)
     );
-    -- Migrations for existing installs
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS company_key TEXT;
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS regions JSONB DEFAULT '[]';
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS contract_sizes JSONB DEFAULT '[]';
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS known_mandantes JSONB DEFAULT '[]';
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS onboarding_done BOOLEAN DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS mandante_heat (
         id              SERIAL PRIMARY KEY,
         company         TEXT NOT NULL UNIQUE,
-        heat_score      INTEGER DEFAULT 0,    -- 0-100, calculado por IA
-        heat_label      TEXT,                 -- "Muy activo", "Caliente", "Normal", "Frío"
-        heat_reason     TEXT,                 -- explicación IA
-        n_noticias      INTEGER DEFAULT 0,    -- noticias recientes detectadas
-        n_empleos       INTEGER DEFAULT 0,    -- empleos activos detectados
-        trending_topics TEXT[],               -- temas que aparecen en noticias
+        heat_score      INTEGER DEFAULT 0,
+        heat_label      TEXT,
+        heat_reason     TEXT,
+        n_noticias      INTEGER DEFAULT 0,
+        n_empleos       INTEGER DEFAULT 0,
+        trending_topics TEXT[],
         scored_at       TIMESTAMPTZ DEFAULT NOW(),
         model_version   TEXT DEFAULT 'claude-sonnet-4-6'
     );
@@ -1062,7 +1059,7 @@ def init_ai_db() -> None:
     CREATE TABLE IF NOT EXISTS ai_opportunity_fits (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-        user_id TEXT NOT NULL DEFAULT 'default',
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         fit_score INTEGER NOT NULL DEFAULT 0,
         fit_reason TEXT,
         service_applicable TEXT,
@@ -1076,11 +1073,61 @@ def init_ai_db() -> None:
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            cur.execute(create_sql)
+        conn.commit()
+    _migrate_ai_user_id_to_int()
+
+
+def _migrate_ai_user_id_to_int() -> None:
+    """One-shot migration: convierte user_id TEXT ('default') a INTEGER REFERENCES users(id).
+
+    Idempotente: se ejecuta solo si la columna user_id todavía es TEXT.
+    Filas que no pueden ser asignadas a un usuario real se eliminan."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for table, unique_cols in [
+                ("service_profiles",    ["user_id"]),
+                ("ai_opportunity_fits", ["opportunity_id", "user_id"]),
+            ]:
+                cur.execute(
+                    """
+                    SELECT data_type FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = 'user_id'
+                    """,
+                    (table,),
+                )
+                row = cur.fetchone()
+                if not row or row["data_type"] in ("integer", "bigint"):
+                    continue  # ya migrado o tabla no existe
+
+                print(f"[migrate] {table}.user_id TEXT -> INTEGER")
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id_int INTEGER REFERENCES users(id) ON DELETE CASCADE")
+                cur.execute("SELECT MIN(id) AS uid FROM users")
+                first_user = cur.fetchone()
+                first_uid = first_user["uid"] if first_user else None
+                if first_uid is not None:
+                    cur.execute(f"UPDATE {table} SET user_id_int = %s WHERE user_id_int IS NULL", (first_uid,))
+                # Eliminar filas que no se pudieron asignar (no había user)
+                cur.execute(f"DELETE FROM {table} WHERE user_id_int IS NULL")
+                # Dropear constraint/index dependientes del user_id viejo
+                if unique_cols == ["user_id"]:
+                    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_user_id_key")
+                else:
+                    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_opportunity_id_user_id_key")
+                cur.execute(f"DROP INDEX IF EXISTS idx_ai_fits_user")
+                cur.execute(f"ALTER TABLE {table} DROP COLUMN user_id")
+                cur.execute(f"ALTER TABLE {table} RENAME COLUMN user_id_int TO user_id")
+                cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
+                if unique_cols == ["user_id"]:
+                    cur.execute(f"ALTER TABLE {table} ADD CONSTRAINT {table}_user_id_key UNIQUE (user_id)")
+                else:
+                    cur.execute(f"ALTER TABLE {table} ADD CONSTRAINT {table}_opportunity_id_user_id_key UNIQUE (opportunity_id, user_id)")
+                if table == "ai_opportunity_fits":
+                    cur.execute(f"CREATE INDEX IF NOT EXISTS idx_ai_fits_user ON ai_opportunity_fits (user_id, fit_score DESC)")
         conn.commit()
 
 
-def upsert_service_profile(user_id: str, company_name: str, services: list,
+def upsert_service_profile(user_id: int, company_name: str, services: list,
                            regions: list = None, contract_sizes: list = None,
                            known_mandantes: list = None, company_key: str = None,
                            onboarding_done: bool = False) -> Dict[str, Any]:
@@ -1119,14 +1166,8 @@ def upsert_service_profile(user_id: str, company_name: str, services: list,
     return dict(row)
 
 
-def get_service_profile(user_id: str = "default") -> Optional[Dict[str, Any]]:
-    # Search by user_id OR company_key (shared profile for whole company)
-    sql = """
-    SELECT * FROM service_profiles
-    WHERE user_id = %(user_id)s OR company_key = %(user_id)s
-    ORDER BY onboarding_done DESC, updated_at DESC
-    LIMIT 1;
-    """
+def get_service_profile(user_id: int) -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM service_profiles WHERE user_id = %(user_id)s LIMIT 1;"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {"user_id": user_id})
@@ -1134,7 +1175,7 @@ def get_service_profile(user_id: str = "default") -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
-def upsert_ai_fit(opportunity_id: int, user_id: str, fit_score: int,
+def upsert_ai_fit(opportunity_id: int, user_id: int, fit_score: int,
                   fit_reason: str, service_applicable: str,
                   contact_suggestion: str, model_version: str = "claude-sonnet-4-6") -> None:
     sql = """
@@ -1161,7 +1202,7 @@ def upsert_ai_fit(opportunity_id: int, user_id: str, fit_score: int,
         conn.commit()
 
 
-def get_ai_fit(opportunity_id: int, user_id: str = "default") -> Optional[Dict[str, Any]]:
+def get_ai_fit(opportunity_id: int, user_id: int) -> Optional[Dict[str, Any]]:
     sql = "SELECT * FROM ai_opportunity_fits WHERE opportunity_id=%(opp_id)s AND user_id=%(user_id)s;"
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -1170,7 +1211,7 @@ def get_ai_fit(opportunity_id: int, user_id: str = "default") -> Optional[Dict[s
     return dict(row) if row else None
 
 
-def list_opportunities_for_ai_scoring(user_id: str = "default", limit: int = 500) -> List[Dict[str, Any]]:
+def list_opportunities_for_ai_scoring(user_id: int, limit: int = 500) -> List[Dict[str, Any]]:
     """Retorna oportunidades que aún no tienen AI fit score o fueron actualizadas después del último score."""
     sql = """
     SELECT o.id, o.title, o.source, o.company, o.industry, o.region, o.phase,
@@ -1192,7 +1233,7 @@ def list_opportunities_for_ai_scoring(user_id: str = "default", limit: int = 500
 
 
 
-def get_ai_fits(user_id: str = "default", min_score: int = 0, limit: int = 500) -> List[Dict[str, Any]]:
+def get_ai_fits(user_id: int, min_score: int = 0, limit: int = 500) -> List[Dict[str, Any]]:
     """Retorna los scores IA calculados para la empresa, con datos del proyecto."""
     sql = """
     SELECT f.opportunity_id as id, f.fit_score, f.fit_reason,
@@ -1210,7 +1251,7 @@ def get_ai_fits(user_id: str = "default", min_score: int = 0, limit: int = 500) 
             return [dict(r) for r in cur.fetchall()]
 
 
-def list_top_ai_fits(user_id: str = "default", min_score: int = 40, limit: int = 200) -> List[Dict[str, Any]]:
+def list_top_ai_fits(user_id: int, min_score: int = 40, limit: int = 200) -> List[Dict[str, Any]]:
     sql = """
     SELECT o.*, f.fit_score, f.fit_reason, f.service_applicable, f.contact_suggestion, f.scored_at,
            COALESCE(s.signal_score, 0) as signal_score,
