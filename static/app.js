@@ -500,12 +500,12 @@ async function openDrawer(type, value) {
       const [c,bg] = scoreColor(score);
       drawerMap[`opp_${i.id}`] = {type:"opp", id: i.id};
       return `<tr>
-        <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
-        <td><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
+        <td data-label="Score"><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
+        <td data-label="Licitación"><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
             <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
-        <td>${statusChip(i.pipeline_status)}</td>
-        <td>${fmtDate(itemDate(i))}</td>
-        <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+        <td data-label="Pipeline">${statusChip(i.pipeline_status)}</td>
+        <td data-label="Fecha">${fmtDate(itemDate(i))}</td>
+        <td data-label=""><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
       </tr>`;
     }).join("");
   }
@@ -517,10 +517,10 @@ async function openDrawer(type, value) {
     const pts = i.score ?? 0;
     const phase = escapeHTML(i.phase || "En evaluación");
     return `<tr>
-      <td><span class="phase-chip" style="background:#dcfce7;color:#15803d">${phase}</span></td>
-      <td><a class="row-link" href="${i.url||"#"}" target="_blank" style="font-weight:600;color:var(--text);text-decoration:none">${escapeHTML(i.title||"")}</a></td>
-      <td>${escapeHTML(i.region||"—")}</td>
-      <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+      <td data-label="Fase"><span class="phase-chip" style="background:#dcfce7;color:#15803d">${phase}</span></td>
+      <td data-label="Prospecto"><a class="row-link" href="${i.url||"#"}" target="_blank" style="font-weight:600;color:var(--text);text-decoration:none">${escapeHTML(i.title||"")}</a></td>
+      <td data-label="Región">${escapeHTML(i.region||"—")}</td>
+      <td data-label=""><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
     </tr>`;
   }).join("");
 
