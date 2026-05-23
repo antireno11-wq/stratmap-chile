@@ -310,12 +310,24 @@ def ingest(payload: IngestPayload):
     inserted, updated = upsert_opportunities(items)
     return {"ok": True, "inserted": inserted, "updated": updated, "total": inserted + updated}
 
-@app.get("/opportunities", dependencies=[Depends(get_current_user)])
+@app.get("/opportunities")
 def opportunities(
     q: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=2000),
+    all: bool = Query(default=False, description="Si true, ignora las preferencias del usuario y devuelve todo."),
+    user=Depends(get_current_user),
 ):
     rows = list_opportunities(q=q, limit=limit)
+    # Filtrar por preferencias del usuario logueado (industrias / regiones).
+    # Filas con industry/region NULL siempre se muestran (no esconder data sin clasificar).
+    if not all:
+        prefs = get_preferences(user["user_id"]) or {}
+        industries = set(prefs.get("preferred_industries") or [])
+        regions    = set(prefs.get("preferred_regions") or [])
+        if industries:
+            rows = [r for r in rows if not r.get("industry") or r["industry"] in industries]
+        if regions:
+            rows = [r for r in rows if not r.get("region") or r["region"] in regions]
     result = []
     for row in rows:
         r = dict(row)
@@ -353,9 +365,9 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
-@app.get("/pipeline", dependencies=[Depends(get_current_user)])
-def get_pipeline_list(status: Optional[str] = Query(default=None)):
-    rows = list_pipeline(status=status)
+@app.get("/pipeline")
+def get_pipeline_list(status: Optional[str] = Query(default=None), user=Depends(get_current_user)):
+    rows = list_pipeline(user_id=user["user_id"], status=status)
     result = []
     for row in rows:
         r = dict(row)
@@ -367,33 +379,33 @@ def get_pipeline_list(status: Optional[str] = Query(default=None)):
 def get_statuses():
     return {"statuses": PIPELINE_STATUSES}
 
-@app.put("/opportunities/{opportunity_id}/pipeline", dependencies=[Depends(get_current_user)])
-def update_pipeline(opportunity_id: int, payload: PipelineUpdate):
+@app.put("/opportunities/{opportunity_id}/pipeline")
+def update_pipeline(opportunity_id: int, payload: PipelineUpdate, user=Depends(get_current_user)):
     if payload.status not in PIPELINE_STATUSES:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Opciones: {PIPELINE_STATUSES}")
-    row = upsert_pipeline(opportunity_id, payload.status, payload.assignee)
+    row = upsert_pipeline(opportunity_id, user["user_id"], payload.status, payload.assignee)
     if row.get("updated_at"): row["updated_at"] = row["updated_at"].isoformat()
     if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
     return row
 
-@app.get("/opportunities/{opportunity_id}/pipeline", dependencies=[Depends(get_current_user)])
-def get_opp_pipeline(opportunity_id: int):
-    row = get_pipeline(opportunity_id)
+@app.get("/opportunities/{opportunity_id}/pipeline")
+def get_opp_pipeline(opportunity_id: int, user=Depends(get_current_user)):
+    row = get_pipeline(opportunity_id, user["user_id"])
     if not row:
         return {"opportunity_id": opportunity_id, "status": None, "assignee": None}
     if row.get("updated_at"): row["updated_at"] = row["updated_at"].isoformat()
     if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
     return row
 
-@app.post("/opportunities/{opportunity_id}/notes", dependencies=[Depends(get_current_user)])
-def add_note(opportunity_id: int, payload: NoteIn):
-    row = add_pipeline_note(opportunity_id, payload.note, payload.author)
+@app.post("/opportunities/{opportunity_id}/notes")
+def add_note(opportunity_id: int, payload: NoteIn, user=Depends(get_current_user)):
+    row = add_pipeline_note(opportunity_id, user["user_id"], payload.note, payload.author)
     if row.get("created_at"): row["created_at"] = row["created_at"].isoformat()
     return row
 
-@app.get("/opportunities/{opportunity_id}/notes", dependencies=[Depends(get_current_user)])
-def get_notes(opportunity_id: int):
-    rows = get_pipeline_notes(opportunity_id)
+@app.get("/opportunities/{opportunity_id}/notes")
+def get_notes(opportunity_id: int, user=Depends(get_current_user)):
+    rows = get_pipeline_notes(opportunity_id, user["user_id"])
     result = []
     for row in rows:
         r = dict(row)

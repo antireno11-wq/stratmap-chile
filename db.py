@@ -148,10 +148,12 @@ def init_contacts_db() -> None:
 
 
 def init_pipeline_db() -> None:
+    # Esquema actual: pipeline y notes son per-user (multi-tenant).
     sql = """
     CREATE TABLE IF NOT EXISTS opportunity_pipeline (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         status TEXT NOT NULL DEFAULT 'Detectada',
         outcome TEXT NULL,
         outcome_date TIMESTAMPTZ NULL,
@@ -160,28 +162,71 @@ def init_pipeline_db() -> None:
         notes TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE(opportunity_id)
+        UNIQUE(opportunity_id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS pipeline_notes (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         note TEXT NOT NULL,
         author TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE INDEX IF NOT EXISTS idx_pipeline_opportunity_id ON opportunity_pipeline(opportunity_id);
+    CREATE INDEX IF NOT EXISTS idx_pipeline_user_id ON opportunity_pipeline(user_id);
     CREATE INDEX IF NOT EXISTS idx_pipeline_status ON opportunity_pipeline(status);
     CREATE INDEX IF NOT EXISTS idx_pipeline_notes_opportunity_id ON pipeline_notes(opportunity_id);
+    CREATE INDEX IF NOT EXISTS idx_pipeline_notes_user_id ON pipeline_notes(user_id);
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
-            # Migración: agregar columnas outcome si no existen (para BDs existentes)
+            # Migraciones idempotentes para BDs viejas
             cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome TEXT NULL;")
             cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome_date TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome_notes TEXT NULL;")
+        conn.commit()
+    _migrate_pipeline_user_id()
+
+
+def _migrate_pipeline_user_id() -> None:
+    """One-shot migration: opportunity_pipeline y pipeline_notes pasan a per-user.
+
+    Idempotente: si ya tienen user_id (NOT NULL) no hace nada. Si la columna
+    no existe (BD vieja), la agrega, backfilea con MIN(users.id), recrea la
+    constraint UNIQUE, y borra filas huérfanas si no había usuarios."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MIN(id) AS uid FROM users")
+            first_user = cur.fetchone()
+            first_uid = first_user["uid"] if first_user else None
+
+            for table, drop_constraint, new_constraint in [
+                ("opportunity_pipeline",
+                 "opportunity_pipeline_opportunity_id_key",
+                 "opportunity_pipeline_opportunity_id_user_id_key"),
+                ("pipeline_notes", None, None),
+            ]:
+                cur.execute("""
+                    SELECT column_name, is_nullable FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = 'user_id'
+                """, (table,))
+                row = cur.fetchone()
+                if row and row["is_nullable"] == "NO":
+                    continue  # ya migrado
+
+                print(f"[migrate] {table} → per-user")
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
+                if first_uid is not None:
+                    cur.execute(f"UPDATE {table} SET user_id = %s WHERE user_id IS NULL", (first_uid,))
+                cur.execute(f"DELETE FROM {table} WHERE user_id IS NULL")
+                cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
+                if drop_constraint:
+                    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {drop_constraint}")
+                if new_constraint:
+                    cur.execute(f"ALTER TABLE {table} ADD CONSTRAINT {new_constraint} UNIQUE (opportunity_id, user_id)")
         conn.commit()
 
 
@@ -697,19 +742,19 @@ def get_opportunity_by_url(url: str) -> Optional[Dict[str, Any]]:
 PIPELINE_STATUSES = ["Detectada", "En análisis", "Postular", "No postular",
                      "Presentada", "Adjudicada", "Perdida"]
 
-def get_pipeline(opportunity_id: int) -> Optional[Dict[str, Any]]:
-    sql = "SELECT * FROM opportunity_pipeline WHERE opportunity_id = %(id)s LIMIT 1;"
+def get_pipeline(opportunity_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM opportunity_pipeline WHERE opportunity_id = %(id)s AND user_id = %(uid)s LIMIT 1;"
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"id": opportunity_id})
+            cur.execute(sql, {"id": opportunity_id, "uid": user_id})
             row = cur.fetchone()
     return dict(row) if row else None
 
-def upsert_pipeline(opportunity_id: int, status: str, assignee: Optional[str] = None) -> Dict[str, Any]:
+def upsert_pipeline(opportunity_id: int, user_id: int, status: str, assignee: Optional[str] = None) -> Dict[str, Any]:
     sql = """
-    INSERT INTO opportunity_pipeline (opportunity_id, status, assignee, updated_at)
-    VALUES (%(opportunity_id)s, %(status)s, %(assignee)s, NOW())
-    ON CONFLICT (opportunity_id) DO UPDATE SET
+    INSERT INTO opportunity_pipeline (opportunity_id, user_id, status, assignee, updated_at)
+    VALUES (%(opportunity_id)s, %(user_id)s, %(status)s, %(assignee)s, NOW())
+    ON CONFLICT (opportunity_id, user_id) DO UPDATE SET
       status = EXCLUDED.status,
       assignee = COALESCE(EXCLUDED.assignee, opportunity_pipeline.assignee),
       updated_at = NOW()
@@ -717,46 +762,47 @@ def upsert_pipeline(opportunity_id: int, status: str, assignee: Optional[str] = 
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"opportunity_id": opportunity_id, "status": status, "assignee": assignee})
+            cur.execute(sql, {"opportunity_id": opportunity_id, "user_id": user_id, "status": status, "assignee": assignee})
             row = cur.fetchone()
         conn.commit()
     return dict(row)
 
-def add_pipeline_note(opportunity_id: int, note: str, author: Optional[str] = None) -> Dict[str, Any]:
+def add_pipeline_note(opportunity_id: int, user_id: int, note: str, author: Optional[str] = None) -> Dict[str, Any]:
     sql = """
-    INSERT INTO pipeline_notes (opportunity_id, note, author)
-    VALUES (%(opportunity_id)s, %(note)s, %(author)s)
+    INSERT INTO pipeline_notes (opportunity_id, user_id, note, author)
+    VALUES (%(opportunity_id)s, %(user_id)s, %(note)s, %(author)s)
     RETURNING *;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"opportunity_id": opportunity_id, "note": note, "author": author})
+            cur.execute(sql, {"opportunity_id": opportunity_id, "user_id": user_id, "note": note, "author": author})
             row = cur.fetchone()
         conn.commit()
     return dict(row)
 
-def get_pipeline_notes(opportunity_id: int) -> List[Dict[str, Any]]:
+def get_pipeline_notes(opportunity_id: int, user_id: int) -> List[Dict[str, Any]]:
     sql = """
     SELECT * FROM pipeline_notes
-    WHERE opportunity_id = %(id)s
+    WHERE opportunity_id = %(id)s AND user_id = %(uid)s
     ORDER BY created_at DESC;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"id": opportunity_id})
+            cur.execute(sql, {"id": opportunity_id, "uid": user_id})
             return [dict(r) for r in cur.fetchall()]
 
-def list_pipeline(status: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_pipeline(user_id: int, status: Optional[str] = None) -> List[Dict[str, Any]]:
     sql = """
     SELECT o.id, o.title, o.company, o.region, o.industry, o.url,
            (o.score + COALESCE(o.signal_score, 0)) AS radar_score,
            p.status, p.assignee, p.updated_at
     FROM opportunity_pipeline p
     JOIN opportunities o ON o.id = p.opportunity_id
+    WHERE p.user_id = %(user_id)s
     """
-    params: Dict[str, Any] = {}
+    params: Dict[str, Any] = {"user_id": user_id}
     if status:
-        sql += " WHERE p.status = %(status)s"
+        sql += " AND p.status = %(status)s"
         params["status"] = status
     sql += " ORDER BY p.updated_at DESC;"
     with get_conn() as conn:
