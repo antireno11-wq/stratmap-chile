@@ -5,15 +5,13 @@ import requests
 from typing import Any, Dict, List, Optional
 
 RSS_FEEDS = [
-    # ── Minería ──────────────────────────────────────────────────────────────
+    # ── Minería (todos en español) ──────────────────────────────────────────
     {"url": "https://www.portalminero.com/wp/feed/", "source": "Portal Minero", "industry": "Minería"},
     {"url": "https://www.mch.cl/feed/", "source": "Minería Chilena", "industry": "Minería"},
     {"url": "https://www.cochilco.cl/web/feed/", "source": "COCHILCO Noticias", "industry": "Minería"},
     {"url": "https://www.reporteminero.cl/feed/", "source": "Reporte Minero", "industry": "Minería"},
     {"url": "https://www.nuevamineria.com/revista/feed/", "source": "Nueva Minería y Energía", "industry": "Minería"},
     {"url": "https://www.mineriachilena.com/feed/", "source": "MCh Online", "industry": "Minería"},
-    {"url": "https://www.mining.com/feed/", "source": "Mining.com", "industry": "Minería"},
-    {"url": "https://www.mining-technology.com/feed/", "source": "Mining Technology", "industry": "Minería"},
     # ── Negocios / finanzas (filtro por keywords mineros downstream) ─────────
     {"url": "https://www.df.cl/noticias/site/list/port/rss.xml", "source": "Diario Financiero", "industry": None},
     {"url": "https://www.americaeconomia.com/rss.xml", "source": "AméricaEconomía", "industry": None},
@@ -27,10 +25,11 @@ RSS_FEEDS = [
     # ── Generales Chile (filtro estricto por keywords mineros) ───────────────
     {"url": "https://radio.uchile.cl/feed/", "source": "Radio U. de Chile", "industry": None},
 ]
-# Removidos (verificados muertos 2026-05-23): pisoexploracion.cl (DNS),
-# construccionminera.cl (DNS), pulso.cl/feed/ (devuelve HTML), elmostrador
-# mercados/feed/ (404), biobiochile.cl/feed/ (404), emol.com/rss (timeout),
-# cooperativa.cl/economia.xml (404), 24horas.cl/economia.xml (404).
+# Removidos por idioma (solo contenido en español): Mining.com, Mining Technology.
+# Removidos por URL muerta: pisoexploracion.cl (DNS), construccionminera.cl
+# (DNS), pulso.cl/feed/ (HTML), elmostrador mercados/feed/ (404), biobiochile.cl
+# /feed/ (404), emol.com/rss (timeout), cooperativa.cl/economia.xml (404),
+# 24horas.cl/economia.xml (404).
 
 KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "codelco", "bhp", "teck", "yacimiento", "salar", "antofagasta minerals", "collahuasi", "escondida", "spence", "chuquicamata"]
 KEYWORDS_INFRA = ["infraestructura", "carretera", "puente", "ruta", "mop", "concesión vial", "obras públicas", "autopista", "aeropuerto", "hospital", "embalse"]

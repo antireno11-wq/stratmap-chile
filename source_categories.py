@@ -42,8 +42,6 @@ CATEGORIES: dict[str, str] = {
     "Reporte Minero":             "noticia",
     "Nueva Minería y Energía":    "noticia",
     "Piso Exploración":           "noticia",
-    "Mining.com":                 "noticia",
-    "Mining Technology":          "noticia",
     "Construcción Minera":        "noticia",
     "Diario Financiero":          "noticia",
     "Pulso":                      "noticia",

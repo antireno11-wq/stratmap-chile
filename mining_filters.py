@@ -126,8 +126,7 @@ def is_mining_relevant(title: str, description: str = "", source: str = "") -> b
     mining_specific = {
         "portal minero", "minería chilena", "mineria chilena", "mch online",
         "cochilco noticias", "cochilco", "reporte minero",
-        "nueva minería y energía", "piso exploración",
-        "mining.com", "mining technology", "construcción minera",
+        "nueva minería y energía", "piso exploración", "construcción minera",
         "infomineria", "mundo minería", "mundo mineria", "lithium chile",
         "revista ei", "revista electricidad", "energía estratégica", "cchc",
     }
