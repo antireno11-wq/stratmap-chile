@@ -3,9 +3,33 @@ import logging
 import traceback
 
 import db
-from mining_filters import is_mining_relevant
+from mining_filters import is_mining_relevant, is_chile_relevant
 
 logger = logging.getLogger("stratmap.helpers")
+
+
+def _chile_filter(items: list) -> list:
+    """Filtra items aplicando DOS condiciones:
+    1. Debe ser relevante minería (empresa/sustancia/operación/regulatorio).
+    2. Debe ser de Chile (o no mencionar otro país).
+
+    Bloomberg Línea, AméricaEconomía y Diario Financiero a veces sueltan
+    noticias regionales de toda LATAM o cosas no-mineras (aerolíneas, retail,
+    etc.) — esto las recorta antes de tocar la DB."""
+    out = []
+    for it in items:
+        title = it.get("title", "") or ""
+        source = it.get("source", "") or ""
+        desc = ""
+        raw = it.get("raw")
+        if isinstance(raw, dict):
+            desc = raw.get("description", "") or ""
+        if not is_mining_relevant(title, desc, source):
+            continue
+        if not is_chile_relevant(title, desc):
+            continue
+        out.append(it)
+    return out
 
 
 def run_rss_ingest():
@@ -17,13 +41,16 @@ def run_rss_ingest():
     total_inserted = 0
 
     # 1. Feeds mineros (rss_mineria): Portal Minero, Mineria Chilena, COCHILCO,
-    #    Diario Financiero, CChC, Revista EI, Electricidad, etc.
+    #    Diario Financiero, CChC, Revista EI, Electricidad, etc. Filtramos por
+    #    relevancia chilena (saca noticias regionales de Brasil/Perú/Ecuador
+    #    que entran via Bloomberg Línea + AméricaEconomía).
     try:
         from connectors.rss_mineria import fetch_rss_mineria
-        items = fetch_rss_mineria(limit=300)
+        raw = fetch_rss_mineria(limit=300)
+        items = _chile_filter(raw)
         if items:
             db.upsert_opportunities(items)
-        summary["feeds"]["rss_mineria"] = len(items)
+        summary["feeds"]["rss_mineria"] = {"total": len(raw), "chile_only": len(items)}
         total_inserted += len(items)
     except Exception as e:
         logger.warning("rss_mineria failed", extra={"err": str(e)})
@@ -61,10 +88,11 @@ def run_rss_ingest():
     for name, mod_path, fn_name, lim in specific_scrapers:
         try:
             mod = __import__(mod_path, fromlist=[fn_name])
-            items = getattr(mod, fn_name)(limit=lim)
+            raw_items = getattr(mod, fn_name)(limit=lim)
+            items = _chile_filter(raw_items)
             if items:
                 db.upsert_opportunities(items)
-            summary["feeds"][name] = len(items)
+            summary["feeds"][name] = {"total": len(raw_items), "chile_only": len(items)}
             total_inserted += len(items)
         except Exception as e:
             logger.warning(f"{name} failed", extra={"err": str(e)})

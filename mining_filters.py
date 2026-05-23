@@ -92,6 +92,66 @@ _ALL_POSITIVE: set[str] = _STRONG_POSITIVE | _PLACES
 _ALL_NEGATIVE: set[str] = {kw.lower() for kw in NEGATIVE_KEYWORDS}
 
 
+# Países LATAM/globales NO-Chile. Bloomberg Línea y AméricaEconomía mezclan
+# noticias de toda la región: descartamos las que mencionan otro país sin
+# mencionar Chile o una empresa/lugar chileno.
+NON_CHILE_COUNTRIES = [
+    # Países (raíz)
+    "ecuador", "perú", "peru", "brasil", "brazil", "argentina",
+    "colombia", "bolivia", "méxico", "mexico", "venezuela",
+    "uruguay", "paraguay", "panamá", "panama", "guatemala", "honduras",
+    "costa rica", "cuba", "república dominicana", "puerto rico",
+    "españa", "spain", "estados unidos", "ee.uu", "eeuu",
+    "australia", "canadá", "canada", "china", "japón", "japon",
+    # Gentilicios — los más comunes en titulares
+    "peruano", "peruana", "brasileño", "brasileña", "ecuatoriano", "ecuatoriana",
+    "argentino", "mexicano", "mexicana", "colombiano", "colombiana",
+    "boliviano", "boliviana", "venezolano", "venezolana",
+    # Capitales / ciudades grandes (cuando aparecen las identifican como NO Chile)
+    "lima", "bogotá", "bogota", "buenos aires", "ciudad de méxico", "ciudad de mexico",
+    "são paulo", "sao paulo", "rio de janeiro", "quito", "guayaquil",
+    "la paz", "asunción", "asuncion", "montevideo", "caracas",
+]
+
+_CHILE_MARKERS = {"chile", "chileno", "chilena", "chilenos", "chilenas"}
+# Solo operadores que tienen Chile como principal jurisdicción. Empresas
+# globales (Vale, Rio Tinto, Glencore, BHP genérico, Freeport, Kinross,
+# Newmont, Barrick) NO cuentan porque pueden estar en cualquier país.
+_CHILE_OPERATORS = {
+    "codelco", "enami", "cochilco", "sernageomin",
+    "sqm",
+    "bhp chile", "minera escondida", "escondida", "minera spence", "spence",
+    "antofagasta minerals", "amsa",
+    "minera los pelambres", "los pelambres", "pelambres",
+    "minera centinela", "centinela",
+    "minera zaldívar", "minera zaldivar",
+    "collahuasi", "minera collahuasi", "doña inés de collahuasi",
+    "teck quebrada blanca", "quebrada blanca",
+    "carmen de andacollo", "teck andacollo", "minera andacollo",
+    "minera candelaria", "candelaria",
+    "minera el abra", "el abra",
+    "minera valle central", "el teniente", "andina", "chuquicamata",
+}
+_CHILE_MARKERS |= _CHILE_OPERATORS
+_CHILE_MARKERS |= {p.lower() for p in PLACES}      # hubs chilenos
+_NON_CHILE_SET = {c.lower() for c in NON_CHILE_COUNTRIES}
+
+
+def is_chile_relevant(title: str, description: str = "") -> bool:
+    """¿Esta noticia es de Chile (o de operaciones chilenas)?
+
+    - Si menciona Chile / empresa chilena / hub chileno: SÍ.
+    - Si menciona otro país y NO Chile: NO.
+    - Si no menciona ninguno: SÍ (asumimos relevante; ya pasó is_mining_relevant).
+    """
+    blob = ((title or "") + " " + (description or "")).lower()
+    if any(m in blob for m in _CHILE_MARKERS):
+        return True
+    if any(c in blob for c in _NON_CHILE_SET):
+        return False
+    return True
+
+
 def is_mining_relevant(title: str, description: str = "", source: str = "") -> bool:
     """¿Esta noticia/proyecto es relevante para Stratmap minería?
 
