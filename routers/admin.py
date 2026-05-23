@@ -18,6 +18,7 @@ from db import expire_stale_opportunities, recalc_all_scores
 from deps import require_admin
 from helpers import run_rss_ingest
 from routers.mandantes import reset_faenas_cache
+from source_categories import NOTICIA_SOURCES
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -100,11 +101,7 @@ def refresh_faenas():
 @router.get("/admin/debug-noticias")
 def debug_noticias(company: str = "Codelco"):
     """Debug: diagnostico completo de noticias en BD."""
-    NEWS_LIST = [
-        'Lithium Chile','Portal Minero','Revista EI','Mineria Chilena',
-        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Mineria',
-        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
-    ]
+    NEWS_LIST = NOTICIA_SOURCES
     STOPWORDS = {'spa','ltda','de','del','la','el','los','las','y','en','por','para','con'}
     words = [w.lower() for w in company.replace('.',' ').split()
              if len(w) > 3 and w.lower() not in STOPWORDS]

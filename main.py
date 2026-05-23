@@ -75,17 +75,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("recalc_all_scores failed", extra={"err": str(e)})
 
-    # Normalizar source 'sea' → 'SEA' (inconsistencia en datos)
+    # Normalizaciones de data legacy (idempotentes, baratas):
+    # - SEA: minúsculas → 'SEA'
+    # - Chile Compra (con espacio) → ChileCompra
+    # - MOP marcadas mal como 'Minería' → 'Infraestructura'
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("UPDATE opportunities SET source = 'SEA' WHERE source = 'sea'")
-                n = cur.rowcount
+                n_sea = cur.rowcount
+                cur.execute("UPDATE opportunities SET source = 'ChileCompra' WHERE source = 'Chile Compra'")
+                n_cc = cur.rowcount
+                cur.execute("UPDATE opportunities SET industry = 'Infraestructura' WHERE source = 'MOP' AND industry = 'Minería'")
+                n_mop = cur.rowcount
             conn.commit()
-        if n:
-            logger.info("sea_source_normalized", extra={"rows": n})
+        if n_sea or n_cc or n_mop:
+            logger.info("legacy data normalized",
+                        extra={"sea_lowercase": n_sea, "chile_compra": n_cc, "mop_industry": n_mop})
     except Exception as e:
-        logger.warning("sea normalize failed", extra={"err": str(e)})
+        logger.warning("legacy normalize failed", extra={"err": str(e)})
 
     # Noticias no deben tener score — reset al arrancar
     try:

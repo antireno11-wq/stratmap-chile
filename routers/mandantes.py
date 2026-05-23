@@ -8,6 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import db
 from deps import get_current_user
+from source_categories import (
+    LICITACION_SOURCES, CONCESION_SOURCES, PROSPECTO_SOURCES,
+    NOTICIA_SOURCES, EMPLEO_SOURCES,
+)
 
 router = APIRouter(tags=["mandantes"], dependencies=[Depends(get_current_user)])
 
@@ -22,32 +26,26 @@ _faenas_cache: dict = {"data": [], "ts": 0}
 def get_mandantes():
     """
     Ranking de mandantes por actividad consolidada.
-    Incluye cualquier mandante con proyectos reales (ENAMI, Codelco, SIGEX, SEA).
+    Categoriza cada fuente via source_categories.CATEGORIES.
     """
-    NEWS_SOURCES = (
-        "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
-        "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
-        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS'"
-    )
-    sql = f"""
+    from source_categories import LICITACION_SOURCES, CONCESION_SOURCES, PROSPECTO_SOURCES, NOTICIA_SOURCES, EMPLEO_SOURCES
+
+    # Buckets: usamos arrays parametrizados (más seguro que f-string en SQL)
+    sql = """
     WITH base AS (
         SELECT
             company,
-            COUNT(*) FILTER (WHERE source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual'))
-                AS n_proyectos,
-            COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco'))
-                AS n_licitaciones,
-            COUNT(*) FILTER (WHERE source = 'SIGEX')
-                AS n_sigex,
-            COUNT(*) FILTER (WHERE source = 'SEA')
-                AS n_sea,
-            COALESCE(AVG(score) FILTER (
-                WHERE source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual')
-            ), 0)                                       AS avg_score,
-            MAX(COALESCE(signal_score, 0))              AS top_signal,
-            SUM(COALESCE(jobs_count, 0))                AS total_jobs,
-            0 AS n_news_recent,
-            MAX(COALESCE(published_at, created_at))     AS last_activity
+            COUNT(*) FILTER (WHERE source = ANY(%(licit)s))     AS n_licitaciones,
+            COUNT(*) FILTER (WHERE source = ANY(%(conce)s))     AS n_sigex,
+            COUNT(*) FILTER (WHERE source = ANY(%(prosp)s))     AS n_sea,
+            COUNT(*) FILTER (WHERE source = ANY(%(empleo)s))    AS n_empleos,
+            -- "n_proyectos" = licitaciones + concesiones + prospectos (todo lo que es oportunidad real)
+            COUNT(*) FILTER (WHERE source = ANY(%(real)s))      AS n_proyectos,
+            COALESCE(AVG(score) FILTER (WHERE source = ANY(%(real)s)), 0) AS avg_score,
+            MAX(COALESCE(signal_score, 0))                                AS top_signal,
+            SUM(COALESCE(jobs_count, 0))                                  AS total_jobs,
+            0                                                              AS n_news_recent,
+            MAX(COALESCE(published_at, created_at))                       AS last_activity
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
           AND source != 'manual'
@@ -59,6 +57,7 @@ def get_mandantes():
         b.n_licitaciones,
         b.n_sigex,
         b.n_sea,
+        b.n_empleos,
         b.top_signal                            AS signal_score,
         b.total_jobs,
         b.n_news_recent,
@@ -77,18 +76,22 @@ def get_mandantes():
             LEAST(COALESCE(h.heat_score, 0) * 0.15, 15)
         ) AS score_consolidado
     FROM base b
-    LEFT JOIN (
-        SELECT * FROM mandante_heat
-        WHERE 1=1
-    ) h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
+    LEFT JOIN mandante_heat h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
     WHERE b.n_proyectos > 0 OR b.n_sea > 0 OR b.n_news_recent > 0
     ORDER BY score_consolidado DESC
     LIMIT 100;
     """
+    params = {
+        "licit":  LICITACION_SOURCES,
+        "conce":  CONCESION_SOURCES,
+        "prosp":  PROSPECTO_SOURCES,
+        "empleo": EMPLEO_SOURCES,
+        "real":   LICITACION_SOURCES + CONCESION_SOURCES + PROSPECTO_SOURCES,
+    }
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(sql)
+                cur.execute(sql, params)
                 rows = [dict(r) for r in cur.fetchall()]
 
                 # Enriquecer con conteo de noticias por keyword
@@ -97,13 +100,9 @@ def get_mandantes():
                         SELECT title, company
                         FROM opportunities
                         WHERE published_at > NOW() - INTERVAL '90 days'
-                          AND source NOT IN (
-                              'SIGEX','ENAMI','Codelco','SEA','sea','manual',
-                              'BHP Careers','AMSA Careers','Lundin Careers',
-                              'Collahuasi Careers','Teck Careers'
-                          )
+                          AND source = ANY(%s)
                           AND title IS NOT NULL
-                    """)
+                    """, (NOTICIA_SOURCES,))
                     recent_news = cur.fetchall()
                     news_titles = [(r["title"] or "").lower() for r in recent_news]
 
@@ -131,20 +130,21 @@ def get_mandantes():
                 r["trending_topics"] = []
         return {"mandantes": rows, "total": len(rows)}
     except Exception as e:
-        print(f"[mandantes] Error: {e}")
-        # Fallback sin mandante_heat join
+        import logging
+        logging.getLogger("stratmap.mandantes").warning("mandantes query failed, fallback", extra={"err": str(e)})
+        # Fallback sin mandante_heat join (por si mandante_heat no existe en BDs viejas)
         try:
-            simple_sql = f"""
+            simple_sql = """
             WITH base AS (
                 SELECT company,
-                    COUNT(*) FILTER (WHERE source NOT IN ({NEWS_SOURCES}, 'SEA', 'manual')) AS n_proyectos,
-                    COUNT(*) FILTER (WHERE source IN ('ENAMI','Codelco')) AS n_licitaciones,
-                    COUNT(*) FILTER (WHERE source = 'SIGEX') AS n_sigex,
-                    COUNT(*) FILTER (WHERE source = 'SEA') AS n_sea,
-                    COALESCE(AVG(score) FILTER (WHERE source NOT IN ({NEWS_SOURCES},'SEA','manual')),0) AS avg_score,
-                    MAX(COALESCE(signal_score,0)) AS top_signal,
-                    SUM(COALESCE(jobs_count,0)) AS total_jobs,
-                    MAX(COALESCE(published_at,created_at)) AS last_activity
+                    COUNT(*) FILTER (WHERE source = ANY(%(licit)s))   AS n_licitaciones,
+                    COUNT(*) FILTER (WHERE source = ANY(%(conce)s))   AS n_sigex,
+                    COUNT(*) FILTER (WHERE source = ANY(%(prosp)s))   AS n_sea,
+                    COUNT(*) FILTER (WHERE source = ANY(%(real)s))    AS n_proyectos,
+                    COALESCE(AVG(score) FILTER (WHERE source = ANY(%(real)s)), 0) AS avg_score,
+                    MAX(COALESCE(signal_score,0))                                  AS top_signal,
+                    SUM(COALESCE(jobs_count,0))                                    AS total_jobs,
+                    MAX(COALESCE(published_at,created_at))                        AS last_activity
                 FROM opportunities
                 WHERE company IS NOT NULL AND TRIM(company) != '' AND source != 'manual'
                 GROUP BY company
@@ -159,7 +159,7 @@ def get_mandantes():
             """
             with db.get_conn() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(simple_sql)
+                    cur.execute(simple_sql, params)
                     rows = [dict(r) for r in cur.fetchall()]
             for r in rows:
                 if r.get("last_activity"):
@@ -177,11 +177,7 @@ def get_company_summary(company_name: str):
     if key in _company_summaries:
         return _company_summaries[key]
 
-    NEWS_SRC_LIST = [
-        'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',
-        'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',
-        'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',
-    ]
+    NEWS_SRC_LIST = NOTICIA_SOURCES
     with db.get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -286,13 +282,12 @@ def get_mandante_detail(company_name: str):
 
 
 def _mandante_detail(company_name: str):
-    """Lógica compartida del detalle de mandante."""
-    NON_PROJECT_SOURCES = (
-        "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
-        "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
-        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS',"
-        "'BHP Careers','manual'"
-    )
+    """Lógica compartida del detalle de mandante.
+
+    "Proyectos" = todo source de categoría licitacion/concesion (excluye SEA, noticias,
+    empleos y manual). SEA va aparte como "prospectos". Las noticias van aparte.
+    """
+    PROJECT_SOURCES = LICITACION_SOURCES + CONCESION_SOURCES  # SEA va aparte
 
     STOPWORDS = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
                  'los','las','y','en','por','para','con','una','uno','minera','minero'}
@@ -300,17 +295,17 @@ def _mandante_detail(company_name: str):
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"""
+                cur.execute("""
                     SELECT id, title, source, score,
                            COALESCE(signal_score,0) AS signal_score,
                            phase, region, url, published_at,
                            COALESCE(jobs_count,0) AS jobs_count
                     FROM opportunities
                     WHERE LOWER(TRIM(company)) = LOWER(TRIM(%(company)s))
-                      AND source NOT IN ({NON_PROJECT_SOURCES}, 'SEA')
+                      AND source = ANY(%(srcs)s)
                     ORDER BY (score + COALESCE(signal_score,0)) DESC
                     LIMIT 50;
-                """, {"company": company_name})
+                """, {"company": company_name, "srcs": PROJECT_SOURCES})
                 projects = [dict(r) for r in cur.fetchall()]
 
                 cur.execute("""

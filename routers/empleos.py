@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import db
 from deps import get_current_user
+from source_categories import NOTICIA_SOURCES
 
 router = APIRouter(tags=["empleos"], dependencies=[Depends(get_current_user)])
 
@@ -15,12 +16,7 @@ def get_empleos_resumen():
 
     Normaliza nombres de empresa para consolidar duplicados (BHP, Escondida, etc.)
     """
-    NEWS_SRC = (
-        "'Lithium Chile','Portal Minero','Revista EI','Minería Chilena',"
-        "'Diario Financiero','COCHILCO Noticias','InfoMineria','Mundo Minería',"
-        "'Radio U. de Chile','Radio Universidad de Chile','BioBioChile','RSS','manual'"
-    )
-    sql = f"""
+    sql = """
     WITH normalized AS (
         SELECT
             CASE
@@ -71,7 +67,8 @@ def get_empleos_resumen():
             jobs_count, signal_score, last_signal_at, signal_detail
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
-          AND source NOT IN ({NEWS_SRC})
+          AND source != ALL(%(news)s)
+          AND source != 'manual'
           AND (jobs_count > 0 OR signal_score > 0)
     )
     SELECT
@@ -93,7 +90,7 @@ def get_empleos_resumen():
     try:
         with db.get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(sql)
+                cur.execute(sql, {"news": NOTICIA_SOURCES})
                 rows = [dict(r) for r in cur.fetchall()]
         for r in rows:
             if r.get("ultima_senal"):

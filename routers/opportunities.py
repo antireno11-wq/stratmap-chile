@@ -7,14 +7,9 @@ import db
 from deps import get_current_user, require_admin
 from plans import features_for
 from schemas import IngestPayload
+from source_categories import NOTICIA_SOURCES
 
 router = APIRouter(tags=["opportunities"])
-
-NEWS_SOURCES = [
-    'Lithium Chile', 'Portal Minero', 'Revista EI', 'Minería Chilena',
-    'Diario Financiero', 'COCHILCO Noticias', 'InfoMineria', 'Mundo Minería',
-    'Radio U. de Chile', 'Radio Universidad de Chile', 'BioBioChile', 'RSS',
-]
 
 
 @router.post("/ingest", dependencies=[Depends(require_admin)])
@@ -70,7 +65,7 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
                     WHERE source = ANY(%s)
                     ORDER BY COALESCE(published_at, created_at) DESC NULLS LAST
                     LIMIT %s
-                """, (NEWS_SOURCES, limit))
+                """, (NOTICIA_SOURCES, limit))
                 rows = [dict(r) for r in cur.fetchall()]
         for r in rows:
             for f in ['published_at', 'created_at']:

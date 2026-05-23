@@ -181,7 +181,7 @@ def fetch_chilebcompra(limit: int = 200) -> List[Dict[str, Any]]:
             score = score_item(title, industry)
 
             all_items.append({
-                "source": "Chile Compra",
+                "source": "ChileCompra",
                 "title": title[:400],
                 "url": detail_page_url,
                 "company": organismo or None,
