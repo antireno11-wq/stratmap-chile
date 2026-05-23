@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Dict
 from collections import defaultdict, deque
 import asyncio
+import os
 import time
 
 from fastapi import FastAPI, Request
@@ -16,6 +17,11 @@ from fastapi.responses import JSONResponse
 import db
 from db import db_health, init_db_safe, recalc_all_scores, expire_stale_opportunities
 from helpers import run_rss_ingest
+
+
+# Heartbeat del scheduler: timestamp del último ciclo completo. Lo lee /health.
+_scheduler_last_run_ts: float = 0.0
+_app_started_ts: float = time.time()
 from routers import (
     auth as auth_router,
     opportunities as opportunities_router,
@@ -33,6 +39,7 @@ from routers import (
 
 async def _rss_scheduler():
     """Corre RSS cada 6h y tareas diarias (ai scorer + expire stale) cada 24h."""
+    global _scheduler_last_run_ts
     await asyncio.sleep(10)
     cycle = 0
     while True:
@@ -40,6 +47,7 @@ async def _rss_scheduler():
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, run_rss_ingest)
         print(f"[scheduler] RSS done: {result}")
+        _scheduler_last_run_ts = time.time()
 
         cycle += 1
         if cycle % 4 == 0:
@@ -177,8 +185,52 @@ async def rate_limit_middleware(request: Request, call_next):
 
 @app.get("/health")
 def health():
+    """Healthcheck robusto: DB, último scrape por fuente, heartbeat scheduler, build SHA."""
+    now = time.time()
     db_ok, db_msg = db_health()
-    return {"status": "ok", "db_ok": db_ok, "db_msg": db_msg}
+
+    # Último scrape exitoso por fuente (MAX(updated_at) por source en opportunities)
+    last_scrape: Dict[str, str] = {}
+    if db_ok:
+        try:
+            with db.get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT source, MAX(updated_at) AS last
+                        FROM opportunities
+                        WHERE source IS NOT NULL
+                        GROUP BY source
+                        ORDER BY source
+                    """)
+                    for r in cur.fetchall():
+                        if r.get("last"):
+                            last_scrape[r["source"]] = r["last"].isoformat()
+        except Exception as e:
+            last_scrape = {"error": f"{type(e).__name__}: {e}"}
+
+    # Scheduler heartbeat
+    if _scheduler_last_run_ts > 0:
+        scheduler = {
+            "last_run": _scheduler_last_run_ts,
+            "seconds_ago": int(now - _scheduler_last_run_ts),
+            "stale": (now - _scheduler_last_run_ts) > 8 * 3600,  # > 8h sin correr
+        }
+    else:
+        # Tolerar primeros 15 min después del arranque (el scheduler hace sleep(10))
+        scheduler = {
+            "last_run": None,
+            "warming_up": (now - _app_started_ts) < 900,
+        }
+
+    return {
+        "status": "ok",
+        "db_ok": db_ok,
+        "db_msg": db_msg,
+        "version": os.getenv("RAILWAY_GIT_COMMIT_SHA", "unknown")[:8],
+        "uptime_seconds": int(now - _app_started_ts),
+        "scheduler": scheduler,
+        "last_scrape_by_source": last_scrape,
+    }
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────

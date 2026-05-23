@@ -671,13 +671,13 @@ def expire_stale_opportunities() -> Dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             for source, ttl_days in SOURCE_TTL_DAYS.items():
-                cur.execute(f"""
+                cur.execute("""
                     UPDATE opportunities
                     SET is_active = FALSE
                     WHERE source = %(source)s
                       AND is_active = TRUE
-                      AND updated_at < NOW() - INTERVAL '{ttl_days} days'
-                """, {"source": source})
+                      AND updated_at < NOW() - (%(ttl_days)s || ' days')::interval
+                """, {"source": source, "ttl_days": ttl_days})
                 count = cur.rowcount
                 if count > 0:
                     expired[source] = count
