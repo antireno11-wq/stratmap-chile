@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
-import csv, io, asyncio, os
+from collections import defaultdict, deque
+import csv, io, asyncio, os, time
 
-from fastapi import FastAPI, HTTPException, Query, Depends, Header
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 
 import db
@@ -130,6 +131,61 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Stratmap Chile", lifespan=lifespan)
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# In-memory sliding-window rate limiter, per IP, per rule. Single-instance only;
+# if we scale to multiple replicas this needs Redis-backed coordination.
+
+_RATE_RULES = [
+    ("/admin/",     2,   60),   # /admin/* :  2 req / 60s (protege quota Anthropic + escrituras)
+    ("/auth/login", 5,   60),   # login    :  5 req / 60s (anti brute-force)
+    ("",            200, 60),   # default  : 200 req / 60s
+]
+_rl_hits: Dict[str, Dict[str, deque]] = defaultdict(lambda: defaultdict(deque))
+_rl_lock = asyncio.Lock()
+
+
+def _match_rate_rule(path: str):
+    for prefix, max_req, window in _RATE_RULES:
+        if path.startswith(prefix):
+            return prefix, max_req, window
+    return _RATE_RULES[-1]
+
+
+def _client_ip(request: Request) -> str:
+    # Railway (y cualquier proxy) setea X-Forwarded-For con el IP real del cliente.
+    # En dev sin proxy el header no existe y caemos a request.client.host.
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # /health debe quedar fuera: Railway lo consulta en loop como healthcheck
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    ip = _client_ip(request)
+    rule_key, max_req, window = _match_rate_rule(request.url.path)
+    now = time.monotonic()
+    cutoff = now - window
+
+    async with _rl_lock:
+        bucket = _rl_hits[rule_key][ip]
+        while bucket and bucket[0] < cutoff:
+            bucket.popleft()
+        if len(bucket) >= max_req:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Demasiadas solicitudes. Límite: {max_req}/{window}s."},
+                headers={"Retry-After": str(window)},
+            )
+        bucket.append(now)
+
+    return await call_next(request)
+
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
