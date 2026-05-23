@@ -58,7 +58,7 @@
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; }
   </style>
-  <link rel="stylesheet" href="/theme.css" />
+  <link rel="stylesheet" href="/theme.css?v=2" />
 </head>
 <body>
   <nav class="sidebar">
@@ -90,7 +90,7 @@
     </div>
   </div>
 
-  <script src="/auth.js"></script>
+  <script src="/auth.js?v=2"></script>
   <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     let allMandantes = [];
@@ -162,6 +162,6 @@
 
     load();
   </script>
-  <script src="/mobile-nav.js" defer></script>
+  <script src="/mobile-nav.js?v=2" defer></script>
 </body>
 </html>
