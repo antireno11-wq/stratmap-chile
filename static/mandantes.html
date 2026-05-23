@@ -58,6 +58,7 @@
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; }
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 <body>
   <nav class="sidebar">
@@ -89,6 +90,8 @@
     </div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     let allMandantes = [];
 
@@ -150,7 +153,7 @@
     }
 
     async function load() {
-      const res  = await fetch('/mandantes');
+      const res  = await apiFetch('/mandantes');
       const data = await res.json();
       allMandantes = data.mandantes || [];
       document.getElementById('topbar-sub').textContent = `${allMandantes.length} empresas con actividad minera`;
@@ -159,5 +162,6 @@
 
     load();
   </script>
+  <script src="/mobile-nav.js" defer></script>
 </body>
 </html>

@@ -80,6 +80,7 @@
     .date-input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; outline: none; }
     .date-input:focus { border-color: var(--blue); }
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 <body>
   <aside class="sidebar">
@@ -230,6 +231,8 @@
     </div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     const INDUSTRIES = ["Minería","Construcción","Energía","Infraestructura","Agua y Saneamiento","Telecomunicaciones","Logística","Gobierno"];
     const REGIONS = ["Arica y Parinacota","Tarapacá","Antofagasta","Atacama","Coquimbo","Valparaíso","Metropolitana","O'Higgins","Maule","Ñuble","Biobío","Araucanía","Los Ríos","Los Lagos","Aysén","Magallanes"];
@@ -301,12 +304,12 @@
         company_name: companyName,
         services: services.map(({name, description}) => ({name, description})).filter(s => s.name.trim())
       };
-      await fetch('/me/service-profile', {
+      await apiFetch('/me/service-profile', {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(servicePayload)
       });
-      try { await fetch("/me/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(prefs)}); } catch(e) {}
+      try { await apiFetch("/me/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(prefs)}); } catch(e) {}
       const fb = document.getElementById("feedback");
       fb.classList.add("show");
       setTimeout(() => fb.classList.remove("show"), 3000);
@@ -374,7 +377,7 @@
 
     async function loadServiceProfile() {
       try {
-        const res = await fetch('/me/service-profile');
+        const res = await apiFetch('/me/service-profile');
         const data = await res.json();
         if (data.company_name) document.getElementById('company-name').value = data.company_name;
         if (data.services?.length) {
@@ -393,7 +396,7 @@
       btn.textContent = '⏳ Corriendo…';
       status.textContent = 'Iniciando AI matcher…';
       try {
-        const res = await fetch('/admin/run-ai-matcher', { method: 'POST' });
+        const res = await apiFetch('/admin/run-ai-matcher', { method: 'POST' });
         const data = await res.json();
         status.textContent = data.ok ? '✓ Matcher iniciado — puede tardar varios minutos' : 'Error al iniciar';
         status.style.color = data.ok ? '#16a34a' : '#dc2626';
@@ -414,5 +417,6 @@
     buildTagGrid("tag-phases", PHASES, "phases");
     buildTagGrid("tag-sources", SOURCES, "sources");
   </script>
+  <script src="/mobile-nav.js" defer></script>
 </body>
 </html>

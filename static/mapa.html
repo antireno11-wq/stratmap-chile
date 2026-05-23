@@ -107,6 +107,7 @@
     .detail-row a { color: var(--blue); text-decoration: none; }
     .detail-row a:hover { text-decoration: underline; }
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 <body>
   <aside class="sidebar">
@@ -194,6 +195,8 @@
     <div class="drawer-body" id="drawer-body"></div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     // ── Coordenadas por región (centros aproximados) ───────────────────────────
     const REGION_COORDS = {
@@ -430,8 +433,8 @@
       map.closePopup();
 
       const [pipeRes, notesRes] = await Promise.all([
-        fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
-        fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
+        apiFetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
+        apiFetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
       ]);
 
       const score = item.radar_score || item.score || 0;
@@ -482,7 +485,7 @@
     };
 
     window.savePipe = async function(oppId) {
-      await fetch(`/opportunities/${oppId}/pipeline`, {
+      await apiFetch(`/opportunities/${oppId}/pipeline`, {
         method:"PUT", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({status:document.getElementById("ps").value, assignee:document.getElementById("pa").value||null})
       });
@@ -495,7 +498,7 @@
       const note = document.getElementById("nt").value.trim();
       if (!note) return;
       const author = document.getElementById("na").value.trim() || null;
-      const res = await fetch(`/opportunities/${oppId}/notes`, {
+      const res = await apiFetch(`/opportunities/${oppId}/notes`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({note, author})
       });
@@ -544,7 +547,7 @@
 
     async function loadFaenas() {
       try {
-        const res = await fetch("/faenas");
+        const res = await apiFetch("/faenas");
         const data = await res.json();
         const faenas = data.faenas || [];
         faenasLayer.clearLayers();
@@ -585,7 +588,7 @@
 
     // ── Load ──────────────────────────────────────────────────────────────────
     async function load() {
-      const res = await fetch("/opportunities?limit=2000");
+      const res = await apiFetch("/opportunities?limit=2000");
       const data = await res.json();
       allItems = data.items || [];
       applyFilters();
@@ -624,5 +627,6 @@
 
     load();
   </script>
+  <script src="/mobile-nav.js" defer></script>
 </body>
 </html>

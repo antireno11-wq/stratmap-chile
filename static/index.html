@@ -274,6 +274,7 @@
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 <body>
   <aside class="sidebar">
@@ -282,10 +283,11 @@
     </div>
 
     <div class="sidebar-section">Plataforma</div>
-    <div class="sidebar-item active"><span class="icon">⚡</span> Radar</div>
-    <div class="sidebar-item"><span class="icon">📋</span> Licitaciones <span class="sidebar-count" id="sc-licitaciones">—</span></div>
-    <div class="sidebar-item"><span class="icon">⛏️</span> Concesiones <span class="sidebar-count" id="sc-projects">—</span></div>
-    <div class="sidebar-item"><span class="icon">📰</span> Noticias <span class="sidebar-count" id="sc-news">—</span></div>
+    <div class="sidebar-item active" data-cat=""><span class="icon">⚡</span> Radar</div>
+    <div class="sidebar-item" data-cat="licitacion"><span class="icon">📋</span> Licitaciones <span class="sidebar-count" id="sc-licitaciones">—</span></div>
+    <div class="sidebar-item" data-cat="concesion"><span class="icon">⛏️</span> Concesiones <span class="sidebar-count" id="sc-projects">—</span></div>
+    <div class="sidebar-item" data-cat="prospecto"><span class="icon">🌱</span> Prospectos <span class="sidebar-count" id="sc-prospectos">—</span></div>
+    <div class="sidebar-item" data-cat="noticia"><span class="icon">📰</span> Noticias <span class="sidebar-count" id="sc-news">—</span></div>
     <a class="sidebar-item" href="/kanban.html"><span class="icon">🗂</span> Pipeline</a>
     <a class="sidebar-item" href="/mapa.html"><span class="icon">🗺</span> Mapa</a>
     <a class="sidebar-item" href="/mandantes.html"><span class="icon">🏢</span> Mandantes <span class="sidebar-count" id="sc-mandantes">—</span></a>
@@ -463,6 +465,9 @@
     <div class="drawer-body" id="drawer-body"></div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { /* redirigió */ }</script>
   <script src="/app.js"></script>
+  <script src="/mobile-nav.js" defer></script>
 </body>
 </html>

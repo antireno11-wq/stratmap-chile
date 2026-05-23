@@ -152,7 +152,7 @@ def fetch_sea(days_back: int = 90, limit: int = 800) -> List[Dict[str, Any]]:
             score = score_v1(industry, title, inv_usd)
 
             out.append({
-                "source": "sea",
+                "source": "SEA",
                 "title": title,
                 "url": url,
                 "company": company,

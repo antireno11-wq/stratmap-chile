@@ -1,4 +1,5 @@
 # db.py
+import logging
 import os, re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -6,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
+
+logger = logging.getLogger("stratmap.db")
 
 
 def _db_url() -> str:
@@ -19,6 +22,113 @@ def get_conn():
     return psycopg.connect(_db_url(), row_factory=dict_row, connect_timeout=8)
 
 
+# ── Normalización de nombres de empresas ──────────────────────────────────────
+# Mismas variantes que aparecen en SEA/SIGEX/Codelco/MOP con razones sociales
+# largas. Mapeamos a una forma canónica (la versión "marca") para no fragmentar
+# el ranking de mandantes y los joins por empresa.
+_COMPANY_ALIASES = {
+    # BHP — Escondida, Spence
+    "bhp":                                                "BHP Chile",
+    "bhp chile":                                          "BHP Chile",
+    "bhp chile inc":                                      "BHP Chile",
+    "bhp chile inc.":                                     "BHP Chile",
+    "bhp chile ltda":                                     "BHP Chile",
+    "bhp billiton":                                       "BHP Chile",
+    "minera escondida":                                   "Escondida",
+    "minera escondida limitada":                          "Escondida",
+    "escondida":                                          "Escondida",
+    "minera spence":                                      "Spence",
+    "minera spence s.a.":                                 "Spence",
+    "spence":                                             "Spence",
+    # AMSA — Pelambres, Centinela, Zaldívar
+    "antofagasta minerals":                               "Antofagasta Minerals",
+    "antofagasta minerals s.a.":                          "Antofagasta Minerals",
+    "amsa":                                               "Antofagasta Minerals",
+    "minera los pelambres":                               "Los Pelambres",
+    "los pelambres":                                      "Los Pelambres",
+    "pelambres":                                          "Los Pelambres",
+    "minera centinela":                                   "Centinela",
+    "centinela":                                          "Centinela",
+    "minera zaldivar":                                    "Zaldívar",
+    "minera zaldívar":                                    "Zaldívar",
+    "compania minera zaldivar":                           "Zaldívar",
+    "compañía minera zaldívar":                           "Zaldívar",
+    # Codelco
+    "codelco":                                            "Codelco",
+    "corporacion nacional del cobre":                     "Codelco",
+    "corporación nacional del cobre":                     "Codelco",
+    "corporacion nacional del cobre de chile":            "Codelco",
+    "corporación nacional del cobre de chile":            "Codelco",
+    "codelco chile":                                      "Codelco",
+    # Collahuasi
+    "compania minera dona ines de collahuasi":            "Collahuasi",
+    "compañía minera doña inés de collahuasi":            "Collahuasi",
+    "doña inés de collahuasi scm":                        "Collahuasi",
+    "minera collahuasi":                                  "Collahuasi",
+    "collahuasi":                                         "Collahuasi",
+    # Teck
+    "compania minera teck quebrada blanca":               "Quebrada Blanca",
+    "compañía minera teck quebrada blanca":               "Quebrada Blanca",
+    "teck quebrada blanca":                               "Quebrada Blanca",
+    "quebrada blanca":                                    "Quebrada Blanca",
+    "teck resources":                                     "Teck",
+    "teck resources chile":                               "Teck",
+    "teck chile":                                         "Teck",
+    "teck":                                               "Teck",
+    "compania minera carmen de andacollo":                "Carmen de Andacollo",
+    "compañía minera carmen de andacollo":                "Carmen de Andacollo",
+    "carmen de andacollo":                                "Carmen de Andacollo",
+    "teck andacollo":                                     "Carmen de Andacollo",
+    "minera andacollo":                                   "Carmen de Andacollo",
+    # Candelaria / Lundin
+    "minera candelaria":                                  "Candelaria",
+    "candelaria":                                         "Candelaria",
+    "scm minera lumina copper chile":                     "Candelaria",
+    "lumina copper":                                      "Candelaria",
+    "lundin mining":                                      "Lundin Mining",
+    # SQM
+    "sqm":                                                "SQM",
+    "sqm s.a.":                                           "SQM",
+    "sociedad quimica y minera de chile":                 "SQM",
+    "sociedad química y minera de chile":                 "SQM",
+    # ENAMI
+    "enami":                                              "ENAMI",
+    "empresa nacional de mineria":                        "ENAMI",
+    "empresa nacional de minería":                        "ENAMI",
+    # MOP
+    "ministerio de obras publicas":                       "MOP",
+    "ministerio de obras públicas":                       "MOP",
+    "direccion general de obras publicas":                "MOP",
+    "dirección general de obras públicas":                "MOP",
+    "mop":                                                "MOP",
+    # Anglo American
+    "anglo american":                                     "Anglo American",
+    "anglo american sur":                                 "Anglo American",
+    "anglo american norte":                               "Anglo American",
+}
+
+
+def normalize_company(name: Optional[str]) -> Optional[str]:
+    """Devuelve la forma canónica de un nombre de empresa, o el input
+    limpiado (trim + collapse spaces) si no hay match. None si vacío."""
+    if not name or not name.strip():
+        return None
+    cleaned = " ".join(name.strip().split())  # collapse whitespace
+    key = cleaned.lower()
+    if key in _COMPANY_ALIASES:
+        return _COMPANY_ALIASES[key]
+    # Sin sufijos legales para reintentar
+    stripped = key
+    for suf in (" s.a.", " s.a", " spa", " ltda", " ltda.", " scm", " ltda ",
+                " s.a. ", " sa ", " inc.", " inc ", " inc"):
+        if stripped.endswith(suf):
+            stripped = stripped[:-len(suf)].rstrip()
+            break
+    if stripped != key and stripped in _COMPANY_ALIASES:
+        return _COMPANY_ALIASES[stripped]
+    return cleaned
+
+
 def init_db_safe() -> None:
     try:
         init_db()
@@ -27,7 +137,8 @@ def init_db_safe() -> None:
         init_contacts_db()
         init_pipeline_db()
     except Exception as e:
-        print(f"[db] init_db_safe: DB no disponible todavía: {type(e).__name__}: {e}")
+        logger.warning("init_db_safe: db not available yet",
+                       extra={"err_type": type(e).__name__, "err": str(e)})
 
 
 def init_db() -> None:
@@ -70,6 +181,15 @@ def init_db() -> None:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS strategy TEXT NULL;")
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;")
+            # Deduplicación: dedup_key = hash de company+title (normalizado) +
+            # source-category. Cuando dos fuentes reportan lo mismo (Portal Minero
+            # + COCHILCO + DF cubriendo la misma noticia), dedup_key empareja.
+            # is_duplicate=TRUE en las copias para que las queries de listado las
+            # filtren.
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS dedup_key TEXT NULL;")
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_duplicate BOOLEAN NOT NULL DEFAULT FALSE;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_dedup_key ON opportunities(dedup_key) WHERE dedup_key IS NOT NULL;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_is_duplicate ON opportunities(is_duplicate) WHERE is_duplicate;")
         conn.commit()
 
 
@@ -80,8 +200,10 @@ def init_users_db() -> None:
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         name TEXT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_login TIMESTAMPTZ NULL
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ NULL;
     CREATE TABLE IF NOT EXISTS user_preferences (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         preferred_industries TEXT[] DEFAULT '{}',
@@ -97,6 +219,21 @@ def init_users_db() -> None:
         weight_company FLOAT DEFAULT 1.0,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- ── Planes / billing ──────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS user_plans (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        plan TEXT NOT NULL DEFAULT 'free',
+        status TEXT NOT NULL DEFAULT 'active',  -- active, past_due, canceled, trialing
+        current_period_end TIMESTAMPTZ NULL,
+        mp_customer_id TEXT NULL,
+        mp_preapproval_id TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_plans_plan ON user_plans(plan);
+    CREATE INDEX IF NOT EXISTS idx_user_plans_mp_preapproval ON user_plans(mp_preapproval_id)
+        WHERE mp_preapproval_id IS NOT NULL;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -148,10 +285,12 @@ def init_contacts_db() -> None:
 
 
 def init_pipeline_db() -> None:
+    # Esquema actual: pipeline y notes son per-user (multi-tenant).
     sql = """
     CREATE TABLE IF NOT EXISTS opportunity_pipeline (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         status TEXT NOT NULL DEFAULT 'Detectada',
         outcome TEXT NULL,
         outcome_date TIMESTAMPTZ NULL,
@@ -160,28 +299,71 @@ def init_pipeline_db() -> None:
         notes TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE(opportunity_id)
+        UNIQUE(opportunity_id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS pipeline_notes (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         note TEXT NOT NULL,
         author TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE INDEX IF NOT EXISTS idx_pipeline_opportunity_id ON opportunity_pipeline(opportunity_id);
+    CREATE INDEX IF NOT EXISTS idx_pipeline_user_id ON opportunity_pipeline(user_id);
     CREATE INDEX IF NOT EXISTS idx_pipeline_status ON opportunity_pipeline(status);
     CREATE INDEX IF NOT EXISTS idx_pipeline_notes_opportunity_id ON pipeline_notes(opportunity_id);
+    CREATE INDEX IF NOT EXISTS idx_pipeline_notes_user_id ON pipeline_notes(user_id);
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
-            # Migración: agregar columnas outcome si no existen (para BDs existentes)
+            # Migraciones idempotentes para BDs viejas
             cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome TEXT NULL;")
             cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome_date TIMESTAMPTZ NULL;")
             cur.execute("ALTER TABLE opportunity_pipeline ADD COLUMN IF NOT EXISTS outcome_notes TEXT NULL;")
+        conn.commit()
+    _migrate_pipeline_user_id()
+
+
+def _migrate_pipeline_user_id() -> None:
+    """One-shot migration: opportunity_pipeline y pipeline_notes pasan a per-user.
+
+    Idempotente: si ya tienen user_id (NOT NULL) no hace nada. Si la columna
+    no existe (BD vieja), la agrega, backfilea con MIN(users.id), recrea la
+    constraint UNIQUE, y borra filas huérfanas si no había usuarios."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MIN(id) AS uid FROM users")
+            first_user = cur.fetchone()
+            first_uid = first_user["uid"] if first_user else None
+
+            for table, drop_constraint, new_constraint in [
+                ("opportunity_pipeline",
+                 "opportunity_pipeline_opportunity_id_key",
+                 "opportunity_pipeline_opportunity_id_user_id_key"),
+                ("pipeline_notes", None, None),
+            ]:
+                cur.execute("""
+                    SELECT column_name, is_nullable FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = 'user_id'
+                """, (table,))
+                row = cur.fetchone()
+                if row and row["is_nullable"] == "NO":
+                    continue  # ya migrado
+
+                logger.info("migrate to per-user (pipeline)", extra={"table": table})
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
+                if first_uid is not None:
+                    cur.execute(f"UPDATE {table} SET user_id = %s WHERE user_id IS NULL", (first_uid,))
+                cur.execute(f"DELETE FROM {table} WHERE user_id IS NULL")
+                cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
+                if drop_constraint:
+                    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {drop_constraint}")
+                if new_constraint:
+                    cur.execute(f"ALTER TABLE {table} ADD CONSTRAINT {new_constraint} UNIQUE (opportunity_id, user_id)")
         conn.commit()
 
 
@@ -512,6 +694,58 @@ def recalc_all_scores() -> Dict[str, Any]:
     }
 
 
+def _compute_dedup_key(item: Dict[str, Any]) -> Optional[str]:
+    """Calcula dedup_key = sha1 de title-normalizado + company-canónica.
+
+    Cuando dos sources reportan la misma noticia/proyecto, los títulos suelen
+    coincidir tras normalizar (lowercase, sin signos). Si no, esto no agrupa
+    — es una dedup conservadora.
+    """
+    import hashlib
+    import re
+    title = (item.get("title") or "").lower().strip()
+    if not title:
+        return None
+    # Quitar signos, números sueltos y collapsar espacios
+    title_n = re.sub(r"[^a-záéíóúñü\s]", " ", title)
+    title_n = " ".join(title_n.split())
+    company = (item.get("company") or "").lower().strip()
+    raw = f"{title_n}|{company}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def mark_duplicates() -> int:
+    """Marca como is_duplicate=TRUE las filas con dedup_key compartido salvo
+    una "ganadora" (mayor score, desempate por id menor). Idempotente.
+
+    Devuelve cantidad de filas marcadas como duplicadas en esta corrida.
+    """
+    sql = """
+    WITH ranked AS (
+        SELECT id, dedup_key,
+               ROW_NUMBER() OVER (
+                   PARTITION BY dedup_key
+                   ORDER BY score DESC, id ASC
+               ) AS rn
+        FROM opportunities
+        WHERE dedup_key IS NOT NULL
+    ),
+    targets AS (
+        SELECT id FROM ranked WHERE rn > 1
+    )
+    UPDATE opportunities o
+    SET is_duplicate = TRUE
+    FROM targets t
+    WHERE o.id = t.id AND o.is_duplicate = FALSE;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            n = cur.rowcount
+        conn.commit()
+    return n
+
+
 def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     inserted = 0
     updated = 0
@@ -519,11 +753,11 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
     INSERT INTO opportunities
       (source, title, url, company, contractor, industry, region, phase, score,
        entry, raw, published_at, created_at, updated_at,
-       jobs_count, signal_score, signal_detail, last_signal_at)
+       jobs_count, signal_score, signal_detail, last_signal_at, dedup_key)
     VALUES
       (%(source)s, %(title)s, %(url)s, %(company)s, %(contractor)s, %(industry)s,
        %(region)s, %(phase)s, %(score)s, %(entry)s, %(raw)s, %(published_at)s, NOW(), NOW(),
-       %(jobs_count)s, %(signal_score)s, %(signal_detail)s, %(last_signal_at)s)
+       %(jobs_count)s, %(signal_score)s, %(signal_detail)s, %(last_signal_at)s, %(dedup_key)s)
     ON CONFLICT (url) DO UPDATE SET
       source = EXCLUDED.source, title = EXCLUDED.title, company = EXCLUDED.company,
       contractor = EXCLUDED.contractor, industry = EXCLUDED.industry, region = EXCLUDED.region,
@@ -534,6 +768,7 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
       signal_detail = EXCLUDED.signal_detail,
       last_signal_at = COALESCE(EXCLUDED.last_signal_at, opportunities.last_signal_at),
       published_at = CASE WHEN EXCLUDED.published_at IS NOT NULL THEN EXCLUDED.published_at ELSE opportunities.published_at END,
+      dedup_key = COALESCE(EXCLUDED.dedup_key, opportunities.dedup_key),
       is_active = TRUE,
       updated_at = NOW()
     RETURNING (xmax = 0) AS inserted;
@@ -545,6 +780,12 @@ def upsert_opportunities(items: List[Dict[str, Any]]) -> Tuple[int, int]:
         it.setdefault("published_at", None)
         it.setdefault("jobs_count", 0); it.setdefault("signal_score", 0)
         it.setdefault("signal_detail", None); it.setdefault("last_signal_at", None)
+
+        # Normalizar nombre de empresa (forma canónica para joins/rankings)
+        it["company"] = normalize_company(it.get("company"))
+
+        # Calcular dedup_key (lo usa mark_duplicates() post-ingest)
+        it["dedup_key"] = _compute_dedup_key(it)
 
         # ── Calcular score automáticamente (salvo manual override > 0) ────────
         existing_score = it.get("score") or 0
@@ -626,19 +867,19 @@ def expire_stale_opportunities() -> Dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             for source, ttl_days in SOURCE_TTL_DAYS.items():
-                cur.execute(f"""
+                cur.execute("""
                     UPDATE opportunities
                     SET is_active = FALSE
                     WHERE source = %(source)s
                       AND is_active = TRUE
-                      AND updated_at < NOW() - INTERVAL '{ttl_days} days'
-                """, {"source": source})
+                      AND updated_at < NOW() - (%(ttl_days)s || ' days')::interval
+                """, {"source": source, "ttl_days": ttl_days})
                 count = cur.rowcount
                 if count > 0:
                     expired[source] = count
         conn.commit()
     total = sum(expired.values())
-    print(f"[expire] {total} oportunidades inactivadas: {expired}")
+    logger.info("expire_stale done", extra={"total": total, "by_source": expired})
     return {"total_expired": total, "by_source": expired}
 
 
@@ -651,9 +892,10 @@ def list_opportunities(
     conditions: List[str] = []
     params: Dict[str, Any] = {"limit": limit}
 
-    # Por defecto sólo mostramos oportunidades activas
+    # Por defecto sólo mostramos oportunidades activas + canónicas (no duplicadas)
     if not include_inactive:
         conditions.append("o.is_active IS NOT FALSE")
+        conditions.append("o.is_duplicate = FALSE")
 
     if q:
         conditions.append(
@@ -697,19 +939,19 @@ def get_opportunity_by_url(url: str) -> Optional[Dict[str, Any]]:
 PIPELINE_STATUSES = ["Detectada", "En análisis", "Postular", "No postular",
                      "Presentada", "Adjudicada", "Perdida"]
 
-def get_pipeline(opportunity_id: int) -> Optional[Dict[str, Any]]:
-    sql = "SELECT * FROM opportunity_pipeline WHERE opportunity_id = %(id)s LIMIT 1;"
+def get_pipeline(opportunity_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM opportunity_pipeline WHERE opportunity_id = %(id)s AND user_id = %(uid)s LIMIT 1;"
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"id": opportunity_id})
+            cur.execute(sql, {"id": opportunity_id, "uid": user_id})
             row = cur.fetchone()
     return dict(row) if row else None
 
-def upsert_pipeline(opportunity_id: int, status: str, assignee: Optional[str] = None) -> Dict[str, Any]:
+def upsert_pipeline(opportunity_id: int, user_id: int, status: str, assignee: Optional[str] = None) -> Dict[str, Any]:
     sql = """
-    INSERT INTO opportunity_pipeline (opportunity_id, status, assignee, updated_at)
-    VALUES (%(opportunity_id)s, %(status)s, %(assignee)s, NOW())
-    ON CONFLICT (opportunity_id) DO UPDATE SET
+    INSERT INTO opportunity_pipeline (opportunity_id, user_id, status, assignee, updated_at)
+    VALUES (%(opportunity_id)s, %(user_id)s, %(status)s, %(assignee)s, NOW())
+    ON CONFLICT (opportunity_id, user_id) DO UPDATE SET
       status = EXCLUDED.status,
       assignee = COALESCE(EXCLUDED.assignee, opportunity_pipeline.assignee),
       updated_at = NOW()
@@ -717,46 +959,47 @@ def upsert_pipeline(opportunity_id: int, status: str, assignee: Optional[str] = 
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"opportunity_id": opportunity_id, "status": status, "assignee": assignee})
+            cur.execute(sql, {"opportunity_id": opportunity_id, "user_id": user_id, "status": status, "assignee": assignee})
             row = cur.fetchone()
         conn.commit()
     return dict(row)
 
-def add_pipeline_note(opportunity_id: int, note: str, author: Optional[str] = None) -> Dict[str, Any]:
+def add_pipeline_note(opportunity_id: int, user_id: int, note: str, author: Optional[str] = None) -> Dict[str, Any]:
     sql = """
-    INSERT INTO pipeline_notes (opportunity_id, note, author)
-    VALUES (%(opportunity_id)s, %(note)s, %(author)s)
+    INSERT INTO pipeline_notes (opportunity_id, user_id, note, author)
+    VALUES (%(opportunity_id)s, %(user_id)s, %(note)s, %(author)s)
     RETURNING *;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"opportunity_id": opportunity_id, "note": note, "author": author})
+            cur.execute(sql, {"opportunity_id": opportunity_id, "user_id": user_id, "note": note, "author": author})
             row = cur.fetchone()
         conn.commit()
     return dict(row)
 
-def get_pipeline_notes(opportunity_id: int) -> List[Dict[str, Any]]:
+def get_pipeline_notes(opportunity_id: int, user_id: int) -> List[Dict[str, Any]]:
     sql = """
     SELECT * FROM pipeline_notes
-    WHERE opportunity_id = %(id)s
+    WHERE opportunity_id = %(id)s AND user_id = %(uid)s
     ORDER BY created_at DESC;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"id": opportunity_id})
+            cur.execute(sql, {"id": opportunity_id, "uid": user_id})
             return [dict(r) for r in cur.fetchall()]
 
-def list_pipeline(status: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_pipeline(user_id: int, status: Optional[str] = None) -> List[Dict[str, Any]]:
     sql = """
     SELECT o.id, o.title, o.company, o.region, o.industry, o.url,
            (o.score + COALESCE(o.signal_score, 0)) AS radar_score,
            p.status, p.assignee, p.updated_at
     FROM opportunity_pipeline p
     JOIN opportunities o ON o.id = p.opportunity_id
+    WHERE p.user_id = %(user_id)s
     """
-    params: Dict[str, Any] = {}
+    params: Dict[str, Any] = {"user_id": user_id}
     if status:
-        sql += " WHERE p.status = %(status)s"
+        sql += " AND p.status = %(status)s"
         params["status"] = status
     sql += " ORDER BY p.updated_at DESC;"
     with get_conn() as conn:
@@ -787,6 +1030,79 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
             cur.execute(sql, {"email": email})
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+def touch_user_last_login(user_id: int) -> None:
+    """Marca last_login=NOW() para tracking de usuarios activos."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
+        conn.commit()
+
+
+# ── Billing / planes ──────────────────────────────────────────────────────────
+
+def get_user_plan(user_id: int) -> Dict[str, Any]:
+    """Devuelve el plan del usuario, o un default 'free' / 'active' si no hay fila."""
+    sql = "SELECT * FROM user_plans WHERE user_id = %s LIMIT 1;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id,))
+            row = cur.fetchone()
+    if row:
+        return dict(row)
+    return {"user_id": user_id, "plan": "free", "status": "active",
+            "current_period_end": None, "mp_customer_id": None, "mp_preapproval_id": None}
+
+
+def upsert_user_plan(user_id: int, plan: str, status: str,
+                     current_period_end: Optional[datetime] = None,
+                     mp_customer_id: Optional[str] = None,
+                     mp_preapproval_id: Optional[str] = None) -> Dict[str, Any]:
+    sql = """
+    INSERT INTO user_plans (user_id, plan, status, current_period_end,
+                            mp_customer_id, mp_preapproval_id, updated_at)
+    VALUES (%(uid)s, %(plan)s, %(status)s, %(end)s, %(cust)s, %(pre)s, NOW())
+    ON CONFLICT (user_id) DO UPDATE SET
+      plan = EXCLUDED.plan,
+      status = EXCLUDED.status,
+      current_period_end = COALESCE(EXCLUDED.current_period_end, user_plans.current_period_end),
+      mp_customer_id = COALESCE(EXCLUDED.mp_customer_id, user_plans.mp_customer_id),
+      mp_preapproval_id = COALESCE(EXCLUDED.mp_preapproval_id, user_plans.mp_preapproval_id),
+      updated_at = NOW()
+    RETURNING *;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {
+                "uid": user_id, "plan": plan, "status": status,
+                "end": current_period_end, "cust": mp_customer_id, "pre": mp_preapproval_id,
+            })
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def get_user_by_mp_preapproval(preapproval_id: str) -> Optional[Dict[str, Any]]:
+    """Encuentra el user_plans cuya preapproval coincide. Usado por el webhook MP."""
+    sql = "SELECT * FROM user_plans WHERE mp_preapproval_id = %s LIMIT 1;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (preapproval_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def count_user_contacts(user_id: int) -> int:
+    """No-op por ahora — contactos no están scopeados por user. Devuelve count global.
+
+    TODO: cuando contacts tenga user_id, scopear este count.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM contacts")
+            row = cur.fetchone()
+    return int(row["n"]) if row else 0
 
 def save_preferences(user_id: int, prefs: Dict[str, Any]) -> None:
     sql = """
@@ -1014,7 +1330,8 @@ def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
             create_contact(c)
             inserted += 1
         except Exception as e:
-            print(f"[contacts] error importando {c.get('name')}: {e}")
+            logger.warning("contacts import row failed",
+                           extra={"name": c.get("name"), "err": str(e)})
             errors += 1
     return inserted, errors
 
@@ -1022,11 +1339,14 @@ def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
 # ── AI Matching ───────────────────────────────────────────────────────────────
 
 def init_ai_db() -> None:
-    sql = """
+    # Esquema actual (instalaciones nuevas): user_id INTEGER REFERENCES users(id).
+    # Para instalaciones existentes que tienen user_id TEXT ('default'), corremos
+    # la migración _migrate_ai_user_id_to_int() más abajo.
+    create_sql = """
     CREATE TABLE IF NOT EXISTS service_profiles (
         id SERIAL PRIMARY KEY,
-        user_id TEXT NOT NULL DEFAULT 'default',
-        company_key TEXT,          -- clave compartida por empresa (ej: "constructora_abc")
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        company_key TEXT,
         company_name TEXT,
         services JSONB NOT NULL DEFAULT '[]',
         regions JSONB NOT NULL DEFAULT '[]',
@@ -1037,22 +1357,16 @@ def init_ai_db() -> None:
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(user_id)
     );
-    -- Migrations for existing installs
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS company_key TEXT;
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS regions JSONB DEFAULT '[]';
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS contract_sizes JSONB DEFAULT '[]';
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS known_mandantes JSONB DEFAULT '[]';
-    ALTER TABLE service_profiles ADD COLUMN IF NOT EXISTS onboarding_done BOOLEAN DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS mandante_heat (
         id              SERIAL PRIMARY KEY,
         company         TEXT NOT NULL UNIQUE,
-        heat_score      INTEGER DEFAULT 0,    -- 0-100, calculado por IA
-        heat_label      TEXT,                 -- "Muy activo", "Caliente", "Normal", "Frío"
-        heat_reason     TEXT,                 -- explicación IA
-        n_noticias      INTEGER DEFAULT 0,    -- noticias recientes detectadas
-        n_empleos       INTEGER DEFAULT 0,    -- empleos activos detectados
-        trending_topics TEXT[],               -- temas que aparecen en noticias
+        heat_score      INTEGER DEFAULT 0,
+        heat_label      TEXT,
+        heat_reason     TEXT,
+        n_noticias      INTEGER DEFAULT 0,
+        n_empleos       INTEGER DEFAULT 0,
+        trending_topics TEXT[],
         scored_at       TIMESTAMPTZ DEFAULT NOW(),
         model_version   TEXT DEFAULT 'claude-sonnet-4-6'
     );
@@ -1062,7 +1376,7 @@ def init_ai_db() -> None:
     CREATE TABLE IF NOT EXISTS ai_opportunity_fits (
         id SERIAL PRIMARY KEY,
         opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-        user_id TEXT NOT NULL DEFAULT 'default',
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         fit_score INTEGER NOT NULL DEFAULT 0,
         fit_reason TEXT,
         service_applicable TEXT,
@@ -1076,11 +1390,61 @@ def init_ai_db() -> None:
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            cur.execute(create_sql)
+        conn.commit()
+    _migrate_ai_user_id_to_int()
+
+
+def _migrate_ai_user_id_to_int() -> None:
+    """One-shot migration: convierte user_id TEXT ('default') a INTEGER REFERENCES users(id).
+
+    Idempotente: se ejecuta solo si la columna user_id todavía es TEXT.
+    Filas que no pueden ser asignadas a un usuario real se eliminan."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for table, unique_cols in [
+                ("service_profiles",    ["user_id"]),
+                ("ai_opportunity_fits", ["opportunity_id", "user_id"]),
+            ]:
+                cur.execute(
+                    """
+                    SELECT data_type FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = 'user_id'
+                    """,
+                    (table,),
+                )
+                row = cur.fetchone()
+                if not row or row["data_type"] in ("integer", "bigint"):
+                    continue  # ya migrado o tabla no existe
+
+                logger.info("migrate user_id TEXT -> INTEGER", extra={"table": table})
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id_int INTEGER REFERENCES users(id) ON DELETE CASCADE")
+                cur.execute("SELECT MIN(id) AS uid FROM users")
+                first_user = cur.fetchone()
+                first_uid = first_user["uid"] if first_user else None
+                if first_uid is not None:
+                    cur.execute(f"UPDATE {table} SET user_id_int = %s WHERE user_id_int IS NULL", (first_uid,))
+                # Eliminar filas que no se pudieron asignar (no había user)
+                cur.execute(f"DELETE FROM {table} WHERE user_id_int IS NULL")
+                # Dropear constraint/index dependientes del user_id viejo
+                if unique_cols == ["user_id"]:
+                    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_user_id_key")
+                else:
+                    cur.execute(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {table}_opportunity_id_user_id_key")
+                cur.execute(f"DROP INDEX IF EXISTS idx_ai_fits_user")
+                cur.execute(f"ALTER TABLE {table} DROP COLUMN user_id")
+                cur.execute(f"ALTER TABLE {table} RENAME COLUMN user_id_int TO user_id")
+                cur.execute(f"ALTER TABLE {table} ALTER COLUMN user_id SET NOT NULL")
+                if unique_cols == ["user_id"]:
+                    cur.execute(f"ALTER TABLE {table} ADD CONSTRAINT {table}_user_id_key UNIQUE (user_id)")
+                else:
+                    cur.execute(f"ALTER TABLE {table} ADD CONSTRAINT {table}_opportunity_id_user_id_key UNIQUE (opportunity_id, user_id)")
+                if table == "ai_opportunity_fits":
+                    cur.execute(f"CREATE INDEX IF NOT EXISTS idx_ai_fits_user ON ai_opportunity_fits (user_id, fit_score DESC)")
         conn.commit()
 
 
-def upsert_service_profile(user_id: str, company_name: str, services: list,
+def upsert_service_profile(user_id: int, company_name: str, services: list,
                            regions: list = None, contract_sizes: list = None,
                            known_mandantes: list = None, company_key: str = None,
                            onboarding_done: bool = False) -> Dict[str, Any]:
@@ -1119,14 +1483,8 @@ def upsert_service_profile(user_id: str, company_name: str, services: list,
     return dict(row)
 
 
-def get_service_profile(user_id: str = "default") -> Optional[Dict[str, Any]]:
-    # Search by user_id OR company_key (shared profile for whole company)
-    sql = """
-    SELECT * FROM service_profiles
-    WHERE user_id = %(user_id)s OR company_key = %(user_id)s
-    ORDER BY onboarding_done DESC, updated_at DESC
-    LIMIT 1;
-    """
+def get_service_profile(user_id: int) -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM service_profiles WHERE user_id = %(user_id)s LIMIT 1;"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {"user_id": user_id})
@@ -1134,7 +1492,7 @@ def get_service_profile(user_id: str = "default") -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
-def upsert_ai_fit(opportunity_id: int, user_id: str, fit_score: int,
+def upsert_ai_fit(opportunity_id: int, user_id: int, fit_score: int,
                   fit_reason: str, service_applicable: str,
                   contact_suggestion: str, model_version: str = "claude-sonnet-4-6") -> None:
     sql = """
@@ -1161,7 +1519,7 @@ def upsert_ai_fit(opportunity_id: int, user_id: str, fit_score: int,
         conn.commit()
 
 
-def get_ai_fit(opportunity_id: int, user_id: str = "default") -> Optional[Dict[str, Any]]:
+def get_ai_fit(opportunity_id: int, user_id: int) -> Optional[Dict[str, Any]]:
     sql = "SELECT * FROM ai_opportunity_fits WHERE opportunity_id=%(opp_id)s AND user_id=%(user_id)s;"
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -1170,7 +1528,7 @@ def get_ai_fit(opportunity_id: int, user_id: str = "default") -> Optional[Dict[s
     return dict(row) if row else None
 
 
-def list_opportunities_for_ai_scoring(user_id: str = "default", limit: int = 500) -> List[Dict[str, Any]]:
+def list_opportunities_for_ai_scoring(user_id: int, limit: int = 500) -> List[Dict[str, Any]]:
     """Retorna oportunidades que aún no tienen AI fit score o fueron actualizadas después del último score."""
     sql = """
     SELECT o.id, o.title, o.source, o.company, o.industry, o.region, o.phase,
@@ -1192,7 +1550,7 @@ def list_opportunities_for_ai_scoring(user_id: str = "default", limit: int = 500
 
 
 
-def get_ai_fits(user_id: str = "default", min_score: int = 0, limit: int = 500) -> List[Dict[str, Any]]:
+def get_ai_fits(user_id: int, min_score: int = 0, limit: int = 500) -> List[Dict[str, Any]]:
     """Retorna los scores IA calculados para la empresa, con datos del proyecto."""
     sql = """
     SELECT f.opportunity_id as id, f.fit_score, f.fit_reason,
@@ -1210,7 +1568,7 @@ def get_ai_fits(user_id: str = "default", min_score: int = 0, limit: int = 500) 
             return [dict(r) for r in cur.fetchall()]
 
 
-def list_top_ai_fits(user_id: str = "default", min_score: int = 40, limit: int = 200) -> List[Dict[str, Any]]:
+def list_top_ai_fits(user_id: int, min_score: int = 40, limit: int = 200) -> List[Dict[str, Any]]:
     sql = """
     SELECT o.*, f.fit_score, f.fit_reason, f.service_applicable, f.contact_suggestion, f.scored_at,
            COALESCE(s.signal_score, 0) as signal_score,

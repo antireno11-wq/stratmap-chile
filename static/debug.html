@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Debug — Stratmap</title>
   <style>
     body { font-family: monospace; background: #0d1117; color: #e6edf3; padding: 24px; }
@@ -27,6 +28,7 @@
     #log { color:#8b949e; font-size:11px; margin-top:8px; }
     .row-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 <body>
   <h2>🔍 Stratmap — Diagnóstico de Noticias</h2>
@@ -78,12 +80,14 @@
     <div id="query-result">—</div>
   </div>
 
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     async function runDiag() {
       const company = document.getElementById('inp').value.trim();
       document.getElementById('log').textContent = 'Cargando...';
       try {
-        const res = await fetch(`/admin/debug-noticias?company=${encodeURIComponent(company)}`);
+        const res = await apiFetch(`/admin/debug-noticias?company=${encodeURIComponent(company)}`);
         const d = await res.json();
         render(d);
         document.getElementById('log').textContent = '';
@@ -188,5 +192,6 @@
 
     runDiag();
   </script>
+  <script src="/mobile-nav.js" defer></script>
 </body>
 </html>

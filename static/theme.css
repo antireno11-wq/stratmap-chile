@@ -1,0 +1,271 @@
+/* theme.css — capa global de UX que ablanda todas las páginas de Stratmap.
+   Se carga AL FINAL de cada <head>, así sus reglas ganan a los estilos
+   inline. No cambia estructura HTML, sólo respira el diseño.
+
+   Notas de cambios respecto al estilo original:
+   - fondo más cálido (gris muy suave en vez de gris azulado),
+   - bordes más finos y claros,
+   - tipografía con menos pesos altos (max 700),
+   - más line-height y padding por todos lados,
+   - botones con esquinas más amables,
+   - sidebar y topbar con menos densidad visual,
+   - chips, tags y selects más calmados.
+*/
+
+:root {
+  /* Overrides de variables existentes (cuando las páginas las usan) */
+  --bg:            #fafbfc !important;
+  --card:          #ffffff !important;
+  --border:        #eef0f4 !important;
+  --text:          #1f2937 !important;
+  --muted:         #6b7280 !important;
+  --orange:        #f97316 !important;
+  --orange-light:  #fff7ed !important;
+  --blue:          #3b82f6 !important;
+  --blue-light:    #eff6ff !important;
+  --sidebar-bg:    #1a1f2e !important;
+  --sidebar-hover: #232940 !important;
+  --sidebar-active:#2a3355 !important;
+}
+
+/* Tipografía: ablandar pesos y mejorar legibilidad */
+body, body * { font-feature-settings: "cv11", "ss01"; }
+
+h1, h2, h3, h4, h5, h6 { font-weight: 700 !important; letter-spacing: -0.01em; }
+.sidebar-name, .topbar-title, .logo-text, .plan-name { font-weight: 700 !important; }
+.btn-primary, .btn-login, button.primary { font-weight: 600 !important; letter-spacing: 0 !important; }
+
+/* Respirar todo un poco */
+body { line-height: 1.55; }
+p, li, label, .subtitle, .plan-desc { line-height: 1.6; }
+
+/* Cards y contenedores más calmos */
+.card, .plan, .panel, .container > section, .topbar {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+.plan { border-radius: 16px !important; padding: 32px 28px !important; }
+.card { border-radius: 14px !important; }
+
+/* Botones con esquinas más amigables y menos contraste innecesario */
+button, .btn, .btn-primary, .btn-login, .btn-outline {
+  border-radius: 10px !important;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+.btn-primary:hover, .btn-login:hover { transform: none !important; }
+
+/* Inputs y selects */
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+  border-radius: 10px !important;
+  border: 1px solid var(--border) !important;
+  padding: 10px 13px !important;
+  font-size: 14px !important;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--blue) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* Sidebar: menos densidad, items más espaciados, fuentes menos chillonas */
+.sidebar { box-shadow: none !important; }
+.sidebar-item { padding: 12px 18px !important; font-size: 13.5px !important; gap: 12px !important; }
+.sidebar-section { font-size: 10px !important; padding: 22px 18px 8px !important; }
+.sidebar-count { font-size: 10.5px !important; padding: 2px 8px !important; }
+
+/* Filtros laterales: más amables */
+.filter-group { padding: 4px 18px 12px !important; }
+.filter-item { padding: 5px 0 !important; gap: 10px !important; }
+.filter-item label { font-size: 12px !important; }
+.filter-item .fc { font-size: 10.5px !important; opacity: 0.7; }
+
+/* Topbar más limpia */
+.topbar { height: 60px !important; padding: 0 28px !important; gap: 18px !important; }
+.topbar-title { font-size: 16px !important; }
+.topbar-search { border-radius: 10px !important; }
+.topbar-search input { font-size: 13.5px !important; }
+
+/* Chips de filtro: ablandar */
+.chip { border-radius: 999px !important; padding: 5px 14px !important; font-size: 12px !important; border-width: 1px !important; }
+
+/* Pricing: agrandar precio y respirar */
+.plan-price { font-size: 34px !important; }
+.plan-price small { font-weight: 500 !important; color: var(--muted) !important; }
+ul.features li { padding: 8px 0 !important; font-size: 14px !important; }
+
+/* Tags y badges */
+.tag, .badge, .pill { border-radius: 999px !important; font-weight: 600 !important; }
+
+/* Tablas (mandantes, kanban) menos pesadas */
+table { border-collapse: separate !important; border-spacing: 0; }
+table th { font-weight: 600 !important; font-size: 12px !important; text-transform: none !important; letter-spacing: 0 !important; color: var(--muted) !important; padding: 12px 14px !important; background: #fafbfc !important; }
+table td { padding: 14px !important; font-size: 13.5px !important; border-bottom: 1px solid var(--border) !important; }
+table tr:hover td { background: #fafbfc !important; }
+
+/* Scrollbar más sutil (webkit) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d4d8df; border-radius: 99px; border: 2px solid #fafbfc; }
+::-webkit-scrollbar-thumb:hover { background: #b9bec7; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* En modo oscuro, ablandar también */
+[data-theme="dark"] {
+  --bg:     #0f1117 !important;
+  --card:   #1a1f2e !important;
+  --text:   #e5e7eb !important;
+  --muted:  #9ca3af !important;
+  --border: #232940 !important;
+}
+[data-theme="dark"] table th { background: #0f1117 !important; }
+[data-theme="dark"] table tr:hover td { background: #1a1f2e !important; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2d3548; border-color: #0f1117; }
+
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MOBILE (≤ 768px). Apto para celular: sidebar como drawer, tablas a cards,
+   kanban en stack, touch targets ≥ 44px, font base 16px para no disparar zoom
+   en iOS al hacer focus en inputs.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Botón hamburger inyectado por mobile-nav.js */
+.sm-menu-btn {
+  display: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--text);
+  padding: 0;
+}
+
+/* Overlay para cerrar el drawer al tocar fuera */
+.sm-sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 99;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.sm-sidebar-overlay.open { display: block; opacity: 1; }
+
+@media (max-width: 900px) {
+  body { font-size: 16px !important; }
+  input, select, textarea, button { font-size: 16px !important; }
+
+  /* Sidebar como drawer fuera de pantalla por default. !important en todos
+     porque algunos estilos inline de las páginas usan misma especificidad. */
+  .sidebar {
+    transform: translateX(-100%) !important;
+    transition: transform 0.22s ease !important;
+    width: 280px !important;
+    z-index: 110 !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+  }
+  .sidebar.open { transform: translateX(0) !important; }
+
+  /* Main content ocupa todo el ancho */
+  .main {
+    margin-left: 0 !important;
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
+  /* Topbar: mostrar botón hamburger, esconder buscador wide */
+  .sm-menu-btn { display: inline-flex; }
+  .topbar { padding: 0 16px !important; height: 56px !important; gap: 10px !important; }
+  .topbar-title { font-size: 15px !important; }
+  .topbar-search { max-width: none !important; flex: 1; }
+  .topbar-search input { font-size: 16px !important; }
+
+  /* Contenedores principales */
+  .content {
+    padding: 16px !important;
+    gap: 16px !important;
+  }
+
+  /* Tablas → cada fila se vuelve card con celdas apiladas */
+  table { display: block !important; width: 100% !important; }
+  table thead { display: none !important; }
+  table tbody { display: block !important; }
+  table tr {
+    display: block !important;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  table td {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 6px 0 !important;
+    border-bottom: 1px solid var(--border) !important;
+    font-size: 14px !important;
+    gap: 12px;
+  }
+  table td:last-child { border-bottom: none !important; }
+  /* Label de cada celda usando data-label (lo setea JS si quiere) */
+  table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 11px !important;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  table tr:hover td { background: transparent !important; }
+
+  /* Kanban: columnas en stack vertical */
+  .kanban, .kanban-board, .columns, [class*="kanban"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    overflow-x: visible !important;
+  }
+  .col, .kanban-col, [class*="col-detectada"], [class*="col-analisis"],
+  [class*="col-postular"], [class*="col-nopostular"], [class*="col-presentada"],
+  [class*="col-adjudicada"], [class*="col-perdida"] {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Pricing: cards full-width */
+  .plans { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .plan { padding: 24px 20px !important; }
+
+  /* Login / cards centrados */
+  .card { padding: 28px 22px !important; }
+
+  /* Touch targets >= 44px */
+  button, .btn, .btn-primary, .btn-login, .btn-outline,
+  .sidebar-item, .chip, .user-avatar {
+    min-height: 44px;
+  }
+
+  /* User dropdown: full-width-ish */
+  .user-dropdown { min-width: 240px !important; right: -8px !important; }
+
+  /* Drawer del detalle de oportunidad: ocupa pantalla en mobile */
+  #drawer, .drawer { width: 100% !important; max-width: 100% !important; }
+  #drawer-overlay { z-index: 95; }
+
+  /* Sidebar overlay para cerrar tocando fuera */
+  .sm-sidebar-overlay { z-index: 100; }
+}
+
+/* Tablet zone (≥901, ≤1100): apretar un poquito sin convertirlo a drawer */
+@media (min-width: 901px) and (max-width: 1100px) {
+  .content { padding: 18px 22px !important; }
+  .sidebar { width: 200px !important; }
+  .main { margin-left: 200px !important; }
+}

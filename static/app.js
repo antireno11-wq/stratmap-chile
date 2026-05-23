@@ -1,17 +1,31 @@
+// Las categorías canónicas vienen como `category` en cada row del backend
+// (computadas via source_categories.py). Mantenemos sets como fallback
+// para rows viejas que todavía no traen `category`.
 const NEWS_SOURCES = new Set([
   "Portal Minero","BioBioChile","Emol","Cooperativa",
   "Minería Chilena","COCHILCO Noticias","Diario Financiero",
   "Revista EI","Radio U. de Chile","Radio Universidad de Chile","RSS",
-  "Lithium Chile","InfoMineria","Mundo Minería","MLP Proveedores"
+  "Lithium Chile","InfoMineria","Mundo Minería","CChC","Revista Electricidad","La Tercera"
 ]);
-
-// Fuentes de empleos — aparecen en Empleos activos, NUNCA en Noticias del Sector
 const EMPLEOS_SOURCES = new Set(["BHP Careers","AMSA Careers","Lundin Careers","Collahuasi Careers","Teck Careers"]);
+const LICITACION_SOURCES_SET = new Set(["ENAMI","Codelco","MOP","ChileCompra","SICEP","Ariba Codelco","MLP Proveedores"]);
+const CONCESION_SOURCES_SET  = new Set(["SIGEX"]);
+const PROSPECTO_SOURCES_SET  = new Set(["SEA","sea"]);
 
-// Fuentes que SIEMPRE son proyectos, nunca noticias
-const PROJECT_SOURCES = new Set(["MOP","Chile Compra","COCHILCO","SICEP","Ariba Codelco","SIGEX","ENAMI","Codelco"]);
-// SEA aparece solo como señal (⚡), no como proyecto en la tabla
-const SEA_SOURCES = new Set(["sea","SEA"]);
+function getCategory(item) {
+  if (item.category) return item.category;
+  const s = item.source || "";
+  if (EMPLEOS_SOURCES.has(s))     return "empleo";
+  if (LICITACION_SOURCES_SET.has(s)) return "licitacion";
+  if (CONCESION_SOURCES_SET.has(s))  return "concesion";
+  if (PROSPECTO_SOURCES_SET.has(s))  return "prospecto";
+  if (NEWS_SOURCES.has(s))           return "noticia";
+  if ((item.phase || "").toLowerCase() === "noticia") return "noticia";
+  return "otros";
+}
+
+// Filtro de categoría activo (sidebar). null = mostrar todas las categorías.
+let activeCategory = null;
 
 const PIPELINE_STATUSES = ["Detectada","En análisis","Postular","No postular","Presentada","Adjudicada","Perdida"];
 
@@ -36,19 +50,11 @@ const NON_MINING_KEYWORDS = [
 ];
 
 function isSea(item) {
-  const src = (item.source || "").toLowerCase();
-  // Solo ocultar items genuinamente del SEA (evaluación ambiental)
-  // ENAMI, Codelco, InfoMineria, etc. tienen su propio source
-  return src === "sea" && (item.phase || "").toLowerCase() !== "licitación";
+  return getCategory(item) === "prospecto";
 }
 
 function isNews(item) {
-  const src = item.source || "";
-  if (isSea(item)) return false;
-  if (PROJECT_SOURCES.has(src)) return false;
-  if (EMPLEOS_SOURCES.has(src)) return false;  // empleos van a sección propia
-  if (item.phase === "Noticia") return true;
-  return NEWS_SOURCES.has(src);
+  return getCategory(item) === "noticia";
 }
 
 function isRelevantNews(item) {
@@ -168,10 +174,10 @@ window.openOppDrawer = async function(oppId) {
 
   // Cargar pipeline, notas y servicios en paralelo
   const [pipelineRes, notesRes, aiFitRes, servicesRes] = await Promise.all([
-    fetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
-    fetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
-    fetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
-    fetch(`/opportunities/${oppId}/services`).then(r => r.json()).catch(()=>({})),
+    apiFetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
+    apiFetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
+    apiFetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
+    apiFetch(`/opportunities/${oppId}/services`).then(r => r.json()).catch(()=>({})),
   ]);
 
   const score = item.radar_score ?? item.score ?? 0;
@@ -229,7 +235,7 @@ window.openOppDrawer = async function(oppId) {
 window.savePipeline = async function(oppId) {
   const status = el("pipeline-status").value;
   const assignee = el("pipeline-assignee").value.trim() || null;
-  await fetch(`/opportunities/${oppId}/pipeline`, {
+  await apiFetch(`/opportunities/${oppId}/pipeline`, {
     method: "PUT",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({status, assignee})
@@ -247,7 +253,7 @@ window.saveNote = async function(oppId) {
   const note = el("note-text").value.trim();
   const author = el("note-author").value.trim() || null;
   if (!note) return;
-  const res = await fetch(`/opportunities/${oppId}/notes`, {
+  const res = await apiFetch(`/opportunities/${oppId}/notes`, {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({note, author})
@@ -267,7 +273,7 @@ window.saveNote = async function(oppId) {
 
 async function fetchContacts(company) {
   try {
-    const r = await fetch(`/contacts?company=${encodeURIComponent(company)}`);
+    const r = await apiFetch(`/contacts?company=${encodeURIComponent(company)}`);
     const data = await r.json();
     return data.items || [];
   } catch(e) { return []; }
@@ -275,7 +281,7 @@ async function fetchContacts(company) {
 
 window.deleteContact = async function(contactId, company) {
   if (!confirm("¿Eliminar este contacto?")) return;
-  await fetch(`/contacts/${contactId}`, {method:"DELETE"});
+  await apiFetch(`/contacts/${contactId}`, {method:"DELETE"});
   const contacts = await fetchContacts(company);
   el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
 };
@@ -287,7 +293,7 @@ window.submitNewContact = async function(company) {
   const phone = el("nc-phone").value.trim();
   const linkedin = el("nc-linkedin").value.trim();
   if (!name) { alert("El nombre es obligatorio"); return; }
-  await fetch("/contacts", {
+  await apiFetch("/contacts", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({name, company, role:role||null, email:email||null, phone:phone||null, linkedin_url:linkedin||null})
@@ -357,7 +363,7 @@ window.analyzeServices = async function(oppId) {
   btn.textContent = "Analizando...";
   btn.disabled = true;
   try {
-    const r = await fetch(`/admin/run-demand-intel?batch_size=1&max_batches=1&source=`, {method:'POST'});
+    const r = await apiFetch(`/admin/run-demand-intel?batch_size=1&max_batches=1&source=`, {method:'POST'});
     // Re-abrir el drawer para refrescar
     await openOppDrawer(oppId);
   } catch(e) {
@@ -467,11 +473,10 @@ async function openDrawer(type, value) {
     ? allItems.filter(i => isSea(i) && seaMatchesCompany(i.company, value) && (i.company||"") !== value)
     : [];
 
-  const LICIT_SRC = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores','Ariba Codelco','Chile Compra','MOP','COCHILCO']);
-  const projects    = items.filter(i => !isNews(i));
-  const licitaciones = projects.filter(i =>  LICIT_SRC.has(i.source));
-  const concesiones  = projects.filter(i => !LICIT_SRC.has(i.source));
-  const news = items.filter(i => isNews(i));
+  const projects     = items.filter(i => !isNews(i));
+  const licitaciones = projects.filter(i => getCategory(i) === "licitacion");
+  const concesiones  = projects.filter(i => getCategory(i) === "concesion");
+  const news         = items.filter(i => isNews(i));
 
   const scores = licitaciones.map(i => i.radar_score ?? i.score ?? 0).filter(s => s > 0);
   const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
@@ -495,12 +500,12 @@ async function openDrawer(type, value) {
       const [c,bg] = scoreColor(score);
       drawerMap[`opp_${i.id}`] = {type:"opp", id: i.id};
       return `<tr>
-        <td><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
-        <td><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
+        <td data-label="Score"><span class="score-badge" style="color:${c};background:${bg}">${score}</span></td>
+        <td data-label="Licitación"><span class="proj-title clickable-link" style="max-width:220px" onclick="openOppDrawer(${i.id})">${escapeHTML(i.title||"")}</span>
             <span class="proj-industry">${escapeHTML(i[distKey]||"")}</span></td>
-        <td>${statusChip(i.pipeline_status)}</td>
-        <td>${fmtDate(itemDate(i))}</td>
-        <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+        <td data-label="Pipeline">${statusChip(i.pipeline_status)}</td>
+        <td data-label="Fecha">${fmtDate(itemDate(i))}</td>
+        <td data-label=""><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
       </tr>`;
     }).join("");
   }
@@ -512,10 +517,10 @@ async function openDrawer(type, value) {
     const pts = i.score ?? 0;
     const phase = escapeHTML(i.phase || "En evaluación");
     return `<tr>
-      <td><span class="phase-chip" style="background:#dcfce7;color:#15803d">${phase}</span></td>
-      <td><a class="row-link" href="${i.url||"#"}" target="_blank" style="font-weight:600;color:var(--text);text-decoration:none">${escapeHTML(i.title||"")}</a></td>
-      <td>${escapeHTML(i.region||"—")}</td>
-      <td><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
+      <td data-label="Fase"><span class="phase-chip" style="background:#dcfce7;color:#15803d">${phase}</span></td>
+      <td data-label="Prospecto"><a class="row-link" href="${i.url||"#"}" target="_blank" style="font-weight:600;color:var(--text);text-decoration:none">${escapeHTML(i.title||"")}</a></td>
+      <td data-label="Región">${escapeHTML(i.region||"—")}</td>
+      <td data-label=""><a class="row-link" href="${i.url||"#"}" target="_blank">ver →</a></td>
     </tr>`;
   }).join("");
 
@@ -579,8 +584,8 @@ async function openDrawer(type, value) {
     // Cargar todo en paralelo
     const [contacts, detailData, summaryData] = await Promise.allSettled([
       fetchContacts(value),
-      fetch(`/mandantes/detail?company=${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
-      fetch(`/mandantes/summary/${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
+      apiFetch(`/mandantes/detail?company=${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
+      apiFetch(`/mandantes/summary/${encodeURIComponent(value)}`).then(r => r.json()).catch(() => null),
     ]);
 
     // ── Contactos ──────────────────────────────────────────────────────────────
@@ -675,7 +680,7 @@ const aiFitsCache = {};
 
 async function loadAiFits() {
   try {
-    const res = await fetch('/ai/fits?min_score=1&limit=500');
+    const res = await apiFetch('/ai/fits?min_score=1&limit=500');
     const data = await res.json();
     (data.items || []).forEach(item => {
       aiFitsCache[item.id] = {
@@ -743,7 +748,7 @@ function newsRow(item) {
 // ── Filters & Data ────────────────────────────────────────────────────────────
 
 async function fetchJSON(url) {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const res = await apiFetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -813,14 +818,17 @@ function renderPagination(containerId, total, currentPg, onPage) {
 }
 
 function renderFiltered() {
-  const filtered = applyFilters(allItems);
+  let filtered = applyFilters(allItems);
 
-  // Separar fuentes: licitaciones (alta señal comercial) vs concesiones SIGEX
-  const LICITACION_SOURCES = new Set(['Codelco','ENAMI','SEA','sea','MLP Proveedores']);
-  const allProjects = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
+  // Filtro de categoría desde sidebar (Radar/Licitaciones/Concesiones/etc.)
+  if (activeCategory) {
+    filtered = filtered.filter(i => getCategory(i) === activeCategory);
+  }
 
-  let licitaciones = allProjects.filter(i => LICITACION_SOURCES.has(i.source));
-  let concesiones  = allProjects.filter(i => !LICITACION_SOURCES.has(i.source));
+  // Separación por categoría (ya viene del backend en row.category)
+  const allProjects  = filtered.filter(i => !isNews(i) && !isSea(i) && !i._isNews && !EMPLEOS_SOURCES.has(i.source));
+  let licitaciones   = allProjects.filter(i => getCategory(i) === "licitacion");
+  let concesiones    = allProjects.filter(i => getCategory(i) === "concesion");
 
   // Apply region quick-filter chip to both
   if (window._activeRegion) {
@@ -854,6 +862,10 @@ function renderFiltered() {
   if (scLic) scLic.textContent = licitaciones.length;
   el('sc-projects').textContent = concesiones.length;
   el('sc-news').textContent = news.length;
+  // sc-prospectos: prospectos SEA actuales en allItems (no en filtered, para
+  // que el contador no varíe al cambiar la categoría activa)
+  const scProsp = document.getElementById('sc-prospectos');
+  if (scProsp) scProsp.textContent = allItems.filter(i => getCategory(i) === "prospecto").length;
 
   // Render tables
   const tbodyLic = document.getElementById('tbody-licitaciones');
@@ -938,7 +950,7 @@ async function loadMandantes() {
   if (section) section.style.display = '';
 
   try {
-    const res = await fetch('/mandantes');
+    const res = await apiFetch('/mandantes');
     const data = await res.json();
     mandantesData = data.mandantes || [];
     renderMandantes();
@@ -1059,7 +1071,7 @@ async function loadEmpleos() {
   if (section) section.style.display = '';
 
   try {
-    const res = await fetch('/empleos/resumen');
+    const res = await apiFetch('/empleos/resumen');
     const data = await res.json();
     window._empleosData = data.empresas || [];
     renderEmpleos(data.empresas || []);
@@ -1199,7 +1211,7 @@ async function toggleEmpleoDetail(slug, row) {
   if (detail.innerHTML) return; // ya cargado
   detail.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">Cargando...</div>';
   try {
-    const res  = await fetch('/empleos/empresa/' + slug);
+    const res  = await apiFetch('/empleos/empresa/' + slug);
     const data = await res.json();
     const proyectos = data.proyectos || [];
     if (!proyectos.length) {
@@ -1230,7 +1242,7 @@ async function toggleEmpleoDetail(slug, row) {
 
 async function checkSession() {
   const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
-  const hasSession = !!(session.username);
+  const hasSession = !!(session.token);
   isLoggedIn = hasSession;
 
   if (hasSession) {
@@ -1240,7 +1252,7 @@ async function checkSession() {
 
     if (!fromOnboarding && companyKey !== 'default') {
       try {
-        const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
+        const res = await apiFetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
         const data = await res.json();
         if (!data.onboarding_done && window.location.pathname === '/') {
           window.location.href = '/onboarding.html';
@@ -1266,7 +1278,7 @@ async function loadPersonalizedScores() {
   const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
   const companyKey = session.company_key || 'default';
   try {
-    const res = await fetch(`/ai/fits?company_key=${encodeURIComponent(companyKey)}&min_score=1&limit=500`);
+    const res = await apiFetch(`/ai/fits?company_key=${encodeURIComponent(companyKey)}&min_score=1&limit=500`);
     const data = await res.json();
     const fits = data.fits || data.items || [];
     if (!fits.length) return;
@@ -1355,18 +1367,18 @@ document.addEventListener("DOMContentLoaded", () => {
   el("drawer-close").addEventListener("click", closeDrawer);
   el("drawer-overlay").addEventListener("click", closeDrawer);
 
-  const sidebarItems = document.querySelectorAll(".sidebar-item");
+  // Sidebar de categorías: data-cat="" = mostrar todo, data-cat="licitacion"
+  // filtra a esa categoría. Solo aplica a items con data-cat definido (los
+  // links a otras páginas como Pipeline/Mapa/Mandantes/Preferencias no tienen).
+  const sidebarItems = document.querySelectorAll(".sidebar-item[data-cat]");
   sidebarItems.forEach(item => {
     item.addEventListener("click", () => {
       sidebarItems.forEach(i => i.classList.remove("active"));
       item.classList.add("active");
+      const cat = item.getAttribute("data-cat") || "";
+      activeCategory = cat || null;
+      renderFiltered();
     });
-  });
-  if (sidebarItems[1]) sidebarItems[1].addEventListener("click", () => {
-    el("tbody-projects")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
-  });
-  if (sidebarItems[2]) sidebarItems[2].addEventListener("click", () => {
-    el("tbody-news")?.closest(".section-card")?.scrollIntoView({behavior:"smooth", block:"start"});
   });
 
   load();
@@ -1479,14 +1491,7 @@ function resetSession() {
   localStorage.removeItem('stratmap_prefs');
   localStorage.removeItem('stratmap_services');
   localStorage.removeItem('stratmap_session');
-  isLoggedIn = false;
-  currentSort.by = 'date';
-  currentSort.dir = 'desc';
-  updateScoreVisibility();
-  updateUserMenuState();
-  loadMandantes();
-  toggleUserMenu();
-  load();
+  window.location.href = '/login.html';
 }
 
 function updateUserMenuState() {

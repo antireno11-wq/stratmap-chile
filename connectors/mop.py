@@ -131,7 +131,7 @@ def fetch_page(page: int, session: requests.Session) -> list:
                 "title": name[:500],
                 "url": f"{BASE_URL}/{href}",
                 "company": "MOP",
-                "industry": "Minería",
+                "industry": "Infraestructura",
                 "region": region,
                 "phase": "En ejecución",
                 "score": score,

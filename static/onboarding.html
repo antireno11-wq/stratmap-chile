@@ -60,6 +60,7 @@
     .dot:nth-child(3){animation-delay:0.4s;}
     @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
   </style>
+  <link rel="stylesheet" href="/theme.css" />
 </head>
 <body>
 <div class="onboarding-wrap">
@@ -74,10 +75,11 @@
   </div>
 </div>
 
+<script src="/auth.js"></script>
+<script>if (!requireLogin()) { throw new Error('redir'); }</script>
 <script>
 // ── Estado ─────────────────────────────────────────────────────────────────
-const session = JSON.parse(localStorage.getItem('stratmap_session') || '{}');
-if (!session.username) { window.location.href = '/login.html'; }
+const session = getSession();
 
 const profile = {
   company_name: '',
@@ -409,7 +411,7 @@ async function finishOnboarding() {
   try {
     // Ensure onboarding_done is set before saving
     profile.onboarding_done = true;
-    await fetch('/me/service-profile', {
+    await apiFetch('/me/service-profile', {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(profile),
@@ -422,7 +424,7 @@ async function finishOnboarding() {
     localStorage.setItem('stratmap_session', JSON.stringify(sess));
 
     // Trigger scoring in background
-    fetch('/me/score-projects', {
+    apiFetch('/me/score-projects', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ company_key: profile.company_key }),
@@ -462,7 +464,7 @@ async function init() {
   const companyKey = sess.company_key || 'default';
 
   try {
-    const res = await fetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
+    const res = await apiFetch(`/me/profile?company_key=${encodeURIComponent(companyKey)}`);
     const data = await res.json();
     if (data.onboarding_done) {
       // Already configured, go to radar
@@ -480,5 +482,6 @@ async function init() {
 
 init();
 </script>
+<script src="/mobile-nav.js" defer></script>
 </body>
 </html>

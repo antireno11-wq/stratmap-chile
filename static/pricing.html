@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <title>Planes · Stratmap</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+      color: #0f172a;
+      padding: 48px 24px;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 40px; }
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .plan {
+      background: #fff;
+      border: 1px solid #e8edf2;
+      border-radius: 14px;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .plan.featured { border-color: #e05a1e; box-shadow: 0 4px 24px rgba(224,90,30,0.12); }
+    .plan-name { font-size: 14px; font-weight: 700; color: #e05a1e; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+    .plan-price { font-size: 30px; font-weight: 800; margin-bottom: 4px; }
+    .plan-price small { font-size: 14px; font-weight: 500; color: #64748b; }
+    .plan-desc { color: #64748b; font-size: 13px; margin-bottom: 22px; }
+    ul.features { list-style: none; margin-bottom: 28px; flex-grow: 1; }
+    ul.features li { padding: 6px 0; font-size: 14px; color: #334155; display: flex; align-items: center; gap: 8px; }
+    ul.features li::before { content: "✓"; color: #16a34a; font-weight: 700; }
+    ul.features li.disabled { color: #cbd5e1; }
+    ul.features li.disabled::before { content: "—"; color: #cbd5e1; }
+    .btn {
+      width: 100%;
+      padding: 11px;
+      background: #0f172a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn.primary { background: #e05a1e; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+    .current-badge {
+      display: inline-block;
+      background: #16a34a;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-left: 8px;
+    }
+    .err {
+      margin-top: 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .back { display: inline-block; margin-bottom: 24px; color: #64748b; text-decoration: none; font-size: 13px; }
+    .back:hover { color: #0f172a; }
+  </style>
+  <link rel="stylesheet" href="/theme.css" />
+</head>
+<body>
+  <div class="container">
+    <a class="back" href="/">← Volver al radar</a>
+    <h1>Planes Stratmap</h1>
+    <p class="subtitle">Pagos vía Mercado Pago. Cancelá cuando quieras desde tu cuenta MP.</p>
+
+    <div class="plans" id="plans"></div>
+
+    <div class="err" id="err"></div>
+  </div>
+
+  <script src="/auth.js"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
+  <script>
+    const PLANS = [
+      {
+        key: "free",
+        label: "Free",
+        price: "Gratis",
+        desc: "Para evaluar el producto sin compromiso.",
+        features: [
+          { txt: "20 oportunidades/día", on: true },
+          { txt: "50 contactos", on: true },
+          { txt: "Kanban y mandantes", on: true },
+          { txt: "AI matching personalizado", on: false },
+          { txt: "Exportar contactos", on: false },
+        ],
+        cta: "Tu plan actual",
+        action: null,
+      },
+      {
+        key: "pro",
+        label: "Pro",
+        price: "$29.000 CLP /mes",
+        desc: "Para profesionales activos en el sector.",
+        featured: true,
+        features: [
+          { txt: "500 oportunidades/día", on: true },
+          { txt: "2.000 contactos", on: true },
+          { txt: "AI matching personalizado", on: true },
+          { txt: "Exportar contactos a CSV", on: true },
+          { txt: "Soporte por email", on: true },
+        ],
+        cta: "Suscribirme",
+        action: "pro",
+      },
+      {
+        key: "team",
+        label: "Team",
+        price: "$89.000 CLP /mes",
+        desc: "Para equipos comerciales que comparten radar.",
+        features: [
+          { txt: "Sin límite de oportunidades", on: true },
+          { txt: "Sin límite de contactos", on: true },
+          { txt: "Todo lo de Pro", on: true },
+          { txt: "Soporte prioritario", on: true },
+        ],
+        cta: "Suscribirme",
+        action: "team",
+      },
+    ];
+
+    async function loadCurrentPlan() {
+      try {
+        const r = await apiFetch("/me/plan");
+        if (r.ok) return (await r.json()).plan;
+      } catch (e) {}
+      return "free";
+    }
+
+    async function buy(planKey) {
+      const errEl = document.getElementById("err");
+      errEl.style.display = "none";
+      try {
+        const r = await apiFetch("/billing/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan: planKey }),
+        });
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          errEl.textContent = data.detail || "Error creando checkout";
+          errEl.style.display = "block";
+          return;
+        }
+        const data = await r.json();
+        if (data.init_point) {
+          window.location.href = data.init_point;
+        } else {
+          errEl.textContent = "Respuesta inesperada de Mercado Pago";
+          errEl.style.display = "block";
+        }
+      } catch (e) {
+        errEl.textContent = "Error de conexión, intentá de nuevo";
+        errEl.style.display = "block";
+      }
+    }
+
+    function render(currentPlan) {
+      const container = document.getElementById("plans");
+      container.innerHTML = "";
+      for (const p of PLANS) {
+        const isCurrent = p.key === currentPlan;
+        const card = document.createElement("div");
+        card.className = "plan" + (p.featured ? " featured" : "");
+        card.innerHTML = `
+          <div class="plan-name">${p.label}${isCurrent ? '<span class="current-badge">Actual</span>' : ''}</div>
+          <div class="plan-price">${p.price}</div>
+          <div class="plan-desc">${p.desc}</div>
+          <ul class="features">
+            ${p.features.map(f => `<li class="${f.on ? '' : 'disabled'}">${f.txt}</li>`).join("")}
+          </ul>
+          <button class="btn ${p.featured ? 'primary' : ''}"
+                  ${(!p.action || isCurrent) ? 'disabled' : ''}
+                  data-plan="${p.action || ''}">
+            ${isCurrent ? "Tu plan actual" : p.cta}
+          </button>`;
+        container.appendChild(card);
+      }
+      container.querySelectorAll("button[data-plan]").forEach(btn => {
+        const plan = btn.dataset.plan;
+        if (plan && !btn.disabled) btn.addEventListener("click", () => buy(plan));
+      });
+    }
+
+    (async () => {
+      const current = await loadCurrentPlan();
+      render(current);
+    })();
+  </script>
+  <script src="/mobile-nav.js" defer></script>
+</body>
+</html>
