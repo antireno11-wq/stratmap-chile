@@ -269,3 +269,116 @@ table tr:hover td { background: #fafbfc !important; }
   .sidebar { width: 200px !important; }
   .main { margin-left: 200px !important; }
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SIDEBAR MODERNO — light theme con pills suaves. Gana al inline via
+   especificidad + !important. Aplica a index, kanban, mandante, preferences,
+   mapa (todas las páginas con .sidebar).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  background: #ffffff !important;
+  border-right: 1px solid #eef0f4 !important;
+  box-shadow: none !important;
+  padding: 6px 0 14px !important;
+}
+
+.sidebar-brand {
+  background: transparent !important;
+  border-bottom: 1px solid #eef0f4 !important;
+  padding: 14px 16px !important;
+}
+
+.sidebar-section {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: #9ca3af !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  padding: 22px 22px 10px !important;
+  margin: 0 !important;
+}
+
+.sidebar-item, .sidebar a.sidebar-item {
+  color: #374151 !important;
+  background: transparent !important;
+  border-left: none !important;
+  border-radius: 9px !important;
+  margin: 1px 10px !important;
+  padding: 9px 12px !important;
+  gap: 11px !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.sidebar-item:hover, .sidebar a.sidebar-item:hover {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+  border-left: none !important;
+}
+.sidebar-item.active, .sidebar a.sidebar-item.active {
+  background: #eef2ff !important;
+  color: #1e40af !important;
+  font-weight: 600 !important;
+  border-left: none !important;
+}
+
+.sidebar-item .icon {
+  font-size: 13px !important;
+  opacity: 0.85 !important;
+  width: 18px !important;
+  text-align: center !important;
+}
+.sidebar-item.active .icon { opacity: 1 !important; }
+
+.sidebar-count {
+  background: #f3f4f6 !important;
+  color: #6b7280 !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  padding: 2px 8px !important;
+  border-radius: 999px !important;
+}
+.sidebar-item.active .sidebar-count {
+  background: rgba(30, 64, 175, 0.12) !important;
+  color: #1e40af !important;
+}
+
+.sidebar-divider {
+  border-top: 1px solid #eef0f4 !important;
+  margin: 8px 22px !important;
+}
+
+/* Filtros laterales (checkboxes industria/región/fuente) */
+.filter-group {
+  padding: 4px 22px 12px !important;
+}
+.filter-item {
+  padding: 5px 0 !important;
+  gap: 10px !important;
+}
+.filter-item input[type=checkbox] {
+  accent-color: #3b82f6 !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+.filter-item label {
+  font-size: 12.5px !important;
+  color: #4b5563 !important;
+  font-weight: 500 !important;
+}
+.filter-item .fc {
+  font-size: 11px !important;
+  color: #9ca3af !important;
+  font-weight: 500 !important;
+}
+
+/* Mobile (drawer): mantener el fondo blanco moderno */
+@media (max-width: 900px) {
+  .sidebar {
+    background: #ffffff !important;
+    border-right: 1px solid #eef0f4 !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+  }
+}

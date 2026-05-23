@@ -1021,7 +1021,7 @@ function renderMandantes() {
 let isLoggedIn = false;
 let currentSort = { by: null, dir: 'desc' };
 let currentPage = { projects: 1, news: 1, licitaciones: 1 };
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function updateSortArrows() {
   ['score','title','company','region','date'].forEach(f => {
