@@ -11,30 +11,26 @@ RSS_FEEDS = [
     {"url": "https://www.cochilco.cl/web/feed/", "source": "COCHILCO Noticias", "industry": "Minería"},
     {"url": "https://www.reporteminero.cl/feed/", "source": "Reporte Minero", "industry": "Minería"},
     {"url": "https://www.nuevamineria.com/revista/feed/", "source": "Nueva Minería y Energía", "industry": "Minería"},
-    {"url": "https://www.pisoexploracion.cl/feed/", "source": "Piso Exploración", "industry": "Minería"},
     {"url": "https://www.mineriachilena.com/feed/", "source": "MCh Online", "industry": "Minería"},
     {"url": "https://www.mining.com/feed/", "source": "Mining.com", "industry": "Minería"},
     {"url": "https://www.mining-technology.com/feed/", "source": "Mining Technology", "industry": "Minería"},
-    # ── Negocios / finanzas (filtramos por keywords mineros downstream) ──────
+    # ── Negocios / finanzas (filtro por keywords mineros downstream) ─────────
     {"url": "https://www.df.cl/noticias/site/list/port/rss.xml", "source": "Diario Financiero", "industry": None},
-    {"url": "https://www.pulso.cl/feed/", "source": "Pulso", "industry": None},
-    {"url": "https://www.elmostrador.cl/mercados/feed/", "source": "El Mostrador Mercados", "industry": None},
     {"url": "https://www.americaeconomia.com/rss.xml", "source": "AméricaEconomía", "industry": None},
     {"url": "https://www.bloomberglinea.com/arc/outboundfeeds/rss/?outputType=xml", "source": "Bloomberg Línea", "industry": None},
     # ── Infraestructura / construcción ──────────────────────────────────────
     {"url": "https://www.cchc.cl/feed/", "source": "CChC", "industry": "Infraestructura"},
-    {"url": "https://www.construccionminera.cl/feed/", "source": "Construcción Minera", "industry": "Infraestructura"},
     # ── Energía ──────────────────────────────────────────────────────────────
     {"url": "https://www.revistaei.cl/feed/", "source": "Revista EI", "industry": "Energía"},
     {"url": "https://www.electricidad.cl/feed/", "source": "Revista Electricidad", "industry": "Energía"},
     {"url": "https://energiaestrategica.com/feed/", "source": "Energía Estratégica", "industry": "Energía"},
     # ── Generales Chile (filtro estricto por keywords mineros) ───────────────
     {"url": "https://radio.uchile.cl/feed/", "source": "Radio U. de Chile", "industry": None},
-    {"url": "https://www.biobiochile.cl/feed/", "source": "BioBioChile", "industry": None},
-    {"url": "https://www.emol.com/rss/Noticias_del_Dia.xml", "source": "Emol", "industry": None},
-    {"url": "https://www.cooperativa.cl/noticias/rss/economia.xml", "source": "Cooperativa Economía", "industry": None},
-    {"url": "https://www.24horas.cl/rss/economia.xml", "source": "24Horas Economía", "industry": None},
 ]
+# Removidos (verificados muertos 2026-05-23): pisoexploracion.cl (DNS),
+# construccionminera.cl (DNS), pulso.cl/feed/ (devuelve HTML), elmostrador
+# mercados/feed/ (404), biobiochile.cl/feed/ (404), emol.com/rss (timeout),
+# cooperativa.cl/economia.xml (404), 24horas.cl/economia.xml (404).
 
 KEYWORDS_MINERIA = ["miner", "cobre", "litio", "molibdeno", "relave", "faena", "codelco", "bhp", "teck", "yacimiento", "salar", "antofagasta minerals", "collahuasi", "escondida", "spence", "chuquicamata"]
 KEYWORDS_INFRA = ["infraestructura", "carretera", "puente", "ruta", "mop", "concesión vial", "obras públicas", "autopista", "aeropuerto", "hospital", "embalse"]

@@ -63,8 +63,11 @@ async def _loop():
     _init()
     loop = asyncio.get_event_loop()
 
-    # Empezar en cycle 4 para que el primer arranque corra las tareas diarias.
-    cycle = DAILY_EVERY_N_CYCLES
+    # Empezar en cycle 1: el primer arranque solo corre RSS (rápido). El primer
+    # daily ocurre cuando cycle=4 (24h después). Antes arrancaba con cycle=4 →
+    # full ingest + Playwright bloqueaban todos los ciclos siguientes hasta
+    # terminar (a veces horas), durante los cuales el RSS no refrescaba.
+    cycle = 1
     while True:
         # ── RSS (cada ciclo de 6h) ────────────────────────────────────────────
         try:
