@@ -62,6 +62,9 @@ Setearlas en Railway (Variables tab) o en un `.env` local para desarrollo.
 | `RAILWAY_GIT_COMMIT_SHA` | auto | Railway lo provee. `/health` lo expone como `version`. |
 | `SENTRY_DSN` | no | Si está seteada, web y worker reportan excepciones a Sentry (5% trace sampling). Si no, no se cargan errores a ningún lado externo. |
 | `LOG_LEVEL` | no | `INFO` por default. `DEBUG` para verbosidad, `WARNING` para silencio. Logs salen como JSON a stdout. |
+| `MP_ACCESS_TOKEN` | sí para pagos | Access Token de Mercado Pago. Usá `TEST-...` en sandbox, `APP_USR-...` en prod. Sacalo de https://www.mercadopago.cl/developers > tu app > Credenciales. |
+| `MP_WEBHOOK_SECRET` | sí para pagos | Secret para validar firma del webhook. En el panel MP > tu app > Webhooks > Configurar notificaciones. Si falta, las firmas no se validan (NO usar así en prod). |
+| `PUBLIC_URL` | sí para pagos | Base URL pública del web service (ej: `https://stratmap-chile.up.railway.app`). MP redirige acá tras el pago y manda webhooks a `PUBLIC_URL/billing/webhook`. |
 
 Generar un `SECRET_KEY` fuerte:
 
@@ -185,6 +188,36 @@ pytest -q
 ```
 
 Tests cubiertos: auth gates (parametrizados sobre 16 endpoints), rate limiter, scoring engine (`calc_score`, `_mandante_size`, etc.), shape de `/health`. CI corre `pytest` en cada push via `.github/workflows/test.yml`.
+
+## Planes y pagos (Mercado Pago)
+
+Stratmap tiene 3 planes definidos en `plans.py`: **Free** (20 opps/día, 50 contactos), **Pro** ($29.000 CLP/mes, 500 opps, 2.000 contactos, AI matching + exports) y **Team** ($89.000 CLP/mes, ilimitado).
+
+### Cómo activar los pagos
+
+1. **Cuenta Mercado Pago Developers:** crear una app en https://www.mercadopago.cl/developers > Aplicaciones > Crear aplicación. Tipo: **Pagos online + presenciales**.
+2. **Credenciales:** ir a la app > Credenciales. Copiar el **Access Token** (TEST-... para sandbox, APP_USR-... para producción).
+3. **Webhook:** en la misma app > **Webhooks** > Configurar URL `https://<tu-app>.up.railway.app/billing/webhook` y suscribirse a evento `subscription_preapproval`. Copiar el **Secret** generado.
+4. **Setear env vars en Railway** (servicio web):
+   - `MP_ACCESS_TOKEN=APP_USR-...` (o `TEST-...` para sandbox)
+   - `MP_WEBHOOK_SECRET=...` (el secret del paso 3)
+   - `PUBLIC_URL=https://<tu-app>.up.railway.app`
+5. **Probar:** logueate como user no-admin (free por default), andá a `/pricing.html`, dale a "Suscribirme" a Pro. Te redirige a MP, pagás con tarjeta de prueba, MP llama al webhook, `/me/plan` ya muestra plan=pro.
+
+### Endpoints relevantes
+
+- `POST /billing/checkout {plan: "pro"|"team"}` → crea preapproval, devuelve `init_point` URL.
+- `POST /billing/webhook` → público; valida firma HMAC y sincroniza `user_plans`.
+- `GET /billing/portal` → info del plan + link a MP para cancelar.
+- `GET /me/plan` → plan + features + status (lo lee el frontend para mostrar/ocultar UI).
+- 402 (Payment Required) se devuelve cuando `require_feature("ai_matching" | "exports")` falla, o cuando se supera `max_contacts`.
+
+### Tarjetas de prueba MP (sandbox)
+
+| Tipo | Número | CVV | Vencimiento |
+|---|---|---|---|
+| Aprobada | `5031 7557 3453 0604` (Mastercard) | `123` | `11/30` |
+| Rechazada | `4509 9535 6623 3704` (Visa) | `123` | `11/30` |
 
 ## Observabilidad
 

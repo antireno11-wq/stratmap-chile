@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 import db
 from deps import get_current_user, require_admin
+from plans import features_for
 from schemas import IngestPayload
 
 router = APIRouter(tags=["opportunities"])
@@ -32,6 +33,11 @@ def opportunities(
     all: bool = Query(default=False, description="Si true, ignora las preferencias del usuario y devuelve todo."),
     user=Depends(get_current_user),
 ):
+    # Cap por plan: max_opps_per_day
+    plan = db.get_user_plan(user["user_id"])
+    cap = features_for(plan.get("plan", "free")).get("max_opps_per_day", 20)
+    if limit > cap:
+        limit = cap
     rows = db.list_opportunities(q=q, limit=limit)
     if not all:
         prefs = db.get_preferences(user["user_id"]) or {}
@@ -78,7 +84,10 @@ def get_noticias(limit: int = Query(default=50, ge=1, le=200)):
 @router.get("/feed")
 def feed(user=Depends(get_current_user)):
     prefs = db.get_preferences(user["user_id"])
-    rows = db.list_opportunities(q=None, limit=500)
+    # Cap por plan: max_opps_per_day también acota /feed
+    plan = db.get_user_plan(user["user_id"])
+    cap = features_for(plan.get("plan", "free")).get("max_opps_per_day", 20)
+    rows = db.list_opportunities(q=None, limit=max(500, cap))
     scored = []
     for row in rows:
         r = dict(row)
@@ -101,7 +110,7 @@ def feed(user=Depends(get_current_user)):
                 r[f] = r[f].isoformat()
         scored.append(r)
     scored.sort(key=lambda x: x["feed_score"], reverse=True)
-    return scored[:100]
+    return scored[:cap]
 
 
 @router.get("/opportunities/{opp_id}/services", dependencies=[Depends(get_current_user)])

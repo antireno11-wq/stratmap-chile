@@ -103,6 +103,21 @@ def init_users_db() -> None:
         weight_company FLOAT DEFAULT 1.0,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- ── Planes / billing ──────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS user_plans (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        plan TEXT NOT NULL DEFAULT 'free',
+        status TEXT NOT NULL DEFAULT 'active',  -- active, past_due, canceled, trialing
+        current_period_end TIMESTAMPTZ NULL,
+        mp_customer_id TEXT NULL,
+        mp_preapproval_id TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_plans_plan ON user_plans(plan);
+    CREATE INDEX IF NOT EXISTS idx_user_plans_mp_preapproval ON user_plans(mp_preapproval_id)
+        WHERE mp_preapproval_id IS NOT NULL;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -847,6 +862,71 @@ def touch_user_last_login(user_id: int) -> None:
         with conn.cursor() as cur:
             cur.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
         conn.commit()
+
+
+# ── Billing / planes ──────────────────────────────────────────────────────────
+
+def get_user_plan(user_id: int) -> Dict[str, Any]:
+    """Devuelve el plan del usuario, o un default 'free' / 'active' si no hay fila."""
+    sql = "SELECT * FROM user_plans WHERE user_id = %s LIMIT 1;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id,))
+            row = cur.fetchone()
+    if row:
+        return dict(row)
+    return {"user_id": user_id, "plan": "free", "status": "active",
+            "current_period_end": None, "mp_customer_id": None, "mp_preapproval_id": None}
+
+
+def upsert_user_plan(user_id: int, plan: str, status: str,
+                     current_period_end: Optional[datetime] = None,
+                     mp_customer_id: Optional[str] = None,
+                     mp_preapproval_id: Optional[str] = None) -> Dict[str, Any]:
+    sql = """
+    INSERT INTO user_plans (user_id, plan, status, current_period_end,
+                            mp_customer_id, mp_preapproval_id, updated_at)
+    VALUES (%(uid)s, %(plan)s, %(status)s, %(end)s, %(cust)s, %(pre)s, NOW())
+    ON CONFLICT (user_id) DO UPDATE SET
+      plan = EXCLUDED.plan,
+      status = EXCLUDED.status,
+      current_period_end = COALESCE(EXCLUDED.current_period_end, user_plans.current_period_end),
+      mp_customer_id = COALESCE(EXCLUDED.mp_customer_id, user_plans.mp_customer_id),
+      mp_preapproval_id = COALESCE(EXCLUDED.mp_preapproval_id, user_plans.mp_preapproval_id),
+      updated_at = NOW()
+    RETURNING *;
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {
+                "uid": user_id, "plan": plan, "status": status,
+                "end": current_period_end, "cust": mp_customer_id, "pre": mp_preapproval_id,
+            })
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def get_user_by_mp_preapproval(preapproval_id: str) -> Optional[Dict[str, Any]]:
+    """Encuentra el user_plans cuya preapproval coincide. Usado por el webhook MP."""
+    sql = "SELECT * FROM user_plans WHERE mp_preapproval_id = %s LIMIT 1;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (preapproval_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def count_user_contacts(user_id: int) -> int:
+    """No-op por ahora — contactos no están scopeados por user. Devuelve count global.
+
+    TODO: cuando contacts tenga user_id, scopear este count.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM contacts")
+            row = cur.fetchone()
+    return int(row["n"]) if row else 0
 
 def save_preferences(user_id: int, prefs: Dict[str, Any]) -> None:
     sql = """

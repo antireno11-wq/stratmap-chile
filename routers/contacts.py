@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 import db
-from deps import get_current_user
+from deps import get_current_user, require_feature
+from plans import features_for
 from schemas import ContactIn, ContactUpdate
 
 router = APIRouter(tags=["contacts"], dependencies=[Depends(get_current_user)])
@@ -34,7 +35,16 @@ def get_contacts(
 
 
 @router.post("/contacts")
-def add_contact(payload: ContactIn):
+def add_contact(payload: ContactIn, user=Depends(get_current_user)):
+    # Enforce max_contacts del plan
+    plan = db.get_user_plan(user["user_id"])
+    limit = features_for(plan.get("plan", "free")).get("max_contacts", 50)
+    current = db.count_user_contacts(user["user_id"])
+    if current >= limit:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Llegaste al tope de contactos de tu plan ({limit}). Actualizá tu plan en /pricing.html.",
+        )
     row = db.create_contact(payload.model_dump())
     for f in ["created_at", "updated_at"]:
         if row.get(f):
@@ -69,7 +79,7 @@ def import_contacts(payload: List[ContactIn]):
     return {"ok": True, "inserted": inserted, "errors": errors}
 
 
-@router.get("/contacts/export")
+@router.get("/contacts/export", dependencies=[Depends(require_feature("exports"))])
 def export_contacts():
     rows = db.list_contacts(limit=10000)
     output = io.StringIO()

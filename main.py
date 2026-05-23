@@ -47,6 +47,7 @@ from routers import (
     mandantes as mandantes_router,
     empleos as empleos_router,
     admin as admin_router,
+    billing as billing_router,
     static_pages as static_pages_router,
 )
 
@@ -225,6 +226,7 @@ app.include_router(me_router.router)
 app.include_router(mandantes_router.router)
 app.include_router(empleos_router.router)
 app.include_router(admin_router.router)
+app.include_router(billing_router.router)
 app.include_router(static_pages_router.router)
 
 

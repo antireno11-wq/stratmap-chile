@@ -5,10 +5,28 @@ import traceback
 from fastapi import APIRouter, Depends, HTTPException
 
 import db
-from deps import get_current_user
+from deps import get_current_user, require_feature
+from plans import features_for, plan_is_active
 from schemas import PreferencesPayload, ServiceProfilePayload
 
 router = APIRouter(tags=["me"])
+
+
+@router.get("/me/plan")
+def get_my_plan(user=Depends(get_current_user)):
+    """Plan actual del usuario + features. Lo lee el frontend para mostrar/ocultar UI."""
+    plan_row = db.get_user_plan(user["user_id"])
+    plan_name = plan_row.get("plan", "free")
+    return {
+        "plan": plan_name,
+        "status": plan_row.get("status", "active"),
+        "active": plan_is_active(plan_row.get("status", "active")),
+        "current_period_end": (
+            plan_row["current_period_end"].isoformat()
+            if plan_row.get("current_period_end") else None
+        ),
+        "features": features_for(plan_name),
+    }
 
 
 @router.get("/me/preferences")
@@ -64,7 +82,7 @@ def get_profile(user=Depends(get_current_user)):
     return profile
 
 
-@router.post("/me/score-projects")
+@router.post("/me/score-projects", dependencies=[Depends(require_feature("ai_matching"))])
 def score_projects(payload: dict, user=Depends(get_current_user)):
     """Dispara scoring IA personalizado en background."""
     uid = user["user_id"]
