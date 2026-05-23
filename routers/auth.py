@@ -15,6 +15,11 @@ def login(payload: LoginPayload):
     user = db.get_user_by_email(payload.email)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    try:
+        db.touch_user_last_login(user["id"])
+    except Exception:
+        # No bloquear el login si la actualización falla
+        pass
     token = create_access_token(user["id"], user["email"])
     return {"token": token, "email": user["email"], "name": user.get("name")}
 

@@ -1,18 +1,37 @@
 """Stratmap Chile — entrypoint FastAPI.
 
-Concierge file: lifespan, scheduler, rate limiting, /health y registro
-de routers. La lógica de cada feature vive en routers/.
+Concierge file: lifespan, rate limiting, /health y registro de routers.
+La lógica de cada feature vive en routers/.
 """
 from contextlib import asynccontextmanager
 from typing import Dict
 from collections import defaultdict, deque
 import asyncio
+import logging
 import os
 import time
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+
+from logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger("stratmap.web")
+
+# Sentry — opt-in via SENTRY_DSN
+_sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+if _sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.getenv("RAILWAY_ENVIRONMENT_NAME", "dev"),
+        release=os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+        traces_sample_rate=0.05,
+        send_default_pii=False,
+    )
+    logger.info("sentry initialized")
 
 import db
 from db import db_health, init_db_safe, recalc_all_scores
@@ -39,19 +58,21 @@ async def lifespan(app: FastAPI):
     try:
         db.init_ai_db()
     except Exception as e:
-        print(f"[startup] init_ai_db warning: {e}")
+        logger.warning("init_ai_db failed", extra={"err": str(e)})
     try:
         import demand_intel
         demand_intel.init_demand_intel_db()
-        print("[startup] demand_intel DB inicializada")
+        logger.info("demand_intel db initialized")
     except Exception as e:
-        print(f"[startup] demand_intel init warning: {e}")
+        logger.warning("demand_intel init failed", extra={"err": str(e)})
     try:
         result = recalc_all_scores()
-        print(f"[startup] Scores recalculados: {result['total_updated']} actualizados de {result['total_rows']} total")
-        print(f"[startup] Distribución: {result['distribution']}")
+        logger.info("scores recalculados",
+                    extra={"updated": result["total_updated"],
+                           "total": result["total_rows"],
+                           "distribution": result["distribution"]})
     except Exception as e:
-        print(f"[startup] Warning recalc scores: {e}")
+        logger.warning("recalc_all_scores failed", extra={"err": str(e)})
 
     # Normalizar source 'sea' → 'SEA' (inconsistencia en datos)
     try:
@@ -61,9 +82,9 @@ async def lifespan(app: FastAPI):
                 n = cur.rowcount
             conn.commit()
         if n:
-            print(f"[startup] Normalizado {n} registros 'sea' → 'SEA'")
+            logger.info("sea_source_normalized", extra={"rows": n})
     except Exception as e:
-        print(f"[startup] Warning SEA normalize: {e}")
+        logger.warning("sea normalize failed", extra={"err": str(e)})
 
     # Noticias no deben tener score — reset al arrancar
     try:
@@ -79,11 +100,11 @@ async def lifespan(app: FastAPI):
                     (NEWS_SRCS,),
                 )
             conn.commit()
-        print("[startup] Scores de noticias reseteados a 0")
+        logger.info("news scores reset to 0")
     except Exception as e:
-        print(f"[startup] Warning reset news scores: {e}")
+        logger.warning("reset news scores failed", extra={"err": str(e)})
 
-    print("[startup] web listo. Scheduler corre en proceso worker separado (ver Procfile + worker.py).")
+    logger.info("web ready", extra={"note": "scheduler runs in worker.py"})
     yield
 
 

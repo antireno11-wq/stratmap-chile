@@ -12,8 +12,25 @@ Para que las tareas diarias corran al primer arranque, fijamos `cycle = 4`
 en el inicio (no esperamos 24h para el primer full ingest).
 """
 import asyncio
+import logging
 import os
-import traceback
+
+from logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger("stratmap.worker")
+
+_sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+if _sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        environment=os.getenv("RAILWAY_ENVIRONMENT_NAME", "dev"),
+        release=os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+        traces_sample_rate=0.05,
+        send_default_pii=False,
+    )
+    logger.info("sentry initialized")
 
 import db
 from helpers import run_rss_ingest
@@ -24,7 +41,6 @@ DAILY_EVERY_N_CYCLES = 4         # 4 * 6h = 24h
 
 
 def _full_ingest():
-    """Pipeline completo: SEA, RSS, ENAMI, SIGEX, careers scrapers, mandante scorer, ai_matcher."""
     import sea_ingest
     sea_ingest.main()
 
@@ -39,11 +55,11 @@ def _init():
     try:
         db.init_ai_db()
     except Exception as e:
-        print(f"[worker] init_ai_db warning: {e}")
+        logger.warning("init_ai_db failed", extra={"err": str(e)})
 
 
 async def _loop():
-    print(f"[worker] starting (pid={os.getpid()})")
+    logger.info("worker starting", extra={"pid": os.getpid()})
     _init()
     loop = asyncio.get_event_loop()
 
@@ -52,33 +68,33 @@ async def _loop():
     while True:
         # ── RSS (cada ciclo de 6h) ────────────────────────────────────────────
         try:
-            print(f"[worker] cycle {cycle}: RSS ingest")
+            logger.info("rss ingest", extra={"cycle": cycle})
             result = await loop.run_in_executor(None, run_rss_ingest)
-            print(f"[worker] RSS: {result}")
+            logger.info("rss done", extra={"result": result})
         except Exception:
-            traceback.print_exc()
+            logger.exception("rss failed")
 
         # ── Tareas diarias (cada 4 ciclos = 24h) ─────────────────────────────
         if cycle % DAILY_EVERY_N_CYCLES == 0:
             try:
-                print("[worker] full ingest pipeline...")
+                logger.info("full ingest pipeline")
                 await loop.run_in_executor(None, _full_ingest)
             except Exception:
-                traceback.print_exc()
+                logger.exception("full ingest failed")
 
             try:
-                print("[worker] AI scorer zona gris...")
+                logger.info("ai scorer zona gris")
                 ai_result = await loop.run_in_executor(None, _ai_scorer_zona_gris)
-                print(f"[worker] AI scorer: {ai_result}")
+                logger.info("ai scorer done", extra={"result": ai_result})
             except Exception:
-                traceback.print_exc()
+                logger.exception("ai scorer failed")
 
             try:
-                print("[worker] expirando licitaciones obsoletas...")
+                logger.info("expire stale opportunities")
                 expire = await loop.run_in_executor(None, db.expire_stale_opportunities)
-                print(f"[worker] expire: {expire}")
+                logger.info("expire done", extra={"result": expire})
             except Exception:
-                traceback.print_exc()
+                logger.exception("expire failed")
 
         cycle += 1
         await asyncio.sleep(SHORT_CYCLE_SECONDS)

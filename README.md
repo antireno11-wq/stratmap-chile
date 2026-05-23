@@ -60,6 +60,8 @@ Setearlas en Railway (Variables tab) o en un `.env` local para desarrollo.
 | `SEA_LIMIT` | no | Tope de proyectos SEA por corrida. Default 500. |
 | `RUN_INGEST_ON_START` | no | Si `1`, dispara un scrape inicial al arrancar el worker. |
 | `RAILWAY_GIT_COMMIT_SHA` | auto | Railway lo provee. `/health` lo expone como `version`. |
+| `SENTRY_DSN` | no | Si está seteada, web y worker reportan excepciones a Sentry (5% trace sampling). Si no, no se cargan errores a ningún lado externo. |
+| `LOG_LEVEL` | no | `INFO` por default. `DEBUG` para verbosidad, `WARNING` para silencio. Logs salen como JSON a stdout. |
 
 Generar un `SECRET_KEY` fuerte:
 
@@ -183,6 +185,13 @@ pytest -q
 ```
 
 Tests cubiertos: auth gates (parametrizados sobre 16 endpoints), rate limiter, scoring engine (`calc_score`, `_mandante_size`, etc.), shape de `/health`. CI corre `pytest` en cada push via `.github/workflows/test.yml`.
+
+## Observabilidad
+
+- **Logging:** JSON structured logs a stdout via `logging_config.setup_logging()`, configurado al arrancar tanto en `main.py` (web) como en `worker.py`. Cada log es una línea JSON con `ts`, `level`, `logger`, `msg`, y cualquier campo extra que pase via `logger.info("...", extra={...})`. Nivel por env var `LOG_LEVEL`.
+- **Sentry:** opt-in via `SENTRY_DSN`. Se inicializa en web y worker independientemente; reporta excepciones no manejadas + 5% de trazas. Sin `SENTRY_DSN`, no se reporta a ningún lado.
+- **Métricas operacionales:** `GET /admin/stats` (admin) devuelve oportunidades por fuente (total + activos + last_scrape), usuarios activos (7d / 30d), y conteo de llamadas IA persistidas (`ai_opportunity_fits` + `mandante_heat`) en los últimos 30 días.
+- **Liveness del worker:** `/health` infiere si el worker está vivo desde `MAX(updated_at)` en `opportunities`. Si pasaron >8h sin scrape, `worker.stale = true`.
 
 ## Healthcheck
 

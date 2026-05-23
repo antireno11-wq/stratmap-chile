@@ -1,4 +1,5 @@
 # db.py
+import logging
 import os, re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -6,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
+
+logger = logging.getLogger("stratmap.db")
 
 
 def _db_url() -> str:
@@ -27,7 +30,8 @@ def init_db_safe() -> None:
         init_contacts_db()
         init_pipeline_db()
     except Exception as e:
-        print(f"[db] init_db_safe: DB no disponible todavía: {type(e).__name__}: {e}")
+        logger.warning("init_db_safe: db not available yet",
+                       extra={"err_type": type(e).__name__, "err": str(e)})
 
 
 def init_db() -> None:
@@ -80,8 +84,10 @@ def init_users_db() -> None:
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         name TEXT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_login TIMESTAMPTZ NULL
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ NULL;
     CREATE TABLE IF NOT EXISTS user_preferences (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         preferred_industries TEXT[] DEFAULT '{}',
@@ -217,7 +223,7 @@ def _migrate_pipeline_user_id() -> None:
                 if row and row["is_nullable"] == "NO":
                     continue  # ya migrado
 
-                print(f"[migrate] {table} → per-user")
+                logger.info("migrate to per-user (pipeline)", extra={"table": table})
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
                 if first_uid is not None:
                     cur.execute(f"UPDATE {table} SET user_id = %s WHERE user_id IS NULL", (first_uid,))
@@ -683,7 +689,7 @@ def expire_stale_opportunities() -> Dict[str, Any]:
                     expired[source] = count
         conn.commit()
     total = sum(expired.values())
-    print(f"[expire] {total} oportunidades inactivadas: {expired}")
+    logger.info("expire_stale done", extra={"total": total, "by_source": expired})
     return {"total_expired": total, "by_source": expired}
 
 
@@ -833,6 +839,14 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
             cur.execute(sql, {"email": email})
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+def touch_user_last_login(user_id: int) -> None:
+    """Marca last_login=NOW() para tracking de usuarios activos."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
+        conn.commit()
 
 def save_preferences(user_id: int, prefs: Dict[str, Any]) -> None:
     sql = """
@@ -1060,7 +1074,8 @@ def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
             create_contact(c)
             inserted += 1
         except Exception as e:
-            print(f"[contacts] error importando {c.get('name')}: {e}")
+            logger.warning("contacts import row failed",
+                           extra={"name": c.get("name"), "err": str(e)})
             errors += 1
     return inserted, errors
 
@@ -1146,7 +1161,7 @@ def _migrate_ai_user_id_to_int() -> None:
                 if not row or row["data_type"] in ("integer", "bigint"):
                     continue  # ya migrado o tabla no existe
 
-                print(f"[migrate] {table}.user_id TEXT -> INTEGER")
+                logger.info("migrate user_id TEXT -> INTEGER", extra={"table": table})
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id_int INTEGER REFERENCES users(id) ON DELETE CASCADE")
                 cur.execute("SELECT MIN(id) AS uid FROM users")
                 first_user = cur.fetchone()

@@ -10,3 +10,4 @@ playwright>=1.49.0
 anthropic
 alembic>=1.13
 sqlalchemy>=2.0
+sentry-sdk[fastapi]>=2.0

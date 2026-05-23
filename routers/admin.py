@@ -22,6 +22,74 @@ from routers.mandantes import reset_faenas_cache
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
 
 
+@router.get("/admin/stats")
+def admin_stats():
+    """Métricas operacionales para monitoreo: actividad por fuente, usuarios
+    activos, llamadas IA persistidas en el último mes."""
+    out = {}
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            # Oportunidades por fuente: total + activos + último scrape
+            cur.execute("""
+                SELECT source,
+                       COUNT(*)                                AS total,
+                       COUNT(*) FILTER (WHERE is_active)       AS active,
+                       MAX(updated_at)                         AS last_scrape
+                FROM opportunities
+                WHERE source IS NOT NULL
+                GROUP BY source
+                ORDER BY total DESC
+            """)
+            sources = []
+            for r in cur.fetchall():
+                sources.append({
+                    "source": r["source"],
+                    "total": r["total"],
+                    "active": r["active"],
+                    "last_scrape": r["last_scrape"].isoformat() if r.get("last_scrape") else None,
+                })
+            out["sources"] = sources
+
+            # Usuarios activos (login en los últimos 30 días)
+            cur.execute("""
+                SELECT
+                    COUNT(*)                                                AS total,
+                    COUNT(*) FILTER (WHERE last_login > NOW() - INTERVAL '30 days') AS active_30d,
+                    COUNT(*) FILTER (WHERE last_login > NOW() - INTERVAL '7 days')  AS active_7d
+                FROM users
+            """)
+            row = cur.fetchone() or {}
+            out["users"] = {
+                "total": row.get("total", 0),
+                "active_30d": row.get("active_30d", 0),
+                "active_7d": row.get("active_7d", 0),
+            }
+
+            # Llamadas IA persistidas (proxy de uso de Anthropic API).
+            # Las llamadas a /mandantes/summary se cachean en memoria sin persistir,
+            # así que esto subestima un poco — pero es lo medible sin instrumentar todo.
+            ai_calls = {}
+            try:
+                cur.execute("""
+                    SELECT COUNT(*) AS n FROM ai_opportunity_fits
+                    WHERE scored_at > NOW() - INTERVAL '30 days'
+                """)
+                ai_calls["ai_fits_30d"] = (cur.fetchone() or {}).get("n", 0)
+            except Exception as e:
+                ai_calls["ai_fits_30d_error"] = str(e)
+            try:
+                cur.execute("""
+                    SELECT COUNT(*) AS n FROM mandante_heat
+                    WHERE scored_at > NOW() - INTERVAL '30 days'
+                """)
+                ai_calls["mandante_heat_30d"] = (cur.fetchone() or {}).get("n", 0)
+            except Exception as e:
+                ai_calls["mandante_heat_30d_error"] = str(e)
+            out["ai_calls"] = ai_calls
+
+    return out
+
+
 @router.post("/admin/refresh-faenas")
 def refresh_faenas():
     """Fuerza recarga del cache de faenas mineras."""
