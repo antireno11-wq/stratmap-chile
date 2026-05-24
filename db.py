@@ -190,6 +190,11 @@ def init_db() -> None:
             cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_duplicate BOOLEAN NOT NULL DEFAULT FALSE;")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_dedup_key ON opportunities(dedup_key) WHERE dedup_key IS NOT NULL;")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_is_duplicate ON opportunities(is_duplicate) WHERE is_duplicate;")
+            # Peso por evento (scoring_v2). Calculado tras cada ingesta por
+            # score_events.run(). Reemplaza la lógica vieja de pesos fijos por
+            # categoría en routers/mandantes.py.
+            cur.execute("ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS event_weight INTEGER NULL;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_opp_event_weight ON opportunities(event_weight) WHERE event_weight IS NOT NULL;")
         conn.commit()
 
 

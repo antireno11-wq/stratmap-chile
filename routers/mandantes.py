@@ -25,102 +25,85 @@ _faenas_cache: dict = {"data": [], "ts": 0}
 @router.get("/mandantes")
 def get_mandantes():
     """
-    Ranking de mandantes por MOVIMIENTO. Para cada mandante devuelve:
-      - score_30d:   actividad ponderada últimos 30 días (qué tan caliente AHORA)
-      - score_90d:   actividad ponderada últimos 90 días (qué tan activo trimestre)
-      - score_prev30: 30d anteriores (días -60 a -30), para calcular tendencia
-      - trend:       'up' (>+20%), 'down' (<-20%) o 'flat'
-      - trend_pct:   porcentaje de cambio
-      - breakdown_30d / breakdown_90d: { licitaciones, sea, sigex, news, jobs }
-      - heat_score / heat_label: capa IA opcional (mandante_scorer)
+    Ranking de mandantes por MOVIMIENTO PONDERADO POR CALIDAD DE SEÑAL.
 
-    Filosofía: el score de ventana refleja MOVIMIENTO RECIENTE de cada mandante,
-    no su tamaño histórico. Una empresa con 50 licitaciones del 2024 pero 0 esta
-    semana cae al final. Una con 5 esta semana sube.
+    El score se calcula sumando opportunities.event_weight (calculado por
+    scoring_v2 / score_events) en la ventana correspondiente, normalizado
+    contra el mejor mandante. Una licitación de 50 MUSD en ENAMI pesa 100;
+    una noticia de PR pesa 10. Esto resuelve el problema viejo de que una
+    empresa con muchas noticias chatas terminaba más alta que otra con una
+    sola licitación grande.
+
+    Devuelve por mandante:
+      - score_30d / score_90d: actividad pesada (0-100, normalizada al top).
+      - score_prev30:  ventana -60..-30 para tendencia.
+      - trend, trend_pct: 'up' (≥+20%), 'down' (≤-20%), 'flat'.
+      - breakdown_30d / breakdown_90d: conteos por categoría (licitaciones,
+        SEA, noticias, empleos). SIGEX excluido.
+      - heat_score / heat_label: capa IA (mandante_scorer) opcional.
     """
     sql = """
     WITH src AS (
         SELECT company, source, COALESCE(jobs_count, 0) AS jobs,
+               COALESCE(event_weight, 0) AS w,
                COALESCE(published_at, created_at) AS act_date
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
           AND source != 'manual'
           AND is_duplicate = FALSE
+          AND source != ALL(%(conce)s)
     ),
     base AS (
         SELECT
             company,
-            -- ── 30 días actuales ────────────────────────────────────────────
+            -- Suma pesada por event_weight en cada ventana ───────────────────
+            COALESCE(SUM(w) FILTER (WHERE act_date > NOW() - INTERVAL '30 days'), 0) AS weight_30d,
+            COALESCE(SUM(w) FILTER (WHERE act_date > NOW() - INTERVAL '90 days'), 0) AS weight_90d,
+            COALESCE(SUM(w) FILTER (WHERE act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days'), 0) AS weight_p30,
+            -- Breakdowns por categoría (solo conteos, para mostrar al usuario)
             COUNT(*) FILTER (WHERE source = ANY(%(licit)s)   AND act_date > NOW() - INTERVAL '30 days') AS licit_30d,
             COUNT(*) FILTER (WHERE source = ANY(%(prosp)s)   AND act_date > NOW() - INTERVAL '30 days') AS sea_30d,
-            COUNT(*) FILTER (WHERE source = ANY(%(conce)s)   AND act_date > NOW() - INTERVAL '30 days') AS sigex_30d,
             COUNT(*) FILTER (WHERE source = ANY(%(noticia)s) AND act_date > NOW() - INTERVAL '30 days') AS news_30d,
             COALESCE(SUM(jobs) FILTER (WHERE source = ANY(%(empleo)s) AND act_date > NOW() - INTERVAL '30 days'), 0) AS jobs_30d,
-            -- ── 90 días actuales (incluye los 30) ───────────────────────────
             COUNT(*) FILTER (WHERE source = ANY(%(licit)s)   AND act_date > NOW() - INTERVAL '90 days') AS licit_90d,
             COUNT(*) FILTER (WHERE source = ANY(%(prosp)s)   AND act_date > NOW() - INTERVAL '90 days') AS sea_90d,
-            COUNT(*) FILTER (WHERE source = ANY(%(conce)s)   AND act_date > NOW() - INTERVAL '90 days') AS sigex_90d,
             COUNT(*) FILTER (WHERE source = ANY(%(noticia)s) AND act_date > NOW() - INTERVAL '90 days') AS news_90d,
             COALESCE(SUM(jobs) FILTER (WHERE source = ANY(%(empleo)s) AND act_date > NOW() - INTERVAL '90 days'), 0) AS jobs_90d,
-            -- ── 30d previos (días -60 a -30) para tendencia ────────────────
-            COUNT(*) FILTER (WHERE source = ANY(%(licit)s)   AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS licit_p30,
-            COUNT(*) FILTER (WHERE source = ANY(%(prosp)s)   AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS sea_p30,
-            COUNT(*) FILTER (WHERE source = ANY(%(conce)s)   AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS sigex_p30,
-            COUNT(*) FILTER (WHERE source = ANY(%(noticia)s) AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS news_p30,
-            COALESCE(SUM(jobs) FILTER (WHERE source = ANY(%(empleo)s) AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days'), 0) AS jobs_p30,
             MAX(act_date) AS last_activity
         FROM src
         GROUP BY company
+    ),
+    norm AS (
+        -- Normalizamos contra el top mandante para que score_30d ∈ [0, 100].
+        SELECT (SELECT NULLIF(MAX(weight_30d), 0) FROM base) AS max30,
+               (SELECT NULLIF(MAX(weight_90d), 0) FROM base) AS max90,
+               (SELECT NULLIF(MAX(weight_p30), 0) FROM base) AS maxp30
     )
     SELECT
         b.company,
-        b.licit_30d, b.sea_30d, b.sigex_30d, b.news_30d, b.jobs_30d,
-        b.licit_90d, b.sea_90d, b.sigex_90d, b.news_90d, b.jobs_90d,
-        b.licit_p30, b.sea_p30, b.sigex_p30, b.news_p30, b.jobs_p30,
+        b.weight_30d, b.weight_90d, b.weight_p30,
+        b.licit_30d, b.sea_30d, b.news_30d, b.jobs_30d,
+        b.licit_90d, b.sea_90d, b.news_90d, b.jobs_90d,
         b.last_activity,
-        COALESCE(h.heat_score, 0)                 AS heat_score,
-        COALESCE(h.heat_label, '')                AS heat_label,
-        COALESCE(h.heat_reason, '')               AS heat_reason,
+        COALESCE(h.heat_score, 0)                    AS heat_score,
+        COALESCE(h.heat_label, '')                   AS heat_label,
+        COALESCE(h.heat_reason, '')                  AS heat_reason,
         COALESCE(h.trending_topics, ARRAY[]::text[]) AS trending_topics,
-        -- Score 30d: pesos altos por inmediatez de la señal
-        ROUND(
-            LEAST(b.licit_30d * 4, 30) +
-            LEAST(b.sea_30d * 5, 25) +
-            LEAST(b.sigex_30d * 0.5, 15) +
-            LEAST(b.news_30d * 2, 15) +
-            LEAST(b.jobs_30d * 1, 10) +
-            LEAST(COALESCE(h.heat_score, 0) * 0.05, 5)
-        )::int AS score_30d,
-        -- Score 90d: pesos menores (más volumen tolerado en ventana larga)
-        ROUND(
-            LEAST(b.licit_90d * 1.5, 30) +
-            LEAST(b.sea_90d * 2, 25) +
-            LEAST(b.sigex_90d * 0.2, 15) +
-            LEAST(b.news_90d * 0.7, 15) +
-            LEAST(b.jobs_90d * 0.4, 10) +
-            LEAST(COALESCE(h.heat_score, 0) * 0.05, 5)
-        )::int AS score_90d,
-        -- Score prev30 con misma fórmula que 30d, para tendencia
-        ROUND(
-            LEAST(b.licit_p30 * 4, 30) +
-            LEAST(b.sea_p30 * 5, 25) +
-            LEAST(b.sigex_p30 * 0.5, 15) +
-            LEAST(b.news_p30 * 2, 15) +
-            LEAST(b.jobs_p30 * 1, 10) +
-            LEAST(COALESCE(h.heat_score, 0) * 0.05, 5)
-        )::int AS score_prev30
+        -- Normalización: weight_30d * 100 / max30, capeado en 100.
+        ROUND(LEAST(b.weight_30d * 100.0 / COALESCE(n.max30, 1), 100))::int AS score_30d,
+        ROUND(LEAST(b.weight_90d * 100.0 / COALESCE(n.max90, 1), 100))::int AS score_90d,
+        ROUND(LEAST(b.weight_p30 * 100.0 / COALESCE(n.maxp30, 1), 100))::int AS score_prev30
     FROM base b
+    CROSS JOIN norm n
     LEFT JOIN mandante_heat h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
-    WHERE (b.licit_30d + b.sea_30d + b.sigex_30d + b.news_30d + b.jobs_30d) > 0
-       OR (b.licit_90d + b.sea_90d + b.sigex_90d + b.news_90d) > 0
-    ORDER BY score_30d DESC, score_90d DESC
+    WHERE b.weight_30d > 0 OR b.weight_90d > 0
+    ORDER BY b.weight_30d DESC, b.weight_90d DESC
     LIMIT 100;
     """
     params = {
         "licit":   LICITACION_SOURCES,
-        # SIGEX desactivado 2026-05: lista vacía hace que sigex_30d/90d/p30 sean 0
-        # y no aporten al score. Los datos históricos siguen en la base.
-        "conce":   [],
+        # SIGEX excluido (2026-05) tanto del scoring como del breakdown.
+        "conce":   CONCESION_SOURCES,
         "prosp":   PROSPECTO_SOURCES,
         "noticia": NOTICIA_SOURCES,
         "empleo":  EMPLEO_SOURCES,
@@ -154,11 +137,8 @@ def get_mandantes():
                 "news":         r.pop("news_90d", 0),
                 "jobs":         r.pop("jobs_90d", 0),
             }
-            # Limpieza de columnas SIGEX (ya no las exponemos)
-            for k in ("sigex_30d", "sigex_90d"):
-                r.pop(k, None)
-            # Cleanup prev30 raw fields (ya los usamos para trend)
-            for k in ("licit_p30", "sea_p30", "sigex_p30", "news_p30", "jobs_p30"):
+            # Weight raw fields ya no se exponen (los usamos para normalizar).
+            for k in ("weight_30d", "weight_90d", "weight_p30"):
                 r.pop(k, None)
             if r.get("last_activity"):
                 r["last_activity"] = r["last_activity"].isoformat()

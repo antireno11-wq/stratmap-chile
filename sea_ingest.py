@@ -132,6 +132,16 @@ def run_signals():
     return None
 
 
+@track_run("score_events")
+def run_score_events():
+    """Recalcula opportunities.event_weight para las filas nuevas (NULL).
+    Corre al final del pipeline para que el endpoint /mandantes y futuros
+    consumidores tengan pesos frescos."""
+    import score_events
+    result = score_events.run(only_unscored=True)
+    return {"inserted": int(result.get("processed") or 0), "updated": 0}
+
+
 # Lista de (nombre, función) que main() itera. Centralizar acá hace que agregar
 # una fuente sea una línea, y que el wrapper try/except sea uniforme.
 PIPELINE: list[tuple[str, callable]] = [
@@ -148,6 +158,7 @@ PIPELINE: list[tuple[str, callable]] = [
     ("mundo_mineria",  lambda: run_mundo_mineria()),
     ("empleos",        lambda: run_empleos()),
     ("signals_jobs",   lambda: run_signals()),
+    ("score_events",   lambda: run_score_events()),
 ]
 
 

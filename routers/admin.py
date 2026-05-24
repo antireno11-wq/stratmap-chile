@@ -23,6 +23,16 @@ from source_categories import NOTICIA_SOURCES
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
 
 
+@router.post("/admin/run-score-events")
+def admin_run_score_events(full: bool = False):
+    """Recalcula opportunities.event_weight.
+    - full=false (default): solo filas con event_weight IS NULL (rápido).
+    - full=true: recalcula TODO. Usar cuando se ajusta scoring_v2.
+    """
+    import score_events
+    return score_events.run(only_unscored=not full)
+
+
 @router.get("/admin/health")
 def admin_health():
     """Salud de cada conector. Última corrida + semáforo verde/amarillo/rojo.
