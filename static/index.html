@@ -274,7 +274,7 @@
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=8" />
+  <link rel="stylesheet" href="/theme.css?v=9" />
 </head>
 <body>
   <aside class="sidebar">
@@ -407,6 +407,47 @@
         </div>
       </div>
 
+      <!-- ── HERO: KPIs + charts ────────────────────────────────────────────── -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Licitaciones · 30d</div>
+          <div class="kpi-value" id="kpi-licitaciones">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Prospectos SEA · 30d</div>
+          <div class="kpi-value" id="kpi-prospectos">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Noticias · 30d</div>
+          <div class="kpi-value" id="kpi-noticias">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Empleos detectados · 30d</div>
+          <div class="kpi-value" id="kpi-empleos">—</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+        <div class="chart-card">
+          <div class="chart-card-head">
+            <div>
+              <div class="chart-card-title">Actividad últimos 30 días</div>
+              <div class="chart-card-sub">Oportunidades nuevas por día y categoría</div>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chart-activity"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-head">
+            <div>
+              <div class="chart-card-title">Distribución</div>
+              <div class="chart-card-sub">Últimos 30 días por categoría</div>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chart-donut"></canvas></div>
+        </div>
+      </div>
+
       <!-- ── TOP MANDANTES CALIENTES (últimos 30 días) ───────────────────────── -->
       <div class="section-card" id="section-hot-mandantes">
         <div class="section-head">
@@ -478,9 +519,11 @@
     <div class="drawer-body" id="drawer-body"></div>
   </div>
 
-  <script src="/auth.js?v=8"></script>
+  <script src="/auth.js?v=9"></script>
   <script>if (!requireLogin()) { /* redirigió */ }</script>
-  <script src="/app.js?v=8"></script>
-  <script src="/mobile-nav.js?v=8" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/charts.js?v=9"></script>
+  <script src="/app.js?v=9"></script>
+  <script src="/mobile-nav.js?v=9" defer></script>
 </body>
 </html>

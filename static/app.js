@@ -1420,7 +1420,51 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   load();
+  loadDashboardStats();
 });
+
+
+// ── Stats del dashboard (KPIs + 2 charts) ─────────────────────────────────────
+
+let _chartActivity = null;
+let _chartDonut = null;
+
+async function loadDashboardStats() {
+  try {
+    const [tsRes, byCatRes] = await Promise.all([
+      apiFetch('/stats/timeseries?days=30'),
+      apiFetch('/stats/by-category?days=30'),
+    ]);
+    if (tsRes.ok && typeof window.activityChart === 'function') {
+      const ts = await tsRes.json();
+      const canvas = document.getElementById('chart-activity');
+      if (canvas) {
+        if (_chartActivity) _chartActivity.destroy();
+        _chartActivity = window.activityChart(canvas, ts);
+      }
+    }
+    if (byCatRes.ok) {
+      const cats = await byCatRes.json();
+      // KPIs
+      const setKpi = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
+      setKpi('kpi-licitaciones', cats.licitacion);
+      setKpi('kpi-prospectos',   cats.prospecto);
+      setKpi('kpi-noticias',     cats.noticia);
+      setKpi('kpi-empleos',      cats.empleo);
+      // Donut
+      if (typeof window.categoryDonut === 'function') {
+        const canvas = document.getElementById('chart-donut');
+        if (canvas) {
+          if (_chartDonut) _chartDonut.destroy();
+          _chartDonut = window.categoryDonut(canvas, cats);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('loadDashboardStats failed:', e);
+  }
+}
+
 
 // ── Aplicar preferencias de localStorage al scoring ───────────────────────────
 
