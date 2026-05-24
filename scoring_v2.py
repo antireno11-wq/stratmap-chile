@@ -140,7 +140,20 @@ def event_weight(opp: dict) -> int:
     if source == "cmf":
         return 80
 
-    # SEA: proyecto en evaluación ambiental — pipeline futuro cierto.
+    # Prospectos especializados (pesos diferenciados dentro de la categoría):
+    # - DGA Agua: señal TEMPRANA muy valiosa (6-18m antes del EIA)
+    # - COCHILCO catastro: proyecto declarado oficialmente con MUSD
+    # - SIGEX Explotación: bienalidad — confirma faena activa, señal media
+    # - SEA: EIA presentado — proyecto cierto en marcha
+    if source == "DGA Agua":
+        return 75
+    if source == "COCHILCO":
+        amount = extract_amount_musd(text)
+        if amount and amount >= 5:
+            return 100  # catastro con MUSD declarado es premium
+        return 75
+    if source == "SIGEX Explotación":
+        return 45
     if source in PROSPECTO_SOURCES:
         return 70
 

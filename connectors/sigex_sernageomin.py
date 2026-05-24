@@ -112,9 +112,9 @@ def parse_fecha(fecha_str: str) -> Optional[str]:
     return None
 
 
-def fetch_page(offset: int, count: int = 2000) -> Dict:
+def fetch_page(offset: int, count: int = 2000, where: str = "1=1") -> Dict:
     params = {
-        "where": "1=1",
+        "where": where,
         "outFields": "OBJECTID,ID,NOMBRE_PROYECTO,TITULAR,RUT_TITULAR,REGION,ESTADO,"
                      "TIPO_TRAMITE,TIPO_RECURSO,RECURSO_CONCAT,LATITUD,LONGITUD,"
                      "FECHA,Fecha_2,ENLACE",
@@ -213,6 +213,85 @@ def fetch_sigex(limit: int = 5000) -> List[Dict[str, Any]]:
             break
 
     print(f"[sigex] Ingesta completa: {len(items)} proyectos SIGEX")
+    return items[:limit]
+
+
+def fetch_sigex_explotacion(limit: int = 2000) -> List[Dict[str, Any]]:
+    """SIGEX filtrado a TIPO_TRAMITE='TT_03' (Bienalidad Explotación).
+
+    Diferencia con fetch_sigex():
+    - source = 'SIGEX Explotación' (no 'SIGEX'). Permite categorizarlo aparte
+      del SIGEX general que fue retirado del pipeline.
+    - Solo trae filas con trámite TT_03, que indica que la empresa está
+      manteniendo activa una concesión de explotación (paga la bienalidad).
+      Esto es señal de continuidad operacional — no de proyecto nuevo, pero
+      sí confirma que el mandante tiene faena viva en esa región.
+
+    Para concesiones NUEVAS de explotación (constituciones) la fuente real es
+    el Boletín Oficial Minero (PDF mensual), no implementado.
+    """
+    items: List[Dict[str, Any]] = []
+    offset = 0
+    page_size = 2000
+    where = "TIPO_TRAMITE='TT_03'"
+
+    while len(items) < limit:
+        data = fetch_page(offset, min(page_size, limit - len(items)), where=where)
+        features = data.get("features", [])
+        if not features:
+            break
+
+        for feat in features:
+            a = feat.get("attributes", {})
+            titular = (a.get("TITULAR") or "").strip()
+            nombre  = (a.get("NOMBRE_PROYECTO") or "").strip()
+            if not titular:
+                continue
+
+            region_code = a.get("REGION") or ""
+            estado_code = a.get("ESTADO") or ""
+            recurso     = (a.get("RECURSO_CONCAT") or "").strip()
+            region      = REGION_LOOKUP.get(region_code, region_code)
+            estado      = ESTADO_LOOKUP.get(estado_code, estado_code)
+
+            fecha_iso = None
+            fecha_2 = a.get("Fecha_2")
+            if fecha_2:
+                fecha_iso = parse_fecha(str(fecha_2))
+            if not fecha_iso:
+                fecha_iso = parse_fecha(a.get("FECHA") or "")
+
+            enlace = a.get("ENLACE") or DASHBOARD_URL
+            mineral_str = f" [{recurso}]" if recurso else ""
+            title = f"Bienalidad explotación: {nombre or titular}{mineral_str}"
+
+            items.append({
+                "source":       "SIGEX Explotación",
+                "title":        title[:400],
+                "url":          enlace,
+                "company":      titular,
+                "industry":     "Minería",
+                "region":       region,
+                "phase":        "Explotación activa",
+                "score":        50,
+                "published_at": fecha_iso,
+                "entry":        f"{titular} | bienalidad | {region} | {recurso}",
+                "raw": {
+                    "sigex_id":     a.get("ID"),
+                    "rut_titular":  a.get("RUT_TITULAR"),
+                    "tipo_tramite": "Bienalidad Explotación",
+                    "recurso":      recurso,
+                    "lat":          a.get("LATITUD"),
+                    "lng":          a.get("LONGITUD"),
+                    "source_type":  "sigex_explotacion",
+                }
+            })
+
+        offset += len(features)
+        if not data.get("exceededTransferLimit", False):
+            break
+
+    print(f"[sigex_explotacion] {len(items)} concesiones de explotación activas")
     return items[:limit]
 
 

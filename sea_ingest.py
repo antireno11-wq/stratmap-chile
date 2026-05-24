@@ -123,6 +123,23 @@ def run_cochilco():
     from connectors.cochilco import fetch_cochilco
     return ingest(fetch_cochilco(limit=300), "cochilco")
 
+@track_run("sigex_explotacion")
+def run_sigex_explotacion():
+    """SIGEX filtrado a TT_03 (Bienalidad Explotación) — confirma que un
+    mandante mantiene activa una concesión productiva. Diferente del SIGEX
+    general (retirado) que cubría exploración."""
+    from connectors.sigex_sernageomin import fetch_sigex_explotacion
+    return ingest(fetch_sigex_explotacion(limit=2000), "sigex_explotacion")
+
+@track_run("dga_agua")
+def run_dga_agua():
+    """DGA: derechos de aprovechamiento de agua otorgados con uso minero o
+    industrial. Señal TEMPRANA (6-18 meses antes que aparezca el EIA en SEA).
+    Best-effort: si los endpoints DGA no responden, queda 'empty' en
+    /health.html y se confirma el endpoint correcto a futuro."""
+    from connectors.dga_agua import fetch_dga_agua
+    return ingest(fetch_dga_agua(limit=500), "dga_agua")
+
 @track_run("mundo_mineria")
 def run_mundo_mineria():
     from connectors.mundo_mineria import fetch_mundo_mineria
@@ -161,9 +178,11 @@ PIPELINE: list[tuple[str, callable]] = [
     ("sicep",          lambda: run_sicep()),
     ("codelco",        lambda: run_codelco()),
     ("enami",          lambda: run_enami()),
-    ("cmf",            lambda: run_cmf()),
-    ("cochilco",       lambda: run_cochilco()),
-    ("infomineria",    lambda: run_infomineria()),
+    ("cmf",                lambda: run_cmf()),
+    ("cochilco",           lambda: run_cochilco()),
+    ("sigex_explotacion",  lambda: run_sigex_explotacion()),
+    ("dga_agua",           lambda: run_dga_agua()),
+    ("infomineria",        lambda: run_infomineria()),
     ("mundo_mineria",  lambda: run_mundo_mineria()),
     ("empleos",        lambda: run_empleos()),
     ("signals_jobs",   lambda: run_signals()),

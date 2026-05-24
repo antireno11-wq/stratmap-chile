@@ -28,9 +28,9 @@ CATEGORIES: dict[str, str] = {
     "Ariba Codelco":      "licitacion",
     "MLP Proveedores":    "licitacion",
 
-    # Concesiones mineras
-    # SIGEX desactivado 2026-05 — derechos sobre el suelo, no señal de oportunidad
-    # comercial. Los datos históricos quedan pero no entran al pipeline ni al score.
+    # SIGEX general (exploración + trámites administrativos) desactivado
+    # 2026-05 — derechos sobre el suelo, no señal de oportunidad comercial.
+    # 'concesion' está en la blacklist del dashboard y del scoring.
     "SIGEX":              "concesion",
 
     # Regulatorio (hechos esenciales CMF) — info de calidad institucional. Por
@@ -38,9 +38,12 @@ CATEGORIES: dict[str, str] = {
     # scoring v2 le dará un peso explícito mayor.
     "cmf":                "noticia",
 
-    # Prospectos (evaluación ambiental / catastros oficiales de inversión)
+    # Prospectos (evaluación ambiental / catastros oficiales de inversión /
+    # derechos administrativos que anteceden a la fase de proyecto)
     "SEA":                "prospecto",
     "COCHILCO":           "prospecto",   # catastro de inversiones — proyectos con MUSD declarados
+    "SIGEX Explotación":  "prospecto",   # bienalidad: confirma faena activa del mandante en una región
+    "DGA Agua":           "prospecto",   # derecho de agua minero — señal 6-18m anterior al EIA
 
     # Noticias y medios sectoriales
     "Portal Minero":              "noticia",
