@@ -77,6 +77,14 @@ NEGATIVE_KEYWORDS = [
     "hospital concesionado", "concesionado hospital",
     "dólar cierra", "bolsa de", "ipsa cae", "ipsa sube",
     "concesión vial",  # MOP infra, va por otra fuente, no por noticias
+    # Energía residencial / regulación de consumo (no son oportunidades B2B)
+    "tarifa eléctrica", "tarifas eléctricas", "cuentas de la luz",
+    "cuenta de la luz", "subsidio eléctrico", "subsidio a la luz",
+    "alza tarifa", "alzas tarifa", "cne", "ley eléctrica",
+    "estabilización tarifaria", "consumidor residencial",
+    # Política partidaria
+    "diputado", "senador", "convención constitucional", "plebiscito",
+    "candidato presidencial", "campaña presidencial",
 ]
 
 
@@ -181,14 +189,13 @@ def is_mining_relevant(title: str, description: str = "", source: str = "") -> b
     # Positivo fuerte sobrevive
     if has_strong_pos:
         return True
-    # Fuentes mineras/industriales específicas: pasan sin keyword obvio porque
-    # su sitio entero es minería/energía/infraestructura.
+    # Fuentes mineras 100% específicas. Pasan sin keyword obvio porque su sitio
+    # entero es minería. Energy/infra excluidas: traen mucho ruido tarifario.
     mining_specific = {
         "portal minero", "minería chilena", "mineria chilena", "mch online",
         "cochilco noticias", "cochilco", "reporte minero",
-        "nueva minería y energía", "piso exploración", "construcción minera",
+        "nueva minería y energía", "piso exploración",
         "infomineria", "mundo minería", "mundo mineria", "lithium chile",
-        "revista ei", "revista electricidad", "energía estratégica", "cchc",
     }
     if src_l in mining_specific:
         return True
