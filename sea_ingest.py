@@ -115,6 +115,14 @@ def run_cmf():
     from connectors.cmf import fetch_cmf
     return ingest(fetch_cmf(limit=200), "cmf")
 
+@track_run("cochilco")
+def run_cochilco():
+    """COCHILCO: catastro oficial de inversiones mineras (proyectos con MUSD
+    declarados, etapa, empresa, región) + RSS de noticias COCHILCO.
+    Activado 2026-05 — estaba dormido como CMF."""
+    from connectors.cochilco import fetch_cochilco
+    return ingest(fetch_cochilco(limit=300), "cochilco")
+
 @track_run("mundo_mineria")
 def run_mundo_mineria():
     from connectors.mundo_mineria import fetch_mundo_mineria
@@ -154,6 +162,7 @@ PIPELINE: list[tuple[str, callable]] = [
     ("codelco",        lambda: run_codelco()),
     ("enami",          lambda: run_enami()),
     ("cmf",            lambda: run_cmf()),
+    ("cochilco",       lambda: run_cochilco()),
     ("infomineria",    lambda: run_infomineria()),
     ("mundo_mineria",  lambda: run_mundo_mineria()),
     ("empleos",        lambda: run_empleos()),

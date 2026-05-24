@@ -38,8 +38,9 @@ CATEGORIES: dict[str, str] = {
     # scoring v2 le dará un peso explícito mayor.
     "cmf":                "noticia",
 
-    # Prospectos (evaluación ambiental)
+    # Prospectos (evaluación ambiental / catastros oficiales de inversión)
     "SEA":                "prospecto",
+    "COCHILCO":           "prospecto",   # catastro de inversiones — proyectos con MUSD declarados
 
     # Noticias y medios sectoriales
     "Portal Minero":              "noticia",
