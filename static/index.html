@@ -274,7 +274,7 @@
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=9" />
+  <link rel="stylesheet" href="/theme.css?v=10" />
 </head>
 <body>
   <aside class="sidebar">
@@ -427,7 +427,7 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px">
+      <div class="charts-grid">
         <div class="chart-card">
           <div class="chart-card-head">
             <div>
@@ -461,47 +461,51 @@
         </div>
       </div>
 
-      <!-- ── LICITACIONES (Codelco / ENAMI / SEA) ──────────────────────────────── -->
-      <div class="section-card">
-        <div id="region-chips" style="padding:10px 18px 0;display:flex;gap:6px;flex-wrap:wrap;min-height:0;transition:all 0.2s"></div>
-        <div class="section-head">
-          <span class="section-icon">📋</span>
-          <span class="section-title">Licitaciones</span>
-          <span class="section-badge" id="badge-licitaciones">—</span>
-          <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">Codelco · ENAMI · SEA</span>
-          <span class="section-updated" id="upd-licitaciones"></span>
+      <!-- ── LICITACIONES + CONCESIONES + NOTICIAS (2 columnas) ─────────────── -->
+      <div class="dash-grid">
+        <!-- LICITACIONES (Codelco / ENAMI / SEA) -->
+        <div class="section-card">
+          <div id="region-chips" style="padding:10px 18px 0;display:flex;gap:6px;flex-wrap:wrap;min-height:0;transition:all 0.2s"></div>
+          <div class="section-head">
+            <span class="section-icon">📋</span>
+            <span class="section-title">Licitaciones</span>
+            <span class="section-badge" id="badge-licitaciones">—</span>
+            <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">Codelco · ENAMI · SEA</span>
+            <span class="section-updated" id="upd-licitaciones"></span>
+          </div>
+          <div class="cards-wrap">
+            <div id="tbody-licitaciones"><div class="muted-row">Cargando...</div></div>
+            <div id="pagination-licitaciones"></div>
+          </div>
         </div>
-        <div class="cards-wrap">
-          <div id="tbody-licitaciones"><div class="muted-row">Cargando...</div></div>
-          <div id="pagination-licitaciones"></div>
-        </div>
-      </div>
 
-      <!-- ── CONCESIONES SIGEX ───────────────────────────────────────────────── -->
-      <div class="section-card">
-        <div class="section-head">
-          <span class="section-icon">⛏️</span>
-          <span class="section-title">Concesiones</span>
-          <span class="section-badge" id="badge-projects">—</span>
-          <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">SIGEX · pertenencias y exploración</span>
-          <span class="section-updated" id="upd-projects"></span>
+        <!-- CONCESIONES SIGEX -->
+        <div class="section-card">
+          <div class="section-head">
+            <span class="section-icon">⛏️</span>
+            <span class="section-title">Concesiones</span>
+            <span class="section-badge" id="badge-projects">—</span>
+            <span class="section-subtitle muted" style="font-size:11px;color:var(--muted,#888);margin-left:8px">SIGEX · pertenencias y exploración</span>
+            <span class="section-updated" id="upd-projects"></span>
+          </div>
+          <div class="cards-wrap">
+            <div id="tbody-projects"><div class="muted-row">Cargando...</div></div>
+            <div id="pagination-projects"></div>
+          </div>
         </div>
-        <div class="cards-wrap">
-          <div id="tbody-projects"><div class="muted-row">Cargando...</div></div>
-          <div id="pagination-projects"></div>
-        </div>
-      </div>
 
-      <div class="section-card">
-        <div class="section-head">
-          <span class="section-icon">📰</span>
-          <span class="section-title">Noticias del Sector</span>
-          <span class="section-badge" id="badge-news">—</span>
-          <span class="section-updated" id="upd-news"></span>
-        </div>
-        <div class="cards-wrap">
-          <div id="tbody-news"><div class="muted-row">Cargando...</div></div>
-          <div id="pagination-news"></div>
+        <!-- NOTICIAS (span 2 columnas) -->
+        <div class="section-card span-2">
+          <div class="section-head">
+            <span class="section-icon">📰</span>
+            <span class="section-title">Noticias del Sector</span>
+            <span class="section-badge" id="badge-news">—</span>
+            <span class="section-updated" id="upd-news"></span>
+          </div>
+          <div class="cards-wrap">
+            <div id="tbody-news"><div class="muted-row">Cargando...</div></div>
+            <div id="pagination-news"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -519,11 +523,11 @@
     <div class="drawer-body" id="drawer-body"></div>
   </div>
 
-  <script src="/auth.js?v=9"></script>
+  <script src="/auth.js?v=10"></script>
   <script>if (!requireLogin()) { /* redirigió */ }</script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/charts.js?v=9"></script>
-  <script src="/app.js?v=9"></script>
-  <script src="/mobile-nav.js?v=9" defer></script>
+  <script src="/charts.js?v=10"></script>
+  <script src="/app.js?v=10"></script>
+  <script src="/mobile-nav.js?v=10" defer></script>
 </body>
 </html>
