@@ -25,68 +25,103 @@ _faenas_cache: dict = {"data": [], "ts": 0}
 @router.get("/mandantes")
 def get_mandantes():
     """
-    Ranking de mandantes por actividad consolidada.
-    Categoriza cada fuente via source_categories.CATEGORIES.
-    """
-    from source_categories import LICITACION_SOURCES, CONCESION_SOURCES, PROSPECTO_SOURCES, NOTICIA_SOURCES, EMPLEO_SOURCES
+    Ranking de mandantes por MOVIMIENTO. Para cada mandante devuelve:
+      - score_30d:   actividad ponderada últimos 30 días (qué tan caliente AHORA)
+      - score_90d:   actividad ponderada últimos 90 días (qué tan activo trimestre)
+      - score_prev30: 30d anteriores (días -60 a -30), para calcular tendencia
+      - trend:       'up' (>+20%), 'down' (<-20%) o 'flat'
+      - trend_pct:   porcentaje de cambio
+      - breakdown_30d / breakdown_90d: { licitaciones, sea, sigex, news, jobs }
+      - heat_score / heat_label: capa IA opcional (mandante_scorer)
 
-    # Buckets: usamos arrays parametrizados (más seguro que f-string en SQL)
+    Filosofía: el score de ventana refleja MOVIMIENTO RECIENTE de cada mandante,
+    no su tamaño histórico. Una empresa con 50 licitaciones del 2024 pero 0 esta
+    semana cae al final. Una con 5 esta semana sube.
+    """
     sql = """
-    WITH base AS (
-        SELECT
-            company,
-            COUNT(*) FILTER (WHERE source = ANY(%(licit)s))     AS n_licitaciones,
-            COUNT(*) FILTER (WHERE source = ANY(%(conce)s))     AS n_sigex,
-            COUNT(*) FILTER (WHERE source = ANY(%(prosp)s))     AS n_sea,
-            COUNT(*) FILTER (WHERE source = ANY(%(empleo)s))    AS n_empleos,
-            -- "n_proyectos" = licitaciones + concesiones + prospectos (todo lo que es oportunidad real)
-            COUNT(*) FILTER (WHERE source = ANY(%(real)s))      AS n_proyectos,
-            COALESCE(AVG(score) FILTER (WHERE source = ANY(%(real)s)), 0) AS avg_score,
-            MAX(COALESCE(signal_score, 0))                                AS top_signal,
-            SUM(COALESCE(jobs_count, 0))                                  AS total_jobs,
-            0                                                              AS n_news_recent,
-            MAX(COALESCE(published_at, created_at))                       AS last_activity
+    WITH src AS (
+        SELECT company, source, COALESCE(jobs_count, 0) AS jobs,
+               COALESCE(published_at, created_at) AS act_date
         FROM opportunities
         WHERE company IS NOT NULL AND TRIM(company) != ''
           AND source != 'manual'
+          AND is_duplicate = FALSE
+    ),
+    base AS (
+        SELECT
+            company,
+            -- ── 30 días actuales ────────────────────────────────────────────
+            COUNT(*) FILTER (WHERE source = ANY(%(licit)s)   AND act_date > NOW() - INTERVAL '30 days') AS licit_30d,
+            COUNT(*) FILTER (WHERE source = ANY(%(prosp)s)   AND act_date > NOW() - INTERVAL '30 days') AS sea_30d,
+            COUNT(*) FILTER (WHERE source = ANY(%(conce)s)   AND act_date > NOW() - INTERVAL '30 days') AS sigex_30d,
+            COUNT(*) FILTER (WHERE source = ANY(%(noticia)s) AND act_date > NOW() - INTERVAL '30 days') AS news_30d,
+            COALESCE(SUM(jobs) FILTER (WHERE source = ANY(%(empleo)s) AND act_date > NOW() - INTERVAL '30 days'), 0) AS jobs_30d,
+            -- ── 90 días actuales (incluye los 30) ───────────────────────────
+            COUNT(*) FILTER (WHERE source = ANY(%(licit)s)   AND act_date > NOW() - INTERVAL '90 days') AS licit_90d,
+            COUNT(*) FILTER (WHERE source = ANY(%(prosp)s)   AND act_date > NOW() - INTERVAL '90 days') AS sea_90d,
+            COUNT(*) FILTER (WHERE source = ANY(%(conce)s)   AND act_date > NOW() - INTERVAL '90 days') AS sigex_90d,
+            COUNT(*) FILTER (WHERE source = ANY(%(noticia)s) AND act_date > NOW() - INTERVAL '90 days') AS news_90d,
+            COALESCE(SUM(jobs) FILTER (WHERE source = ANY(%(empleo)s) AND act_date > NOW() - INTERVAL '90 days'), 0) AS jobs_90d,
+            -- ── 30d previos (días -60 a -30) para tendencia ────────────────
+            COUNT(*) FILTER (WHERE source = ANY(%(licit)s)   AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS licit_p30,
+            COUNT(*) FILTER (WHERE source = ANY(%(prosp)s)   AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS sea_p30,
+            COUNT(*) FILTER (WHERE source = ANY(%(conce)s)   AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS sigex_p30,
+            COUNT(*) FILTER (WHERE source = ANY(%(noticia)s) AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days') AS news_p30,
+            COALESCE(SUM(jobs) FILTER (WHERE source = ANY(%(empleo)s) AND act_date BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days'), 0) AS jobs_p30,
+            MAX(act_date) AS last_activity
+        FROM src
         GROUP BY company
     )
     SELECT
         b.company,
-        b.n_proyectos,
-        b.n_licitaciones,
-        b.n_sigex,
-        b.n_sea,
-        b.n_empleos,
-        b.top_signal                            AS signal_score,
-        b.total_jobs,
-        b.n_news_recent,
+        b.licit_30d, b.sea_30d, b.sigex_30d, b.news_30d, b.jobs_30d,
+        b.licit_90d, b.sea_90d, b.sigex_90d, b.news_90d, b.jobs_90d,
+        b.licit_p30, b.sea_p30, b.sigex_p30, b.news_p30, b.jobs_p30,
         b.last_activity,
-        COALESCE(h.heat_score, 0)               AS heat_score,
-        COALESCE(h.heat_label, '')              AS heat_label,
-        COALESCE(h.heat_reason, '')             AS heat_reason,
+        COALESCE(h.heat_score, 0)                 AS heat_score,
+        COALESCE(h.heat_label, '')                AS heat_label,
+        COALESCE(h.heat_reason, '')               AS heat_reason,
         COALESCE(h.trending_topics, ARRAY[]::text[]) AS trending_topics,
-        h.scored_at                             AS heat_scored_at,
+        -- Score 30d: pesos altos por inmediatez de la señal
         ROUND(
-            LEAST(b.avg_score * 0.6, 60) +
-            LEAST(b.n_licitaciones * 4, 20) +
-            LEAST(b.n_sigex * 0.3, 15) +
-            LEAST(b.n_sea * 5, 15) +
-            LEAST(b.top_signal, 7) + LEAST(b.total_jobs * 2, 3) +
-            LEAST(COALESCE(h.heat_score, 0) * 0.15, 15)
-        ) AS score_consolidado
+            LEAST(b.licit_30d * 4, 30) +
+            LEAST(b.sea_30d * 5, 25) +
+            LEAST(b.sigex_30d * 0.5, 15) +
+            LEAST(b.news_30d * 2, 15) +
+            LEAST(b.jobs_30d * 1, 10) +
+            LEAST(COALESCE(h.heat_score, 0) * 0.05, 5)
+        )::int AS score_30d,
+        -- Score 90d: pesos menores (más volumen tolerado en ventana larga)
+        ROUND(
+            LEAST(b.licit_90d * 1.5, 30) +
+            LEAST(b.sea_90d * 2, 25) +
+            LEAST(b.sigex_90d * 0.2, 15) +
+            LEAST(b.news_90d * 0.7, 15) +
+            LEAST(b.jobs_90d * 0.4, 10) +
+            LEAST(COALESCE(h.heat_score, 0) * 0.05, 5)
+        )::int AS score_90d,
+        -- Score prev30 con misma fórmula que 30d, para tendencia
+        ROUND(
+            LEAST(b.licit_p30 * 4, 30) +
+            LEAST(b.sea_p30 * 5, 25) +
+            LEAST(b.sigex_p30 * 0.5, 15) +
+            LEAST(b.news_p30 * 2, 15) +
+            LEAST(b.jobs_p30 * 1, 10) +
+            LEAST(COALESCE(h.heat_score, 0) * 0.05, 5)
+        )::int AS score_prev30
     FROM base b
     LEFT JOIN mandante_heat h ON LOWER(TRIM(h.company)) = LOWER(TRIM(b.company))
-    WHERE b.n_proyectos > 0 OR b.n_sea > 0 OR b.n_news_recent > 0
-    ORDER BY score_consolidado DESC
+    WHERE (b.licit_30d + b.sea_30d + b.sigex_30d + b.news_30d + b.jobs_30d) > 0
+       OR (b.licit_90d + b.sea_90d + b.sigex_90d + b.news_90d) > 0
+    ORDER BY score_30d DESC, score_90d DESC
     LIMIT 100;
     """
     params = {
-        "licit":  LICITACION_SOURCES,
-        "conce":  CONCESION_SOURCES,
-        "prosp":  PROSPECTO_SOURCES,
-        "empleo": EMPLEO_SOURCES,
-        "real":   LICITACION_SOURCES + CONCESION_SOURCES + PROSPECTO_SOURCES,
+        "licit":   LICITACION_SOURCES,
+        "conce":   CONCESION_SOURCES,
+        "prosp":   PROSPECTO_SOURCES,
+        "noticia": NOTICIA_SOURCES,
+        "empleo":  EMPLEO_SOURCES,
     }
     try:
         with db.get_conn() as conn:
@@ -94,80 +129,44 @@ def get_mandantes():
                 cur.execute(sql, params)
                 rows = [dict(r) for r in cur.fetchall()]
 
-                # Enriquecer con conteo de noticias por keyword
-                try:
-                    cur.execute("""
-                        SELECT title, company
-                        FROM opportunities
-                        WHERE published_at > NOW() - INTERVAL '90 days'
-                          AND source = ANY(%s)
-                          AND title IS NOT NULL
-                    """, (NOTICIA_SOURCES,))
-                    recent_news = cur.fetchall()
-                    news_titles = [(r["title"] or "").lower() for r in recent_news]
-
-                    STOPWORDS_N = {'spa','ltda','s.a','s.a.','sa','de','del','la','el',
-                                   'los','las','y','en','por','para','con','una','uno',
-                                   'minera','minero','compania','compañia','inversiones',
-                                   'chile','norte','sur','este','oeste'}
-                    for row in rows:
-                        name = row.get("company") or ""
-                        kws = [w.lower() for w in name.replace("."," ").replace(","," ").split()
-                               if len(w) > 3 and w.lower() not in STOPWORDS_N]
-                        if not kws:
-                            continue
-                        count = sum(1 for t in news_titles if any(k in t for k in kws))
-                        row["n_news_recent"] = count
-                except Exception as ne:
-                    print(f"[mandantes] news count error: {ne}")
-
+        # Computar tendencia 30d vs prev30d en Python (más legible que en SQL)
         for r in rows:
+            s30 = r.get("score_30d") or 0
+            sp30 = r.get("score_prev30") or 0
+            # Si no había nada antes, cualquier actividad ahora es "up"
+            if sp30 == 0:
+                trend_pct = 100 if s30 > 0 else 0
+            else:
+                trend_pct = round((s30 - sp30) / sp30 * 100)
+            r["trend_pct"] = trend_pct
+            r["trend"] = "up" if trend_pct >= 20 else ("down" if trend_pct <= -20 else "flat")
+            r["breakdown_30d"] = {
+                "licitaciones": r.pop("licit_30d", 0),
+                "sea":          r.pop("sea_30d", 0),
+                "sigex":        r.pop("sigex_30d", 0),
+                "news":         r.pop("news_30d", 0),
+                "jobs":         r.pop("jobs_30d", 0),
+            }
+            r["breakdown_90d"] = {
+                "licitaciones": r.pop("licit_90d", 0),
+                "sea":          r.pop("sea_90d", 0),
+                "sigex":        r.pop("sigex_90d", 0),
+                "news":         r.pop("news_90d", 0),
+                "jobs":         r.pop("jobs_90d", 0),
+            }
+            # Cleanup prev30 raw fields (ya los usamos para trend)
+            for k in ("licit_p30", "sea_p30", "sigex_p30", "news_p30", "jobs_p30"):
+                r.pop(k, None)
             if r.get("last_activity"):
                 r["last_activity"] = r["last_activity"].isoformat()
-            if r.get("heat_scored_at"):
-                r["heat_scored_at"] = r["heat_scored_at"].isoformat()
             if r.get("trending_topics") is None:
                 r["trending_topics"] = []
+
         return {"mandantes": rows, "total": len(rows)}
     except Exception as e:
         import logging
-        logging.getLogger("stratmap.mandantes").warning("mandantes query failed, fallback", extra={"err": str(e)})
-        # Fallback sin mandante_heat join (por si mandante_heat no existe en BDs viejas)
-        try:
-            simple_sql = """
-            WITH base AS (
-                SELECT company,
-                    COUNT(*) FILTER (WHERE source = ANY(%(licit)s))   AS n_licitaciones,
-                    COUNT(*) FILTER (WHERE source = ANY(%(conce)s))   AS n_sigex,
-                    COUNT(*) FILTER (WHERE source = ANY(%(prosp)s))   AS n_sea,
-                    COUNT(*) FILTER (WHERE source = ANY(%(real)s))    AS n_proyectos,
-                    COALESCE(AVG(score) FILTER (WHERE source = ANY(%(real)s)), 0) AS avg_score,
-                    MAX(COALESCE(signal_score,0))                                  AS top_signal,
-                    SUM(COALESCE(jobs_count,0))                                    AS total_jobs,
-                    MAX(COALESCE(published_at,created_at))                        AS last_activity
-                FROM opportunities
-                WHERE company IS NOT NULL AND TRIM(company) != '' AND source != 'manual'
-                GROUP BY company
-            )
-            SELECT company, n_proyectos, n_licitaciones, n_sigex, n_sea,
-                   top_signal AS signal_score, total_jobs, last_activity,
-                   0 AS heat_score, '' AS heat_label, '' AS heat_reason,
-                   ARRAY[]::text[] AS trending_topics, NULL AS heat_scored_at,
-                   ROUND(LEAST(avg_score*0.6,60)+LEAST(n_licitaciones*4,20)+LEAST(n_sigex*0.3,15)+LEAST(n_sea*5,15)+LEAST(top_signal,7)+LEAST(total_jobs*2,3)) AS score_consolidado
-            FROM base WHERE n_proyectos > 0 OR n_sea > 0
-            ORDER BY score_consolidado DESC LIMIT 100;
-            """
-            with db.get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(simple_sql, params)
-                    rows = [dict(r) for r in cur.fetchall()]
-            for r in rows:
-                if r.get("last_activity"):
-                    r["last_activity"] = r["last_activity"].isoformat()
-                r["trending_topics"] = []
-            return {"mandantes": rows, "total": len(rows)}
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=str(e2))
+        logging.getLogger("stratmap.mandantes").warning("mandantes query failed", extra={"err": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/mandantes/summary/{company_name}")
