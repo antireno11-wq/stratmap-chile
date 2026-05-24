@@ -1,8 +1,14 @@
 """
-sea_ingest.py — orquestador principal de ingesta
+sea_ingest.py — orquestador principal de ingesta.
+
+Cada run_*() lleva @track_run("source") (ver ingest_log.py) que registra cada
+corrida en la tabla ingest_runs. Las excepciones se loguean ahí y se RE-RAISEAN
+para que main() pueda decidir continuar o no — el pipeline NO debe morirse por
+una sola fuente caída, así que main() envuelve cada call individualmente.
 """
 from db import upsert_opportunities, init_db_safe
 from mining_filters import is_mining_relevant as _is_mining_relevant
+from ingest_log import track_run, ensure_schema as _ensure_ingest_log
 
 
 def is_mining_relevant(item: dict) -> bool:
@@ -13,103 +19,85 @@ def is_mining_relevant(item: dict) -> bool:
         item.get("source") or "",
     )
 
-def ingest(items, label):
-    if items:
-        ins, upd = upsert_opportunities(items)
-        print(f"[{label}] {ins} nuevos, {upd} actualizados")
-    else:
+def ingest(items, label) -> dict:
+    """Inserta items y devuelve conteos para que @track_run los capture."""
+    if not items:
         print(f"[{label}] sin items")
+        return {"inserted": 0, "updated": 0}
+    ins, upd = upsert_opportunities(items)
+    print(f"[{label}] {ins} nuevos, {upd} actualizados")
+    return {"inserted": int(ins or 0), "updated": int(upd or 0)}
 
+
+@track_run("sea")
 def run_sea():
-    try:
-        from connectors.sea import fetch_sea
-        ingest(fetch_sea(), "sea")
-    except Exception as e:
-        print(f"[sea] error: {e}")
+    from connectors.sea import fetch_sea
+    return ingest(fetch_sea(), "sea")
 
+@track_run("sea_signals")
 def run_sea_signals():
     """Cruza proyectos SEA con licitaciones activas del mismo titular y sube signal_score."""
-    try:
-        from signals.sea_signals import run_sea_signals as _run
-        result = _run()
-        print(f"[sea_signals] {result}")
-    except Exception as e:
-        print(f"[sea_signals] error: {e}")
-        import traceback; traceback.print_exc()
+    from signals.sea_signals import run_sea_signals as _run
+    result = _run()
+    print(f"[sea_signals] {result}")
+    return {"inserted": int((result or {}).get("matched") or 0), "updated": 0} if isinstance(result, dict) else None
 
+@track_run("rss")
 def run_rss():
-    try:
-        from connectors.rss import fetch_rss
-        items = fetch_rss()
-        filtered = [i for i in items if is_mining_relevant(i)]
-        print(f"[rss] {len(items)} items → {len(filtered)} relevantes tras filtro minero")
-        ingest(filtered, "rss")
-    except Exception as e:
-        print(f"[rss] error: {e}")
+    from connectors.rss import fetch_rss
+    items = fetch_rss()
+    filtered = [i for i in items if is_mining_relevant(i)]
+    print(f"[rss] {len(items)} items → {len(filtered)} relevantes tras filtro minero")
+    return ingest(filtered, "rss")
 
+@track_run("mlp")
 def run_mlp():
-    try:
-        from connectors.mlp_proveedores import fetch_mlp_proveedores
-        ingest(fetch_mlp_proveedores(limit=100), "mlp")
-    except Exception as e:
-        print(f"[mlp] error: {e}")
+    from connectors.mlp_proveedores import fetch_mlp_proveedores
+    return ingest(fetch_mlp_proveedores(limit=100), "mlp")
 
+@track_run("lithium_chile")
 def run_lithium_chile():
-    try:
-        from connectors.lithium_chile import fetch_lithium_chile
-        ingest(fetch_lithium_chile(limit=100), "lithium_chile")
-    except Exception as e:
-        print(f"[lithium_chile] error: {e}")
+    from connectors.lithium_chile import fetch_lithium_chile
+    return ingest(fetch_lithium_chile(limit=100), "lithium_chile")
 
+@track_run("sicep")
 def run_sicep():
-    try:
-        from connectors.sicep import fetch_sicep
-        ingest(fetch_sicep(limit=200), "sicep")
-    except Exception as e:
-        print(f"[sicep] error: {e}")
+    from connectors.sicep import fetch_sicep
+    return ingest(fetch_sicep(limit=200), "sicep")
 
+@track_run("enami")
 def run_enami():
-    try:
-        from connectors.enami import fetch_enami
-        ingest(fetch_enami(limit=100), "enami")
-    except Exception as e:
-        print(f"[enami] error: {e}")
+    from connectors.enami import fetch_enami
+    return ingest(fetch_enami(limit=100), "enami")
 
+@track_run("codelco")
 def run_codelco():
-    try:
-        from connectors.codelco import fetch_codelco
-        ingest(fetch_codelco(limit=200), "codelco")
-    except Exception as e:
-        print(f"[codelco] error: {e}")
+    from connectors.codelco import fetch_codelco
+    return ingest(fetch_codelco(limit=200), "codelco")
 
 
+@track_run("empleos")
 def run_empleos():
-    """Scrapea empleos mineros y cruza con proyectos para señales."""
+    """Scrapea empleos mineros (Indeed + portales corporativos) y cruza con proyectos."""
+    from connectors.empleos_indeed   import fetch_indeed
+    from connectors.empleos_portales import fetch_portales
+    from signals.empleos_signals     import run_empleos_signals
+
+    print("[empleos] Iniciando scraping de empleos...")
+    jobs = []
     try:
-        from connectors.empleos_indeed   import fetch_indeed
-        from connectors.empleos_portales import fetch_portales
-        from signals.empleos_signals     import run_empleos_signals
-
-        print("[empleos] Iniciando scraping de empleos...")
-        jobs = []
-
-        try:
-            jobs += fetch_indeed(limit=150)
-        except Exception as e:
-            print(f"[indeed] error: {e}")
-
-        try:
-            jobs += fetch_portales(limit=100)
-        except Exception as e:
-            print(f"[portales] error: {e}")
-
-        print(f"[empleos] {len(jobs)} empleos totales recolectados")
-        if jobs:
-            run_empleos_signals(jobs)
-
+        jobs += fetch_indeed(limit=150)
     except Exception as e:
-        print(f"[empleos] error general: {e}")
-        import traceback; traceback.print_exc()
+        print(f"[indeed] sub-error: {e}")
+    try:
+        jobs += fetch_portales(limit=100)
+    except Exception as e:
+        print(f"[portales] sub-error: {e}")
+
+    print(f"[empleos] {len(jobs)} empleos totales recolectados")
+    if jobs:
+        run_empleos_signals(jobs)
+    return {"inserted": len(jobs), "updated": 0}
 
 
 def run_sigex():
@@ -120,54 +108,63 @@ def run_sigex():
     return
 
 
+@track_run("cmf")
 def run_cmf():
     """Hechos esenciales CMF — señal regulatoria de alta calidad (inversiones,
     contratos, cambios de estrategia anunciados a la bolsa)."""
-    try:
-        from connectors.cmf import fetch_cmf
-        ingest(fetch_cmf(limit=200), "cmf")
-    except Exception as e:
-        print(f"[cmf] error: {e}")
-        import traceback; traceback.print_exc()
+    from connectors.cmf import fetch_cmf
+    return ingest(fetch_cmf(limit=200), "cmf")
 
+@track_run("mundo_mineria")
 def run_mundo_mineria():
-    try:
-        from connectors.mundo_mineria import fetch_mundo_mineria
-        ingest(fetch_mundo_mineria(limit=100), "mundo_mineria")
-    except Exception as e:
-        print(f"[mundo_mineria] error: {e}")
+    from connectors.mundo_mineria import fetch_mundo_mineria
+    return ingest(fetch_mundo_mineria(limit=100), "mundo_mineria")
 
+@track_run("infomineria")
 def run_infomineria():
-    try:
-        from connectors.infomineria import fetch_infomineria
-        ingest(fetch_infomineria(limit=100), "infomineria")
-    except Exception as e:
-        print(f"[infomineria] error: {e}")
+    from connectors.infomineria import fetch_infomineria
+    return ingest(fetch_infomineria(limit=100), "infomineria")
 
+@track_run("signals_jobs")
 def run_signals():
-    try:
-        from signals.jobs import run as jobs_run
-        jobs_run()
-    except Exception as e:
-        print(f"[signals] error: {e}")
+    from signals.jobs import run as jobs_run
+    jobs_run()
+    return None
+
+
+# Lista de (nombre, función) que main() itera. Centralizar acá hace que agregar
+# una fuente sea una línea, y que el wrapper try/except sea uniforme.
+PIPELINE: list[tuple[str, callable]] = [
+    ("sea",            lambda: run_sea()),
+    ("sea_signals",    lambda: run_sea_signals()),
+    ("rss",            lambda: run_rss()),
+    ("mlp",            lambda: run_mlp()),
+    ("lithium_chile",  lambda: run_lithium_chile()),
+    ("sicep",          lambda: run_sicep()),
+    ("codelco",        lambda: run_codelco()),
+    ("enami",          lambda: run_enami()),
+    ("cmf",            lambda: run_cmf()),
+    ("infomineria",    lambda: run_infomineria()),
+    ("mundo_mineria",  lambda: run_mundo_mineria()),
+    ("empleos",        lambda: run_empleos()),
+    ("signals_jobs",   lambda: run_signals()),
+]
+
 
 def main() -> None:
     """Pipeline completo de ingesta. Llamable desde worker.py o como CLI."""
     print("[ingest] Iniciando...")
     init_db_safe()
-    run_sea()
-    run_sea_signals()
-    run_rss()
-    run_mlp()
-    run_lithium_chile()
-    run_sicep()
-    run_codelco()
-    run_enami()
-    run_cmf()
-    run_infomineria()
-    run_mundo_mineria()
-    run_empleos()
-    run_signals()
+    _ensure_ingest_log()
+
+    for name, fn in PIPELINE:
+        try:
+            fn()
+        except Exception as e:
+            # @track_run ya registró 'error' en ingest_runs; acá solo evitamos
+            # que se rompa el resto del pipeline.
+            print(f"[{name}] excepción capturada en main(): {e}")
+
     print("[ingest] Ingesta completa")
 
     # ── Scoring IA personalizado por usuario ──────────────────────────────────

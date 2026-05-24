@@ -41,3 +41,8 @@ def serve_kanban():
 @router.get("/preferences.html")
 def serve_preferences():
     return _serve("preferences.html")
+
+
+@router.get("/health.html")
+def serve_health():
+    return _serve("health.html")

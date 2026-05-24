@@ -23,6 +23,22 @@ from source_categories import NOTICIA_SOURCES
 router = APIRouter(tags=["admin"], dependencies=[Depends(require_admin)])
 
 
+@router.get("/admin/health")
+def admin_health():
+    """Salud de cada conector. Última corrida + semáforo verde/amarillo/rojo.
+
+    - verde:    último run hace <30h y status='ok'
+    - amarillo: último run hace 30-48h, o status='empty' hace >24h
+    - rojo:     status='error', o último run hace >48h (fuente muerta)
+    """
+    from ingest_log import health_summary
+    rows = health_summary()
+    counts = {"green": 0, "yellow": 0, "red": 0}
+    for r in rows:
+        counts[r.get("traffic_light", "yellow")] = counts.get(r.get("traffic_light", "yellow"), 0) + 1
+    return {"sources": rows, "counts": counts, "total": len(rows)}
+
+
 @router.get("/admin/stats")
 def admin_stats():
     """Métricas operacionales para monitoreo: actividad por fuente, usuarios

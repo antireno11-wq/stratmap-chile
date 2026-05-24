@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <title>Salud de fuentes · Stratmap</title>
+  <link rel="stylesheet" href="/theme.css?v=12" />
+  <style>
+    body { margin: 0; padding: 24px; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); }
+    h1 { margin: 0 0 6px; }
+    .sub { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+    .summary { display: flex; gap: 10px; margin-bottom: 20px; }
+    .pill { padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--card); }
+    .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.green  { background: var(--success); }
+    .dot.yellow { background: var(--warning); }
+    .dot.red    { background: var(--danger); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .src {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; position: relative; overflow: hidden;
+    }
+    .src::before {
+      content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+    }
+    .src.green::before  { background: var(--success); }
+    .src.yellow::before { background: var(--warning); }
+    .src.red::before    { background: var(--danger); }
+    .src-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .src-status { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .src.green .src-status  { color: var(--success); }
+    .src.yellow .src-status { color: var(--warning); }
+    .src.red .src-status    { color: var(--danger); }
+    .src-meta { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+    .src-meta b { color: var(--text); font-weight: 600; }
+    .src-error {
+      margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+      background: #fef2f2; color: #991b1b; font-size: 11px; font-family: 'SF Mono', Menlo, monospace;
+      max-height: 80px; overflow: auto; word-break: break-all;
+    }
+    .src-link {
+      display: inline-block; margin-top: 8px; font-size: 11px; color: var(--muted);
+      text-decoration: none;
+    }
+    .back { display: inline-block; margin-bottom: 16px; color: var(--muted); font-size: 12px; text-decoration: none; }
+    .back:hover { color: var(--primary); }
+    .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← Volver al radar</a>
+  <h1>Salud de fuentes</h1>
+  <div class="sub">Última corrida de cada conector. Verde: corrió hace &lt;30h sin error. Amarillo: 30–48h o vino vacío. Rojo: error o &gt;48h sin correr.</div>
+
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"><div class="empty">Cargando…</div></div>
+
+  <script src="/auth.js?v=12"></script>
+  <script>if (!requireLogin()) { throw new Error('redir'); }</script>
+  <script>
+    function fmtAge(h) {
+      if (h < 1)  return Math.round(h * 60) + ' min';
+      if (h < 48) return Math.round(h) + ' h';
+      return Math.round(h / 24) + ' días';
+    }
+    function escapeHTML(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    async function load() {
+      const grid = document.getElementById('grid');
+      const summary = document.getElementById('summary');
+      try {
+        const r = await apiFetch('/admin/health');
+        if (!r.ok) {
+          grid.innerHTML = `<div class="empty">No autorizado o sin datos. Status: ${r.status}</div>`;
+          return;
+        }
+        const data = await r.json();
+        const sources = data.sources || [];
+        const c = data.counts || {};
+
+        summary.innerHTML = `
+          <span class="pill"><span class="dot green"></span>${c.green||0} verdes</span>
+          <span class="pill"><span class="dot yellow"></span>${c.yellow||0} amarillos</span>
+          <span class="pill"><span class="dot red"></span>${c.red||0} rojos</span>
+          <span class="pill" style="margin-left:auto">${sources.length} fuentes monitoreadas</span>
+        `;
+
+        if (!sources.length) {
+          grid.innerHTML = '<div class="empty">Aún no hay corridas registradas. El worker debe ejecutar al menos un ciclo.</div>';
+          return;
+        }
+
+        grid.innerHTML = sources.map(s => {
+          const items = (s.items_in != null) ? `<b>${s.items_in}</b> nuevos, <b>${s.items_upd || 0}</b> actualizados` : 'sin conteos';
+          const dur = (s.duration_ms != null) ? `${(s.duration_ms / 1000).toFixed(1)}s` : '—';
+          const errBlock = s.error_msg ? `<div class="src-error">${escapeHTML(s.error_msg)}</div>` : '';
+          return `
+            <div class="src ${s.traffic_light}">
+              <div class="src-name">${escapeHTML(s.source)}</div>
+              <div class="src-status">${s.status}</div>
+              <div class="src-meta">
+                Hace <b>${fmtAge(s.age_hours)}</b> · ${items}<br>
+                Duración: ${dur}
+              </div>
+              ${errBlock}
+            </div>`;
+        }).join('');
+      } catch (e) {
+        grid.innerHTML = `<div class="empty">Error: ${escapeHTML(e.message)}</div>`;
+      }
+    }
+    load();
+    setInterval(load, 60000); // refresh cada minuto
+  </script>
+</body>
+</html>
