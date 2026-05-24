@@ -944,6 +944,43 @@ function scoreColorMandante(s) {
   return ['#6b7280', '#f9fafb'];
 }
 
+function renderHotMandantes(mandantes) {
+  const grid = document.getElementById('hot-mandantes-grid');
+  if (!grid) return;
+  const top = (mandantes || [])
+    .filter(m => (m.score_30d || 0) > 0)
+    .slice(0, 6);
+  if (!top.length) {
+    grid.innerHTML = '<div class="muted-row" style="grid-column:1/-1">Sin actividad en los últimos 30 días</div>';
+    return;
+  }
+  grid.innerHTML = top.map(m => {
+    const s = m.score_30d || 0;
+    const color = s >= 60 ? '#15803d' : s >= 40 ? '#1a56db' : s >= 20 ? '#92400e' : '#6b7280';
+    const trend = m.trend === 'up' ? `<span style="color:#15803d;font-weight:700">↑ +${m.trend_pct}%</span>`
+                : m.trend === 'down' ? `<span style="color:#dc2626;font-weight:700">↓ ${m.trend_pct}%</span>`
+                : `<span style="color:#9ca3af">→ estable</span>`;
+    const b30 = m.breakdown_30d || {};
+    const bits = [];
+    if (b30.licitaciones > 0) bits.push(`${b30.licitaciones} licit.`);
+    if (b30.sea > 0)          bits.push(`${b30.sea} SEA`);
+    if (b30.news > 0)         bits.push(`${b30.news} noticias`);
+    if (b30.jobs > 0)         bits.push(`${b30.jobs} empleos`);
+    return `<div onclick="window.location.href='/mandante.html?empresa=${encodeURIComponent(m.company)}'"
+                 style="background:#fff;border:1px solid #eef0f4;border-radius:12px;padding:14px;cursor:pointer;transition:all 0.15s"
+                 onmouseover="this.style.borderColor='#cbd5e1';this.style.transform='translateY(-2px)'"
+                 onmouseout="this.style.borderColor='#eef0f4';this.style.transform='none'">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:4px">${trend}</div>
+      <div style="font-size:14px;font-weight:600;color:#0f172a;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML(m.company)}</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span style="font-size:24px;font-weight:700;color:${color}">${s}</span>
+        <span style="font-size:11px;color:#9ca3af">/100 · 30d</span>
+      </div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">${bits.join(' · ') || 'sin breakdown'}</div>
+    </div>`;
+  }).join('');
+}
+
 async function loadMandantes() {
   const section = document.getElementById('section-mandantes');
   if (!isLoggedIn) { if (section) section.style.display = 'none'; return; }
@@ -953,6 +990,7 @@ async function loadMandantes() {
     const res = await apiFetch('/mandantes');
     const data = await res.json();
     mandantesData = data.mandantes || [];
+    renderHotMandantes(mandantesData);
     renderMandantes();
   } catch(e) {
     const grid = document.getElementById('mandantes-grid');

@@ -53,12 +53,17 @@
     .heat-hot  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
     .heat-warm { background: #fefce8; color: #ca8a04; border: 1px solid #fde68a; }
     .heat-mid  { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-    .mandante-card-hot { border-color: #fca5a5 !important; }
-    .mandante-card-hot:hover { border-color: #ef4444 !important; box-shadow: 0 6px 20px rgba(220,38,38,0.12) !important; }
+    .mandante-card-hot { border-color: #86efac !important; }
+    .mandante-card-hot:hover { border-color: #16a34a !important; box-shadow: 0 6px 20px rgba(22,163,74,0.12) !important; }
+    .mandante-card-90d { font-size: 11px; color: var(--muted); margin-top: 2px; margin-bottom: 8px; }
+    .trend { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-right: 6px; }
+    .trend-up   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .trend-down { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .trend-flat { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=7" />
+  <link rel="stylesheet" href="/theme.css?v=8" />
 </head>
 <body>
   <nav class="sidebar">
@@ -90,7 +95,7 @@
     </div>
   </div>
 
-  <script src="/auth.js?v=7"></script>
+  <script src="/auth.js?v=8"></script>
   <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     let allMandantes = [];
@@ -98,10 +103,16 @@
     function escapeHTML(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
     function scoreColor(s) {
-      if (s >= 90) return ['#15803d','#f0fdf4'];
-      if (s >= 70) return ['#1a56db','#eff6ff'];
-      if (s >= 50) return ['#92400e','#fef3c7'];
-      return ['#6b7280','#f9fafb'];
+      if (s >= 60) return ['#15803d','#f0fdf4']; // verde fuerte
+      if (s >= 40) return ['#1a56db','#eff6ff']; // azul
+      if (s >= 20) return ['#92400e','#fef3c7']; // amarillo
+      return ['#6b7280','#f9fafb'];              // gris (frío)
+    }
+
+    function trendBadge(trend, pct) {
+      if (trend === 'up')   return `<span class="trend trend-up">↑ +${pct}%</span>`;
+      if (trend === 'down') return `<span class="trend trend-down">↓ ${pct}%</span>`;
+      return `<span class="trend trend-flat">→ estable</span>`;
     }
 
     function renderGrid(data) {
@@ -114,33 +125,37 @@
         return;
       }
 
-      const maxScore = Math.max(...data.map(m => m.score_consolidado || 0), 1);
+      const maxScore = Math.max(...data.map(m => m.score_30d || 0), 1);
 
       grid.innerHTML = data.map(m => {
-        const score = m.score_consolidado || 0;
-        const [sc] = scoreColor(score);
-        const pct  = Math.round((score / maxScore) * 100);
+        const s30 = m.score_30d || 0;
+        const s90 = m.score_90d || 0;
+        const [sc] = scoreColor(s30);
+        const pct  = Math.round((s30 / maxScore) * 100);
         const slug = encodeURIComponent(m.company);
+        const b30  = m.breakdown_30d || {};
         const meta = [];
-        if (m.n_proyectos > 0) meta.push(`<span class="mandante-meta-item">🏗 ${m.n_proyectos} proy.</span>`);
-        if (m.n_sea > 0)       meta.push(`<span class="mandante-meta-item">🌿 ${m.n_sea} SEA</span>`);
-        if ((m.total_jobs||0) > 0) meta.push(`<span class="mandante-meta-item">👷 ${m.total_jobs}</span>`);
-        if ((m.n_news_recent||0) > 0) meta.push(`<span class="mandante-meta-item">📰 ${m.n_news_recent}</span>`);
+        if ((b30.licitaciones||0) > 0) meta.push(`<span class="mandante-meta-item">📋 ${b30.licitaciones} licit.</span>`);
+        if ((b30.sea||0)          > 0) meta.push(`<span class="mandante-meta-item">🌿 ${b30.sea} SEA</span>`);
+        if ((b30.sigex||0)        > 0) meta.push(`<span class="mandante-meta-item">⛏ ${b30.sigex} SIGEX</span>`);
+        if ((b30.jobs||0)         > 0) meta.push(`<span class="mandante-meta-item">👷 ${b30.jobs} empleos</span>`);
+        if ((b30.news||0)         > 0) meta.push(`<span class="mandante-meta-item">📰 ${b30.news} noticias</span>`);
+        if (!meta.length)              meta.push(`<span class="mandante-meta-item" style="color:#9ca3af">Sin actividad últimos 30 días</span>`);
         const heat = m.heat_score || 0;
         let heatBadge = '';
-        if (heat >= 80) heatBadge = `<span class="heat-badge heat-hot" title="${escapeHTML(m.heat_reason||'')}">🔥 Muy activa</span>`;
-        else if (heat >= 60) heatBadge = `<span class="heat-badge heat-warm" title="${escapeHTML(m.heat_reason||'')}">⚡ Activa</span>`;
-        else if (heat >= 40) heatBadge = `<span class="heat-badge heat-mid" title="${escapeHTML(m.heat_reason||'')}">📊 Moderada</span>`;
-        const topics = (m.trending_topics||[]).slice(0,2).map(t =>
-          `<span class="mandante-topic">${escapeHTML(t)}</span>`).join('');
+        if (heat >= 80) heatBadge = `<span class="heat-badge heat-hot" title="${escapeHTML(m.heat_reason||'')}">🔥 IA: muy activa</span>`;
+        else if (heat >= 60) heatBadge = `<span class="heat-badge heat-warm" title="${escapeHTML(m.heat_reason||'')}">⚡ IA: activa</span>`;
         return `
-          <div class="mandante-card ${heat>=60?'mandante-card-hot':''}"
+          <div class="mandante-card ${m.trend==='up'?'mandante-card-hot':''}"
                onclick="window.location.href='/mandante.html?empresa=${slug}'">
-            ${heatBadge ? `<div class="mandante-heat-row">${heatBadge}</div>` : ''}
+            <div class="mandante-heat-row">
+              ${trendBadge(m.trend, m.trend_pct)}
+              ${heatBadge}
+            </div>
             <div class="mandante-card-name">${escapeHTML(m.company)}</div>
-            <div class="mandante-card-score" style="color:${sc}">${score}</div>
+            <div class="mandante-card-score" style="color:${sc}">${s30}<span style="font-size:11px;color:#9ca3af;font-weight:500;margin-left:6px">/100 · 30d</span></div>
+            <div class="mandante-card-90d">90d: <strong>${s90}</strong></div>
             <div class="mandante-card-meta">${meta.join('')}</div>
-            ${topics ? `<div class="mandante-topics">${topics}</div>` : ''}
             <div class="mandante-card-bar" style="width:${pct}%"></div>
           </div>`;
       }).join('');
@@ -162,6 +177,6 @@
 
     load();
   </script>
-  <script src="/mobile-nav.js?v=7" defer></script>
+  <script src="/mobile-nav.js?v=8" defer></script>
 </body>
 </html>

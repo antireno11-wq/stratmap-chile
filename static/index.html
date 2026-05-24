@@ -274,7 +274,7 @@
     .mandante-topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .mandante-topic { font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 5px; border-radius: 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=7" />
+  <link rel="stylesheet" href="/theme.css?v=8" />
 </head>
 <body>
   <aside class="sidebar">
@@ -407,6 +407,19 @@
         </div>
       </div>
 
+      <!-- ── TOP MANDANTES CALIENTES (últimos 30 días) ───────────────────────── -->
+      <div class="section-card" id="section-hot-mandantes">
+        <div class="section-head">
+          <span class="section-icon">🔥</span>
+          <span class="section-title">Mandantes calientes</span>
+          <span class="section-subtitle muted" style="font-size:11px;color:var(--muted);margin-left:8px">Últimos 30 días · ranked por movimiento</span>
+          <a href="/mandantes.html" style="margin-left:auto;font-size:12px;color:#1a56db;text-decoration:none;font-weight:600">Ver todos →</a>
+        </div>
+        <div id="hot-mandantes-grid" style="padding:14px 18px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+          <div class="muted-row">Cargando…</div>
+        </div>
+      </div>
+
       <!-- ── LICITACIONES (Codelco / ENAMI / SEA) ──────────────────────────────── -->
       <div class="section-card">
         <div id="region-chips" style="padding:10px 18px 0;display:flex;gap:6px;flex-wrap:wrap;min-height:0;transition:all 0.2s"></div>
@@ -465,9 +478,9 @@
     <div class="drawer-body" id="drawer-body"></div>
   </div>
 
-  <script src="/auth.js?v=7"></script>
+  <script src="/auth.js?v=8"></script>
   <script>if (!requireLogin()) { /* redirigió */ }</script>
-  <script src="/app.js?v=7"></script>
-  <script src="/mobile-nav.js?v=7" defer></script>
+  <script src="/app.js?v=8"></script>
+  <script src="/mobile-nav.js?v=8" defer></script>
 </body>
 </html>
