@@ -29,7 +29,14 @@ CATEGORIES: dict[str, str] = {
     "MLP Proveedores":    "licitacion",
 
     # Concesiones mineras
+    # SIGEX desactivado 2026-05 — derechos sobre el suelo, no señal de oportunidad
+    # comercial. Los datos históricos quedan pero no entran al pipeline ni al score.
     "SIGEX":              "concesion",
+
+    # Regulatorio (hechos esenciales CMF) — info de calidad institucional. Por
+    # ahora la categorizamos como noticia (encaja en el flujo de display); el
+    # scoring v2 le dará un peso explícito mayor.
+    "cmf":                "noticia",
 
     # Prospectos (evaluación ambiental)
     "SEA":                "prospecto",

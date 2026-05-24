@@ -113,11 +113,21 @@ def run_empleos():
 
 
 def run_sigex():
+    """DESACTIVADO 2026-05: las concesiones SIGEX son derechos sobre el suelo,
+    no licitaciones — para un B2B de servicios a mandantes son ruido. El
+    conector y los datos históricos siguen en la base; este wrapper queda
+    vivo por si necesitamos re-activarlo."""
+    return
+
+
+def run_cmf():
+    """Hechos esenciales CMF — señal regulatoria de alta calidad (inversiones,
+    contratos, cambios de estrategia anunciados a la bolsa)."""
     try:
-        from connectors.sigex_sernageomin import fetch_sigex
-        ingest(fetch_sigex(limit=5000), "sigex")
+        from connectors.cmf import fetch_cmf
+        ingest(fetch_cmf(limit=200), "cmf")
     except Exception as e:
-        print(f"[sigex] error: {e}")
+        print(f"[cmf] error: {e}")
         import traceback; traceback.print_exc()
 
 def run_mundo_mineria():
@@ -153,7 +163,7 @@ def main() -> None:
     run_sicep()
     run_codelco()
     run_enami()
-    run_sigex()
+    run_cmf()
     run_infomineria()
     run_mundo_mineria()
     run_empleos()

@@ -118,7 +118,9 @@ def get_mandantes():
     """
     params = {
         "licit":   LICITACION_SOURCES,
-        "conce":   CONCESION_SOURCES,
+        # SIGEX desactivado 2026-05: lista vacía hace que sigex_30d/90d/p30 sean 0
+        # y no aporten al score. Los datos históricos siguen en la base.
+        "conce":   [],
         "prosp":   PROSPECTO_SOURCES,
         "noticia": NOTICIA_SOURCES,
         "empleo":  EMPLEO_SOURCES,
@@ -143,17 +145,18 @@ def get_mandantes():
             r["breakdown_30d"] = {
                 "licitaciones": r.pop("licit_30d", 0),
                 "sea":          r.pop("sea_30d", 0),
-                "sigex":        r.pop("sigex_30d", 0),
                 "news":         r.pop("news_30d", 0),
                 "jobs":         r.pop("jobs_30d", 0),
             }
             r["breakdown_90d"] = {
                 "licitaciones": r.pop("licit_90d", 0),
                 "sea":          r.pop("sea_90d", 0),
-                "sigex":        r.pop("sigex_90d", 0),
                 "news":         r.pop("news_90d", 0),
                 "jobs":         r.pop("jobs_90d", 0),
             }
+            # Limpieza de columnas SIGEX (ya no las exponemos)
+            for k in ("sigex_30d", "sigex_90d"):
+                r.pop(k, None)
             # Cleanup prev30 raw fields (ya los usamos para trend)
             for k in ("licit_p30", "sea_p30", "sigex_p30", "news_p30", "jobs_p30"):
                 r.pop(k, None)

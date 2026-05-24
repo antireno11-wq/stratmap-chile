@@ -30,7 +30,6 @@ def timeseries(days: int = Query(default=30, ge=7, le=180)):
         SELECT COALESCE(published_at, created_at)::date AS day,
                CASE
                  WHEN source = ANY(%(licit)s)   THEN 'licitacion'
-                 WHEN source = ANY(%(conce)s)   THEN 'concesion'
                  WHEN source = ANY(%(prosp)s)   THEN 'prospecto'
                  WHEN source = ANY(%(noticia)s) THEN 'noticia'
                  ELSE 'otros'
@@ -38,11 +37,11 @@ def timeseries(days: int = Query(default=30, ge=7, le=180)):
         FROM opportunities
         WHERE COALESCE(published_at, created_at) > NOW() - (%(d)s || ' days')::interval
           AND source != 'manual'
+          AND source != ALL(%(conce)s)
           AND is_duplicate = FALSE
     )
     SELECT d.day,
            SUM((a.category = 'licitacion')::int) AS licitacion,
-           SUM((a.category = 'concesion')::int)  AS concesion,
            SUM((a.category = 'prospecto')::int)  AS prospecto,
            SUM((a.category = 'noticia')::int)    AS noticia
     FROM days d
@@ -53,6 +52,8 @@ def timeseries(days: int = Query(default=30, ge=7, le=180)):
     params = {
         "d": days,
         "licit":   LICITACION_SOURCES,
+        # SIGEX excluido del display 2026-05 — los registros viejos siguen en la
+        # base pero no aparecen en los charts.
         "conce":   CONCESION_SOURCES,
         "prosp":   PROSPECTO_SOURCES,
         "noticia": NOTICIA_SOURCES,
@@ -66,7 +67,6 @@ def timeseries(days: int = Query(default=30, ge=7, le=180)):
             "dates":  [r["day"].isoformat() for r in rows],
             "series": {
                 "licitacion": [int(r["licitacion"] or 0) for r in rows],
-                "concesion":  [int(r["concesion"] or 0)  for r in rows],
                 "prospecto":  [int(r["prospecto"] or 0)  for r in rows],
                 "noticia":    [int(r["noticia"] or 0)    for r in rows],
             },
@@ -81,13 +81,13 @@ def by_category(days: int = Query(default=30, ge=7, le=365)):
     sql = """
     SELECT
         SUM((source = ANY(%(licit)s))::int)   AS licitacion,
-        SUM((source = ANY(%(conce)s))::int)   AS concesion,
         SUM((source = ANY(%(prosp)s))::int)   AS prospecto,
         SUM((source = ANY(%(noticia)s))::int) AS noticia,
         SUM((source = ANY(%(empleo)s))::int)  AS empleo
     FROM opportunities
     WHERE COALESCE(published_at, created_at) > NOW() - (%(d)s || ' days')::interval
       AND source != 'manual'
+      AND source != ALL(%(conce)s)
       AND is_duplicate = FALSE;
     """
     params = {
@@ -105,7 +105,6 @@ def by_category(days: int = Query(default=30, ge=7, le=365)):
                 row = cur.fetchone() or {}
         return {
             "licitacion": int(row.get("licitacion") or 0),
-            "concesion":  int(row.get("concesion")  or 0),
             "prospecto":  int(row.get("prospecto")  or 0),
             "noticia":    int(row.get("noticia")    or 0),
             "empleo":     int(row.get("empleo")     or 0),

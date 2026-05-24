@@ -875,9 +875,14 @@ function renderFiltered() {
       : `<div class="muted-row">Sin licitaciones activas</div>`;
   }
 
-  el('tbody-projects').innerHTML = projPage.length
-    ? projPage.map(projectRow).join('')
-    : `<div class="muted-row">Sin concesiones</div>`;
+  // Concesiones (SIGEX) desactivado 2026-05; el bloque sigue por compat por si
+  // se re-activa, pero ahora es opcional — el HTML del dashboard no lo monta.
+  const tbodyProj = document.getElementById('tbody-projects');
+  if (tbodyProj) {
+    tbodyProj.innerHTML = projPage.length
+      ? projPage.map(projectRow).join('')
+      : `<div class="muted-row">Sin concesiones</div>`;
+  }
 
   el('tbody-news').innerHTML = newsPage.length
     ? newsPage.map(newsRow).join('')
@@ -886,8 +891,10 @@ function renderFiltered() {
   // Pagination
   renderPagination('pagination-licitaciones', licitaciones.length, currentPage.licitaciones,
     'function(p){currentPage.licitaciones=p;renderFiltered()}');
-  renderPagination('pagination-projects', concesiones.length, currentPage.projects,
-    'function(p){currentPage.projects=p;renderFiltered()}');
+  if (document.getElementById('pagination-projects')) {
+    renderPagination('pagination-projects', concesiones.length, currentPage.projects,
+      'function(p){currentPage.projects=p;renderFiltered()}');
+  }
   renderPagination('pagination-news', news.length, currentPage.news,
     'function(p){currentPage.news=p;renderFiltered()}');
 
