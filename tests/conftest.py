@@ -5,6 +5,8 @@ import secrets
 # Env vars que auth.py exige al import. Se setean ANTES de importar la app.
 os.environ.setdefault("SECRET_KEY", secrets.token_urlsafe(48))
 os.environ.setdefault("ADMIN_EMAILS", "admin@test.cl")
+# main.py NO carga el .env bajo pytest (detecta "pytest" en sys.modules), así que
+# el entorno de test queda aislado del .env local.
 
 import pytest
 from fastapi.testclient import TestClient

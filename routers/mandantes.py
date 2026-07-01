@@ -3,6 +3,7 @@ import json as _json
 import os
 import time
 from collections import Counter
+import ai_client
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -193,14 +194,11 @@ def get_company_summary(company_name: str):
             """, {"c": company_name, "news": NEWS_SRC_LIST})
             top_projects = [f"{r['title']} ({r['source']})" for r in cur.fetchall()]
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         result = {"summary": None, "error": "no_api_key"}
         _company_summaries[key] = result
         return result
-
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
 
     regiones = [r for r in (stats.get("regiones") or []) if r][:5]
     prompt = f"""Eres un analista del sector minero chileno. Genera un resumen ejecutivo conciso de esta empresa para profesionales del sector.
@@ -227,11 +225,12 @@ Responde SOLO JSON sin markdown:
 }}"""
 
     try:
-        msg = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=600,
-            messages=[{"role": "user", "content": prompt}]
+        raw = ai_client.call_llm(
+            prompt=prompt,
+            max_tokens=600,
+            model="claude-sonnet-4-6"
         )
-        raw = msg.content[0].text.strip().replace("```json", "").replace("```", "").strip()
+        raw = raw.strip().replace("```json", "").replace("```", "").strip()
         data = _json.loads(raw)
         result = {
             "company": company_name,

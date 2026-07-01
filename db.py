@@ -270,6 +270,7 @@ def init_contacts_db() -> None:
     sql = """
     CREATE TABLE IF NOT EXISTS contacts (
         id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         company TEXT NOT NULL,
         role TEXT NULL,
@@ -283,9 +284,54 @@ def init_contacts_db() -> None:
     CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (company);
     CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts (name);
     """
+    # NOTA: el índice sobre user_id NO va en el bloque de arriba. En una BD vieja
+    # (contacts existente SIN user_id) la tabla ya existe (CREATE IF NOT EXISTS =
+    # no-op) y un índice sobre user_id fallaría con UndefinedColumn ANTES de que la
+    # migración agregue la columna, abortando todo el init. Se crea DESPUÉS de migrar.
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
+        conn.commit()
+    _migrate_contacts_user_id()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts (user_id)")
+        conn.commit()
+
+
+def _migrate_contacts_user_id() -> None:
+    """One-shot: contacts pasa a per-user (multi-tenant). Idempotente.
+
+    Si la columna ya es NOT NULL no hace nada. En una BD vieja (contactos
+    globales sin dueño) agrega user_id, asigna TODOS los contactos existentes
+    al primer usuario (MIN(users.id)) y los hace NOT NULL. Si no hay usuarios,
+    borra los contactos huérfanos. Protegido con advisory lock para serializar
+    web vs worker."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(742001)")
+            try:
+                cur.execute("""
+                    SELECT is_nullable FROM information_schema.columns
+                    WHERE table_name = 'contacts' AND column_name = 'user_id'
+                """)
+                row = cur.fetchone()
+                if row and row["is_nullable"] == "NO":
+                    return  # ya migrado
+
+                cur.execute("SELECT MIN(id) AS uid FROM users")
+                first = cur.fetchone()
+                first_uid = first["uid"] if first else None
+
+                logger.info("migrate to per-user (contacts)", extra={"first_uid": first_uid})
+                cur.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
+                if first_uid is not None:
+                    cur.execute("UPDATE contacts SET user_id = %s WHERE user_id IS NULL", (first_uid,))
+                cur.execute("DELETE FROM contacts WHERE user_id IS NULL")
+                cur.execute("ALTER TABLE contacts ALTER COLUMN user_id SET NOT NULL")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts (user_id)")
+            finally:
+                cur.execute("SELECT pg_advisory_unlock(742001)")
         conn.commit()
 
 
@@ -1099,13 +1145,10 @@ def get_user_by_mp_preapproval(preapproval_id: str) -> Optional[Dict[str, Any]]:
 
 
 def count_user_contacts(user_id: int) -> int:
-    """No-op por ahora — contactos no están scopeados por user. Devuelve count global.
-
-    TODO: cuando contacts tenga user_id, scopear este count.
-    """
+    """Cuenta los contactos del usuario (para enforcement de quota del plan)."""
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS n FROM contacts")
+            cur.execute("SELECT COUNT(*) AS n FROM contacts WHERE user_id = %s", (user_id,))
             row = cur.fetchone()
     return int(row["n"]) if row else 0
 
@@ -1266,12 +1309,14 @@ def get_signals_for_opportunity(opportunity_id: int) -> List[Dict[str, Any]]:
 
 # ── Contactos ─────────────────────────────────────────────────────────────────
 
-def create_contact(contact: Dict[str, Any]) -> Dict[str, Any]:
+def create_contact(contact: Dict[str, Any], user_id: int) -> Dict[str, Any]:
     sql = """
-    INSERT INTO contacts (name, company, role, email, phone, linkedin_url, notes)
-    VALUES (%(name)s, %(company)s, %(role)s, %(email)s, %(phone)s, %(linkedin_url)s, %(notes)s)
+    INSERT INTO contacts (user_id, name, company, role, email, phone, linkedin_url, notes)
+    VALUES (%(user_id)s, %(name)s, %(company)s, %(role)s, %(email)s, %(phone)s, %(linkedin_url)s, %(notes)s)
     RETURNING *;
     """
+    contact = dict(contact)
+    contact["user_id"] = user_id
     contact.setdefault("role", None); contact.setdefault("email", None)
     contact.setdefault("phone", None); contact.setdefault("linkedin_url", None)
     contact.setdefault("notes", None)
@@ -1282,12 +1327,14 @@ def create_contact(contact: Dict[str, Any]) -> Dict[str, Any]:
         conn.commit()
     return dict(row)
 
-def update_contact(contact_id: int, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def update_contact(contact_id: int, data: Dict[str, Any], user_id: int) -> Optional[Dict[str, Any]]:
     fields = ["name","company","role","email","phone","linkedin_url","notes"]
     updates = ", ".join([f"{f} = %({f})s" for f in fields if f in data])
     if not updates: return None
-    sql = f"UPDATE contacts SET {updates}, updated_at = NOW() WHERE id = %(id)s RETURNING *;"
+    sql = f"UPDATE contacts SET {updates}, updated_at = NOW() WHERE id = %(id)s AND user_id = %(user_id)s RETURNING *;"
+    data = dict(data)
     data["id"] = contact_id
+    data["user_id"] = user_id
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, data)
@@ -1295,32 +1342,41 @@ def update_contact(contact_id: int, data: Dict[str, Any]) -> Optional[Dict[str, 
         conn.commit()
     return dict(row) if row else None
 
-def delete_contact(contact_id: int) -> bool:
-    sql = "DELETE FROM contacts WHERE id = %(id)s RETURNING id;"
+def get_contact(contact_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    sql = "SELECT * FROM contacts WHERE id = %(id)s AND user_id = %(user_id)s LIMIT 1;"
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"id": contact_id})
+            cur.execute(sql, {"id": contact_id, "user_id": user_id})
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+def delete_contact(contact_id: int, user_id: int) -> bool:
+    sql = "DELETE FROM contacts WHERE id = %(id)s AND user_id = %(user_id)s RETURNING id;"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"id": contact_id, "user_id": user_id})
             row = cur.fetchone()
         conn.commit()
     return row is not None
 
-def get_contacts_by_company(company: str) -> List[Dict[str, Any]]:
+def get_contacts_by_company(company: str, user_id: int) -> List[Dict[str, Any]]:
     sql = """
     SELECT * FROM contacts
-    WHERE company ILIKE %(like)s
-       OR %(company)s ILIKE '%%' || company || '%%'
+    WHERE user_id = %(user_id)s
+      AND (company ILIKE %(like)s
+           OR %(company)s ILIKE '%%' || company || '%%')
     ORDER BY name ASC;
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"company": company, "like": f"%{company}%"})
+            cur.execute(sql, {"company": company, "like": f"%{company}%", "user_id": user_id})
             return [dict(r) for r in cur.fetchall()]
 
-def list_contacts(q: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
-    base = "SELECT * FROM contacts"
-    params: Dict[str, Any] = {"limit": limit}
+def list_contacts(user_id: int, q: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    base = "SELECT * FROM contacts WHERE user_id = %(user_id)s"
+    params: Dict[str, Any] = {"limit": limit, "user_id": user_id}
     if q:
-        base += " WHERE name ILIKE %(q)s OR company ILIKE %(q)s OR role ILIKE %(q)s"
+        base += " AND (name ILIKE %(q)s OR company ILIKE %(q)s OR role ILIKE %(q)s)"
         params["q"] = f"%{q}%"
     base += " ORDER BY company ASC, name ASC LIMIT %(limit)s;"
     with get_conn() as conn:
@@ -1328,11 +1384,11 @@ def list_contacts(q: Optional[str] = None, limit: int = 200) -> List[Dict[str, A
             cur.execute(base, params)
             return [dict(r) for r in cur.fetchall()]
 
-def bulk_import_contacts(contacts: List[Dict[str, Any]]) -> Tuple[int, int]:
+def bulk_import_contacts(contacts: List[Dict[str, Any]], user_id: int) -> Tuple[int, int]:
     inserted = errors = 0
     for c in contacts:
         try:
-            create_contact(c)
+            create_contact(c, user_id)
             inserted += 1
         except Exception as e:
             logger.warning("contacts import row failed",

@@ -10,8 +10,28 @@ import db
 from deps import get_current_user, require_feature
 from plans import features_for
 from schemas import ContactIn, ContactUpdate
+from ai_email import generate_draft
 
 router = APIRouter(tags=["contacts"], dependencies=[Depends(get_current_user)])
+
+@router.post("/contacts/{contact_id}/generate-email")
+def generate_email_draft(contact_id: int, user=Depends(get_current_user)):
+    contact = db.get_contact(contact_id, user["user_id"])
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+
+    company = contact.get("company", "")
+    recent_projects = []
+    if company:
+        recent_projects = db.get_opportunities_by_company(company)[:3]
+
+    draft = generate_draft(
+        contact_name=contact.get("name", ""),
+        contact_role=contact.get("role", ""),
+        company=company,
+        recent_projects=recent_projects
+    )
+    return draft
 
 
 @router.get("/contacts")
@@ -19,11 +39,12 @@ def get_contacts(
     q: Optional[str] = Query(default=None),
     company: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
+    user=Depends(get_current_user),
 ):
     if company:
-        rows = db.get_contacts_by_company(company)
+        rows = db.get_contacts_by_company(company, user["user_id"])
     else:
-        rows = db.list_contacts(q=q, limit=limit)
+        rows = db.list_contacts(user["user_id"], q=q, limit=limit)
     result = []
     for row in rows:
         r = dict(row)
@@ -45,7 +66,7 @@ def add_contact(payload: ContactIn, user=Depends(get_current_user)):
             status_code=402,
             detail=f"Llegaste al tope de contactos de tu plan ({limit}). Actualizá tu plan en /pricing.html.",
         )
-    row = db.create_contact(payload.model_dump())
+    row = db.create_contact(payload.model_dump(), user["user_id"])
     for f in ["created_at", "updated_at"]:
         if row.get(f):
             row[f] = row[f].isoformat()
@@ -53,9 +74,9 @@ def add_contact(payload: ContactIn, user=Depends(get_current_user)):
 
 
 @router.put("/contacts/{contact_id}")
-def edit_contact(contact_id: int, payload: ContactUpdate):
+def edit_contact(contact_id: int, payload: ContactUpdate, user=Depends(get_current_user)):
     data = {k: v for k, v in payload.model_dump().items() if v is not None}
-    row = db.update_contact(contact_id, data)
+    row = db.update_contact(contact_id, data, user["user_id"])
     if not row:
         raise HTTPException(status_code=404, detail="Contacto no encontrado")
     for f in ["created_at", "updated_at"]:
@@ -65,23 +86,33 @@ def edit_contact(contact_id: int, payload: ContactUpdate):
 
 
 @router.delete("/contacts/{contact_id}")
-def remove_contact(contact_id: int):
-    ok = db.delete_contact(contact_id)
+def remove_contact(contact_id: int, user=Depends(get_current_user)):
+    ok = db.delete_contact(contact_id, user["user_id"])
     if not ok:
         raise HTTPException(status_code=404, detail="Contacto no encontrado")
     return {"ok": True}
 
 
 @router.post("/contacts/import")
-def import_contacts(payload: List[ContactIn]):
+def import_contacts(payload: List[ContactIn], user=Depends(get_current_user)):
+    # Enforce max_contacts del plan considerando lo que ya tiene + lo que importa.
+    plan = db.get_user_plan(user["user_id"])
+    limit = features_for(plan.get("plan", "free")).get("max_contacts", 50)
+    current = db.count_user_contacts(user["user_id"])
+    if current + len(payload) > limit:
+        raise HTTPException(
+            status_code=402,
+            detail=f"La importación supera el tope de tu plan ({limit} contactos). "
+                   f"Tenés {current}; intentás agregar {len(payload)}. Actualizá tu plan en /pricing.html.",
+        )
     contacts = [c.model_dump() for c in payload]
-    inserted, errors = db.bulk_import_contacts(contacts)
+    inserted, errors = db.bulk_import_contacts(contacts, user["user_id"])
     return {"ok": True, "inserted": inserted, "errors": errors}
 
 
 @router.get("/contacts/export", dependencies=[Depends(require_feature("exports"))])
-def export_contacts():
-    rows = db.list_contacts(limit=10000)
+def export_contacts(user=Depends(get_current_user)):
+    rows = db.list_contacts(user["user_id"], limit=10000)
     output = io.StringIO()
     writer = csv.DictWriter(
         output,

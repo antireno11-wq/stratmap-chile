@@ -15,6 +15,12 @@ import asyncio
 import logging
 import os
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from logging_config import setup_logging
 
 setup_logging()
@@ -56,6 +62,19 @@ def _init():
         db.init_ai_db()
     except Exception as e:
         logger.warning("init_ai_db failed", extra={"err": str(e)})
+    # El worker corre demand_intel (UPDATE opportunities.services_needed). La columna
+    # + índice GIN los crea init_demand_intel_db(): sin esto el worker dependía de que
+    # la web hubiera booteado antes (orden de deploy, no garantía).
+    try:
+        import demand_intel
+        demand_intel.init_demand_intel_db()
+    except Exception as e:
+        logger.warning("init_demand_intel_db failed", extra={"err": str(e)})
+    try:
+        import ingest_log
+        ingest_log.ensure_schema()  # tabla ingest_runs (observabilidad de scrapers)
+    except Exception as e:
+        logger.warning("ingest_log ensure_schema failed", extra={"err": str(e)})
 
 
 async def _loop():

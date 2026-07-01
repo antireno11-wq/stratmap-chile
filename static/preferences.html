@@ -80,7 +80,7 @@
     .date-input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; outline: none; }
     .date-input:focus { border-color: var(--blue); }
   </style>
-  <link rel="stylesheet" href="/theme.css?v=13" />
+  <link rel="stylesheet" href="/theme.css?v=14" />
 </head>
 <body>
   <aside class="sidebar">
@@ -231,7 +231,7 @@
     </div>
   </div>
 
-  <script src="/auth.js?v=13"></script>
+  <script src="/auth.js?v=14"></script>
   <script>if (!requireLogin()) { throw new Error('redir'); }</script>
   <script>
     const INDUSTRIES = ["Minería","Construcción","Energía","Infraestructura","Agua y Saneamiento","Telecomunicaciones","Logística","Gobierno"];
@@ -396,10 +396,13 @@
       btn.textContent = '⏳ Corriendo…';
       status.textContent = 'Iniciando AI matcher…';
       try {
-        const res = await apiFetch('/admin/run-ai-matcher', { method: 'POST' });
-        const data = await res.json();
-        status.textContent = data.ok ? '✓ Matcher iniciado — puede tardar varios minutos' : 'Error al iniciar';
-        status.style.color = data.ok ? '#16a34a' : '#dc2626';
+        const res = await apiFetch('/me/score-projects', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        const ok = res.ok && data.ok;
+        status.textContent = ok
+          ? '✓ Matcher iniciado — puede tardar varios minutos'
+          : (res.status === 402 ? 'El AI Matcher está disponible en el plan Pro' : (data.detail || 'Error al iniciar'));
+        status.style.color = ok ? '#16a34a' : '#dc2626';
       } catch(e) {
         status.textContent = 'Error de conexión';
         status.style.color = '#dc2626';
@@ -417,6 +420,6 @@
     buildTagGrid("tag-phases", PHASES, "phases");
     buildTagGrid("tag-sources", SOURCES, "sources");
   </script>
-  <script src="/mobile-nav.js?v=13" defer></script>
+  <script src="/mobile-nav.js?v=14" defer></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-import anthropic
+import ai_client
 import db
 
 MODEL = "claude-sonnet-4-6"
@@ -61,19 +61,17 @@ Criterios de scoring:
 
 
 def score_opportunity(
-    client: anthropic.Anthropic,
     opp: Dict[str, Any],
     services: List[Dict[str, Any]],
     company_name: str
 ) -> Optional[Dict[str, Any]]:
     prompt = build_prompt(opp, services, company_name)
     try:
-        message = client.messages.create(
-            model=MODEL,
+        raw = ai_client.call_llm(
+            prompt=prompt,
             max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}]
+            model=MODEL
         )
-        raw = message.content[0].text.strip()
         # Limpiar posibles backticks de markdown
         raw = raw.replace("```json", "").replace("```", "").strip()
         result = json.loads(raw)
@@ -96,9 +94,9 @@ def run(user_id: int, limit: int = MAX_PER_RUN) -> dict:
     print(f"[ai_matcher] Iniciando batch para user_id={user_id} (limit={limit})")
 
     # 1. Verificar API key
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        print("[ai_matcher] ERROR: ANTHROPIC_API_KEY no está configurada")
+        print("[ai_matcher] ERROR: Ni OPENROUTER_API_KEY ni ANTHROPIC_API_KEY están configuradas")
         return {"ok": False, "error": "no_api_key"}
 
     # 2. Cargar perfil de servicios
@@ -125,14 +123,13 @@ def run(user_id: int, limit: int = MAX_PER_RUN) -> dict:
         print("[ai_matcher] Todo al día, nada que procesar")
         return {"ok": True, "scored": 0, "errors": 0}
 
-    # 4. Procesar con Claude
-    client = anthropic.Anthropic(api_key=api_key)
+    # 4. Procesar con ai_client
     scored = 0
     errors = 0
 
     for i, opp in enumerate(opps, 1):
         print(f"  [{i}/{len(opps)}] opp_id={opp['id']} — {opp['title'][:60]}...")
-        result = score_opportunity(client, opp, services, company_name)
+        result = score_opportunity(opp, services, company_name)
 
         if result:
             db.upsert_ai_fit(

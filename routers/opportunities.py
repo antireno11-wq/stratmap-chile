@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 import db
-from deps import get_current_user, require_admin
+from deps import get_current_user, require_admin, require_feature
 from plans import features_for
 from schemas import IngestPayload
 from source_categories import NOTICIA_SOURCES, category_of
@@ -136,6 +136,24 @@ def get_opportunity_services(opp_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/opportunities/{opp_id}/analyze-services",
+             dependencies=[Depends(require_feature("ai_matching"))])
+def analyze_opportunity_services(opp_id: int):
+    """Analiza on-demand (IA) qué servicios requerirá un proyecto y guarda el resultado.
+
+    Gated a planes con `ai_matching` (Pro/Team): el análisis consume IA, así que no se
+    expone a usuarios free. Reemplaza la llamada rota a /admin/run-demand-intel (admin-only)
+    que la UI hacía desde el drawer."""
+    try:
+        import demand_intel
+        result = demand_intel.analyze_opportunity(opp_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo analizar el proyecto: {e}")
+    if not result:
+        raise HTTPException(status_code=422, detail="No se pudo generar el análisis para este proyecto")
+    return {"ok": True, "services_needed": result}
 
 
 @router.get("/opportunities/services/search", dependencies=[Depends(get_current_user)])

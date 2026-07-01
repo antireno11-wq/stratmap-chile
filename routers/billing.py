@@ -3,20 +3,21 @@
 Flujo:
   1. Frontend hace POST /billing/checkout {plan: "pro"|"team"} → devolvemos init_point URL.
   2. Frontend redirige al user a init_point. MP cobra y maneja recurrencia.
-  3. MP envía POST /billing/webhook con topic=preapproval & id=<preapproval_id>.
-  4. Validamos firma HMAC, fetcheamos el preapproval, actualizamos user_plans.
+  3. MP envía POST a /pagos (prod) o /pago (test) con topic=preapproval & id=<preapproval_id>.
+  4. Validamos firma HMAC (x-signature), fetcheamos el preapproval, actualizamos user_plans.
   5. /me/plan refleja el nuevo plan.
 
 Env vars:
-  MP_ACCESS_TOKEN     — Access token de Mercado Pago (test o prod).
+  MP_ACCESS_TOKEN     — Access token de Mercado Pago (TEST-... o APP_USR-...).
   MP_WEBHOOK_SECRET   — Secret para validar firma del webhook (panel MP > Webhooks).
-  PUBLIC_URL          — base URL pública (https://...railway.app), para back_url y notification_url.
+  PUBLIC_URL          — base URL pública (https://...railway.app), para back_url.
 
-Sandbox: crear una app de prueba en https://www.mercadopago.cl/developers,
-copiar TEST-... access token y configurar webhook a https://<tu>.up.railway.app/billing/webhook.
+El webhook responde en /pagos, /pago y /billing/webhook (alias). Configurá en el panel
+de MP la URL https://<tu-dominio>/pagos (prod) y/o /pago (test) con el mismo secret.
 """
 import hashlib
 import hmac
+import json
 import logging
 import os
 from datetime import datetime
@@ -56,6 +57,30 @@ def _public_base_url() -> str:
     return base
 
 
+def _is_production() -> bool:
+    """True si corremos en un entorno productivo (Railway != dev/local/test)."""
+    env = os.getenv("RAILWAY_ENVIRONMENT_NAME", "").strip().lower()
+    return bool(env) and env not in ("dev", "development", "local", "test")
+
+
+def _plan_from_amount(amount) -> Optional[str]:
+    """Deriva el plan a partir del monto que MP realmente cobra (autoritativo).
+
+    Evita confiar en un plan ausente/manipulado: si el monto no coincide EXACTO
+    con el precio de un plan de pago conocido, devuelve None y el webhook ignora
+    el evento (nunca otorga un plan que no corresponde al monto cobrado)."""
+    try:
+        amt = int(round(float(amount)))
+    except (TypeError, ValueError):
+        return None
+    for name, pdef in PLANS.items():
+        if name == "free":
+            continue
+        if int(pdef["price_clp"]) == amt:
+            return name
+    return None
+
+
 def _verify_signature(request_id: str, data_id: str, ts: str, signature_header: str) -> bool:
     """Valida x-signature de Mercado Pago.
 
@@ -68,9 +93,14 @@ def _verify_signature(request_id: str, data_id: str, ts: str, signature_header: 
         # En prod hay que setearlo.
         logger.warning("mp webhook: MP_WEBHOOK_SECRET no configurado, NO se valida firma")
         return True
-    manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
-    expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature_header)
+    # MP indica que si data.id es alfanumérico debe ir en minúscula en el manifest.
+    # Probamos ambas variantes para ser robustos ante ids con mayúsculas.
+    for did in {data_id, (data_id or "").lower()}:
+        manifest = f"id:{did};request-id:{request_id};ts:{ts};"
+        expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, signature_header):
+            return True
+    return False
 
 
 def _fetch_preapproval(preapproval_id: str) -> dict:
@@ -116,7 +146,9 @@ def create_checkout(payload: CheckoutPayload, user=Depends(get_current_user)):
         "reason": f"Stratmap {plan_def['label']} — suscripción mensual",
         "external_reference": str(user["user_id"]),
         "payer_email": user["email"],
-        "back_url": f"{base}/billing/portal",
+        # Volvemos a una página estática (el navegador no manda el header Bearer,
+        # así que /billing/portal —JSON con auth— daría 401 al volver del pago).
+        "back_url": f"{base}/pricing.html?checkout=success",
         "auto_recurring": {
             "frequency": 1,
             "frequency_type": "months",
@@ -147,34 +179,60 @@ def create_checkout(payload: CheckoutPayload, user=Depends(get_current_user)):
     return {"init_point": init_point, "preapproval_id": preapproval_id, "plan": payload.plan}
 
 
-@router.post("/billing/webhook")
+@router.post("/pagos")          # webhook productivo configurado en el panel MP
+@router.post("/pago")           # webhook de prueba configurado en el panel MP
+@router.post("/billing/webhook")  # alias histórico
 async def mp_webhook(
     request: Request,
     x_signature: Optional[str] = Header(default=None, alias="x-signature"),
     x_request_id: Optional[str] = Header(default=None, alias="x-request-id"),
 ):
-    """Webhook público de Mercado Pago. Idempotente, valida firma HMAC."""
+    """Webhook público de Mercado Pago. Idempotente, valida firma HMAC.
+
+    Responde en /pagos (prod), /pago (test) y /billing/webhook — los tres apuntan
+    a este mismo handler para calzar con lo que ya está cargado en el panel de MP.
+    """
     body = await request.body()
     qp = dict(request.query_params)
     topic = qp.get("topic") or qp.get("type") or ""
     resource_id = qp.get("id") or qp.get("data.id") or ""
 
+    # MP manda el tipo/id a veces en el query string y a veces en el BODY JSON
+    # (depende del formato de notificación). Si falta alguno, lo buscamos en el body
+    # para no ignorar el evento y dejar el plan sin activar.
+    if not topic or not resource_id:
+        try:
+            payload = json.loads(body or b"{}")
+            topic = topic or payload.get("type") or payload.get("topic") or ""
+            data_obj = payload.get("data") or {}
+            resource_id = resource_id or str(data_obj.get("id") or payload.get("id") or "")
+        except Exception:
+            pass
+
     logger.info("mp webhook received", extra={"topic": topic, "id": resource_id})
 
-    # Validar firma si MP la mandó (en producción siempre debería estar)
-    if x_signature and "ts=" in x_signature and "v1=" in x_signature:
-        try:
-            parts = dict(p.split("=", 1) for p in x_signature.split(","))
-            ts_val = parts.get("ts", "")
-            v1_val = parts.get("v1", "")
-            ok = _verify_signature(x_request_id or "", resource_id, ts_val, v1_val)
-            if not ok:
-                logger.warning("mp webhook: firma inválida", extra={"id": resource_id})
-                raise HTTPException(status_code=401, detail="Firma MP inválida")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning("mp webhook: error parseando firma", extra={"err": str(e)})
+    # Verificación de firma de MP (defensa en profundidad, NO bloqueante a propósito).
+    #
+    # La integridad real del cobro la garantiza el RE-FETCH del preapproval desde MP
+    # con nuestro access token + la derivación del plan por monto + el user del
+    # external_reference (que seteamos nosotros en el checkout). Un atacante no puede
+    # inyectar un usuario/monto falso ni un preapproval ajeno. Por eso NO rechazamos
+    # el webhook si la firma falla: bloquearlo por un detalle de formato dejaría a
+    # usuarios que YA pagaron sin activar su plan (falla de ingresos silenciosa).
+    # Logueamos el resultado para poder monitorear la salud de la firma.
+    secret = os.getenv("MP_WEBHOOK_SECRET", "").strip()
+    if secret:
+        sig_ok = False
+        if x_signature and "ts=" in x_signature and "v1=" in x_signature:
+            parts = dict(p.split("=", 1) for p in x_signature.split(",") if "=" in p)
+            sig_ok = _verify_signature(x_request_id or "", resource_id, parts.get("ts", ""), parts.get("v1", ""))
+        if sig_ok:
+            logger.info("mp webhook: firma verificada", extra={"id": resource_id})
+        else:
+            logger.warning("mp webhook: firma ausente/inválida — proceso igual (re-fetch es autoritativo)",
+                           extra={"id": resource_id})
+    else:
+        logger.warning("mp webhook: MP_WEBHOOK_SECRET no configurado")
 
     # Solo procesamos topic=preapproval (suscripciones). Ignoramos otros.
     if topic not in ("preapproval", "subscription_preapproval"):
@@ -200,9 +258,15 @@ async def mp_webhook(
         return {"ok": True, "ignored": "bad_external_ref"}
 
     mp_status = pre.get("status", "")
-    plan_row = db.get_user_plan(user_id) or {}
-    # El plan ya está guardado del checkout; el webhook solo actualiza status
-    plan_name = plan_row.get("plan", "pro")
+
+    # El plan se deriva del MONTO que MP realmente cobra (autoritativo), no de un
+    # valor que pudiera venir manipulado o ausente. Sin fallback a "pro".
+    auto = pre.get("auto_recurring") or {}
+    plan_name = _plan_from_amount(auto.get("transaction_amount"))
+    if not plan_name:
+        logger.warning("mp webhook: monto no coincide con ningún plan",
+                       extra={"amount": auto.get("transaction_amount"), "id": resource_id})
+        return {"ok": True, "ignored": "amount_mismatch"}
 
     next_payment_iso = pre.get("next_payment_date")
     current_period_end = None

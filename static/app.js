@@ -98,11 +98,63 @@ function statusChip(status) {
   return `<span class="status-chip" style="color:${color};background:${bg}">${escapeHTML(status)}</span>`;
 }
 
+// ── Toasts (notificaciones flotantes; estilos en theme.css) ─────────────────
+window.toast = function(msg, type = "ok", ms = 3200) {
+  let wrap = document.querySelector(".toast-wrap");
+  if (!wrap) {
+    wrap = document.createElement("div");
+    wrap.className = "toast-wrap";
+    document.body.appendChild(wrap);
+  }
+  const t = document.createElement("div");
+  t.className = "toast " + (type || "ok");
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = "opacity .3s ease, transform .3s ease";
+    t.style.opacity = "0";
+    t.style.transform = "translateY(8px)";
+    setTimeout(() => t.remove(), 320);
+  }, ms);
+};
+
+// Skeletons: devuelve N tarjetas shimmer para estados de carga.
+function skeletonCards(n = 6) {
+  let html = '<div class="proj-card-grid">';
+  for (let i = 0; i < n; i++) {
+    html += `<div class="proj-card" style="pointer-events:none">
+      <div class="skeleton" style="width:40px;height:40px;border-radius:10px;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div class="skeleton" style="height:9px;width:45%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:12px;width:90%;margin-bottom:6px"></div>
+        <div class="skeleton" style="height:12px;width:65%"></div>
+      </div></div>`;
+  }
+  return html + '</div>';
+}
+
+// Skeleton con forma de fila (para las listas del feed: licitaciones/noticias).
+function skeletonRows(n = 6) {
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    html += `<div style="display:flex;align-items:center;gap:12px;padding:11px 6px;border-bottom:1px solid var(--border-soft)">
+      <div class="skeleton" style="width:34px;height:34px;border-radius:8px;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div class="skeleton" style="height:11px;width:70%;margin-bottom:7px"></div>
+        <div class="skeleton" style="height:9px;width:40%"></div>
+      </div>
+      <div class="skeleton" style="width:38px;height:20px;border-radius:6px;flex-shrink:0"></div>
+    </div>`;
+  }
+  return html;
+}
+
 function scoreColor(s) {
-  if (s >= 80) return ["#15803d","#f0fdf4"];
-  if (s >= 65) return ["#92400e","#fef3c7"];
-  if (s >= 50) return ["#c2410c","#fff7ed"];
-  return ["#475569","#f1f5f9"];
+  // Dark "Intelligence Terminal": texto neón + tinte translúcido (glow vía CSS).
+  if (s >= 80) return ["#6ee7b7","rgba(52,211,153,.14)"];
+  if (s >= 65) return ["#fcd34d","rgba(251,191,36,.14)"];
+  if (s >= 50) return ["#fdba74","rgba(251,146,60,.14)"];
+  return ["#94a3b8","rgba(148,163,184,.12)"];
 }
 
 // ── Company logo helpers ───────────────────────────────────────────────────
@@ -173,10 +225,9 @@ window.openOppDrawer = async function(oppId) {
   el("drawer-overlay").classList.add("open");
 
   // Cargar pipeline, notas y servicios en paralelo
-  const [pipelineRes, notesRes, aiFitRes, servicesRes] = await Promise.all([
+  const [pipelineRes, notesRes, servicesRes] = await Promise.all([
     apiFetch(`/opportunities/${oppId}/pipeline`).then(r => r.json()),
     apiFetch(`/opportunities/${oppId}/notes`).then(r => r.json()),
-    apiFetch(`/opportunities/${oppId}/ai-fit`).then(r => r.json()).catch(()=>({})),
     apiFetch(`/opportunities/${oppId}/services`).then(r => r.json()).catch(()=>({})),
   ]);
 
@@ -235,38 +286,49 @@ window.openOppDrawer = async function(oppId) {
 window.savePipeline = async function(oppId) {
   const status = el("pipeline-status").value;
   const assignee = el("pipeline-assignee").value.trim() || null;
-  await apiFetch(`/opportunities/${oppId}/pipeline`, {
-    method: "PUT",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({status, assignee})
-  });
-  // Actualizar en allItems
-  const item = allItems.find(i => i.id === oppId);
-  if (item) item.pipeline_status = status;
-  renderFiltered();
-  const fb = el("pipeline-feedback");
-  fb.style.display = "block";
-  setTimeout(() => { fb.style.display = "none"; }, 2000);
+  try {
+    const res = await apiFetch(`/opportunities/${oppId}/pipeline`, {
+      method: "PUT",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({status, assignee})
+    });
+    if (!res.ok) throw new Error("save failed");
+    // Actualizar en allItems
+    const item = allItems.find(i => i.id === oppId);
+    if (item) item.pipeline_status = status;
+    renderFiltered();
+    toast("Pipeline actualizado ✓", "ok");
+    const fb = el("pipeline-feedback");
+    if (fb) { fb.style.display = "block"; setTimeout(() => { fb.style.display = "none"; }, 2000); }
+  } catch (e) {
+    toast("No se pudo actualizar el pipeline", "err");
+  }
 };
 
 window.saveNote = async function(oppId) {
   const note = el("note-text").value.trim();
   const author = el("note-author").value.trim() || null;
-  if (!note) return;
-  const res = await apiFetch(`/opportunities/${oppId}/notes`, {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({note, author})
-  });
-  const saved = await res.json();
-  el("note-text").value = "";
-  const list = el("notes-list");
-  const card = document.createElement("div");
-  card.className = "note-card";
-  card.innerHTML = `<div class="note-text">${escapeHTML(saved.note)}</div>
-    <div class="note-meta">${saved.author ? escapeHTML(saved.author) + " · " : ""}${fmtDatetime(saved.created_at)}</div>`;
-  list.insertBefore(card, list.firstChild);
-  if (list.querySelector(".drawer-empty")) list.querySelector(".drawer-empty").remove();
+  if (!note) { toast("Escribí una nota primero", "warn"); return; }
+  try {
+    const res = await apiFetch(`/opportunities/${oppId}/notes`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({note, author})
+    });
+    if (!res.ok) throw new Error("note failed");
+    const saved = await res.json();
+    el("note-text").value = "";
+    const list = el("notes-list");
+    const card = document.createElement("div");
+    card.className = "note-card";
+    card.innerHTML = `<div class="note-text">${escapeHTML(saved.note)}</div>
+      <div class="note-meta">${saved.author ? escapeHTML(saved.author) + " · " : ""}${fmtDatetime(saved.created_at)}</div>`;
+    list.insertBefore(card, list.firstChild);
+    if (list.querySelector(".drawer-empty")) list.querySelector(".drawer-empty").remove();
+    toast("Nota agregada ✓", "ok");
+  } catch (e) {
+    toast("No se pudo guardar la nota", "err");
+  }
 };
 
 // ── Company/Region drawer ──────────────────────────────────────────────────────
@@ -281,9 +343,15 @@ async function fetchContacts(company) {
 
 window.deleteContact = async function(contactId, company) {
   if (!confirm("¿Eliminar este contacto?")) return;
-  await apiFetch(`/contacts/${contactId}`, {method:"DELETE"});
-  const contacts = await fetchContacts(company);
-  el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+  try {
+    const res = await apiFetch(`/contacts/${contactId}`, {method:"DELETE"});
+    if (!res.ok) throw new Error("delete failed");
+    const contacts = await fetchContacts(company);
+    el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+    toast("Contacto eliminado", "ok");
+  } catch (e) {
+    toast("No se pudo eliminar el contacto", "err");
+  }
 };
 
 window.submitNewContact = async function(company) {
@@ -292,14 +360,24 @@ window.submitNewContact = async function(company) {
   const email = el("nc-email").value.trim();
   const phone = el("nc-phone").value.trim();
   const linkedin = el("nc-linkedin").value.trim();
-  if (!name) { alert("El nombre es obligatorio"); return; }
-  await apiFetch("/contacts", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({name, company, role:role||null, email:email||null, phone:phone||null, linkedin_url:linkedin||null})
-  });
-  const contacts = await fetchContacts(company);
-  el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+  if (!name) { toast("El nombre es obligatorio", "warn"); return; }
+  try {
+    const res = await apiFetch("/contacts", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({name, company, role:role||null, email:email||null, phone:phone||null, linkedin_url:linkedin||null})
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(res.status === 402 ? (data.detail || "Llegaste al tope de contactos de tu plan") : "No se pudo agregar el contacto", "err");
+      return;
+    }
+    const contacts = await fetchContacts(company);
+    el("drawer-contacts").innerHTML = renderContactsList(contacts, company);
+    toast("Contacto agregado ✓", "ok");
+  } catch (e) {
+    toast("No se pudo agregar el contacto", "err");
+  }
 };
 
 function renderServicesBlock(servicesData, oppId) {
@@ -363,7 +441,15 @@ window.analyzeServices = async function(oppId) {
   btn.textContent = "Analizando...";
   btn.disabled = true;
   try {
-    const r = await apiFetch(`/admin/run-demand-intel?batch_size=1&max_batches=1&source=`, {method:'POST'});
+    const r = await apiFetch(`/opportunities/${oppId}/analyze-services`, {method:'POST'});
+    if (!r.ok) {
+      const data = await r.json().catch(()=>({}));
+      btn.textContent = r.status === 402
+        ? "Disponible en plan Pro"
+        : (data.detail || "Error — reintentar");
+      btn.disabled = false;
+      return;
+    }
     // Re-abrir el drawer para refrescar
     await openOppDrawer(oppId);
   } catch(e) {
@@ -380,9 +466,17 @@ function renderContactsList(contacts, company) {
         <div class="contact-name">${escapeHTML(c.name)}</div>
         <div class="contact-role">${escapeHTML(c.role||"")}</div>
         <div class="contact-meta">
-          ${c.email ? `<a href="mailto:${escapeHTML(c.email)}" class="contact-link">✉ ${escapeHTML(c.email)}</a>` : ""}
+          ${c.email ? `<a href="mailto:${escapeHTML(c.email)}" class="contact-link" style="margin-right:8px;">✉ ${escapeHTML(c.email)}</a>
+          <button id="btn-ai-${c.id}" onclick="generateAiEmail(${c.id}, '${escapeHTML(c.email)}')" class="contact-link" style="background: #1e3a5f; color: white; padding: 2px 8px; border-radius: 4px; text-decoration: none; border: none; font-weight: 600; cursor: pointer; font-size: 11px;">✨ Generar correo IA</button>` : ""}
           ${c.phone ? `<span class="contact-link">📞 ${escapeHTML(c.phone)}</span>` : ""}
           ${c.linkedin_url ? `<a href="${escapeHTML(c.linkedin_url)}" target="_blank" class="contact-link linkedin">in LinkedIn</a>` : ""}
+        </div>
+        <div id="ai-draft-${c.id}" style="display:none; margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+           <div style="font-size:11px; font-weight:600; margin-bottom:4px;">Asunto:</div>
+           <input id="ai-subject-${c.id}" class="cf-input" style="width:100%; margin-bottom:8px; font-size:12px;" />
+           <div style="font-size:11px; font-weight:600; margin-bottom:4px;">Mensaje:</div>
+           <textarea id="ai-body-${c.id}" class="cf-input" style="width:100%; height:120px; margin-bottom:8px; font-size:12px; resize:vertical;"></textarea>
+           <button onclick="sendAiEmail('${escapeHTML(c.email)}', ${c.id})" class="cf-btn-save" style="background:#ea4335; width:100%; justify-content:center;">🚀 Abrir borrador en Gmail</button>
         </div>
       </div>
       <button class="contact-delete" onclick="deleteContact(${c.id},'${ec}')">✕</button>
@@ -682,7 +776,7 @@ async function loadAiFits() {
   try {
     const res = await apiFetch('/ai/fits?min_score=1&limit=500');
     const data = await res.json();
-    (data.items || []).forEach(item => {
+    (data.fits || data.items || []).forEach(item => {
       aiFitsCache[item.id] = {
         fit_score: item.fit_score,
         fit_reason: item.fit_reason,
@@ -945,10 +1039,10 @@ function renderFiltered() {
 let mandantesData = [];
 
 function scoreColorMandante(s) {
-  if (s >= 90) return ['#15803d', '#f0fdf4'];
-  if (s >= 70) return ['#1a56db', '#eff6ff'];
-  if (s >= 50) return ['#92400e', '#fef3c7'];
-  return ['#6b7280', '#f9fafb'];
+  if (s >= 90) return ['#6ee7b7', 'rgba(52,211,153,.14)'];
+  if (s >= 70) return ['#67e8f9', 'rgba(34,211,238,.14)'];
+  if (s >= 50) return ['#fcd34d', 'rgba(251,191,36,.14)'];
+  return ['#94a3b8', 'rgba(148,163,184,.12)'];
 }
 
 function renderHotMandantes(mandantes) {
@@ -1374,6 +1468,9 @@ async function load() {
   let url = `/opportunities?limit=${encodeURIComponent(limit)}`;
   if (q) url += `&q=${encodeURIComponent(q)}`;
   el("status").textContent = "Cargando…";
+  // Skeletons mientras llega la data (mejor percepción de velocidad).
+  const _licEl = document.getElementById('tbody-licitaciones');
+  if (_licEl) _licEl.innerHTML = skeletonRows(6);
   try {
     const data = await fetchJSON(url);
     await checkSession();
@@ -1662,3 +1759,44 @@ function toggleTheme() {
     }, 100);
   }
 })();
+
+// ── AI Email Generation ──────────────────────────────────────────────────────
+window.generateAiEmail = async function(contactId, contactEmail) {
+  const btn = document.getElementById(`btn-ai-${contactId}`);
+  const draftDiv = document.getElementById(`ai-draft-${contactId}`);
+  const subjInput = document.getElementById(`ai-subject-${contactId}`);
+  const bodyInput = document.getElementById(`ai-body-${contactId}`);
+  
+  if (!btn) return;
+  const originalText = btn.textContent;
+  btn.textContent = "⏳ Generando...";
+  btn.disabled = true;
+  
+  try {
+    const res = await apiFetch(`/contacts/${contactId}/generate-email`, { method: 'POST' });
+    if (!res.ok) throw new Error("Error al generar borrador");
+    const data = await res.json();
+    
+    subjInput.value = data.subject || "";
+    bodyInput.value = data.body || "";
+    draftDiv.style.display = 'block';
+  } catch (err) {
+    alert("Hubo un error al generar el correo con IA. Asegúrate de tener ANTHROPIC_API_KEY configurada o revisa la consola.");
+    console.error(err);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+};
+
+window.sendAiEmail = function(contactEmail, contactId) {
+  const subjInput = document.getElementById(`ai-subject-${contactId}`);
+  const bodyInput = document.getElementById(`ai-body-${contactId}`);
+  
+  const to = encodeURIComponent(contactEmail);
+  const su = encodeURIComponent(subjInput.value);
+  const body = encodeURIComponent(bodyInput.value);
+  
+  const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`;
+  window.open(url, '_blank');
+};

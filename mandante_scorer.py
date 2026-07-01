@@ -11,7 +11,7 @@ También se puede ejecutar manualmente: python mandante_scorer.py
 
 import os, sys, json, time
 from typing import Any, Dict, List
-import anthropic
+import ai_client
 import db
 
 MODEL      = "claude-sonnet-4-6"
@@ -132,14 +132,15 @@ Responde SOLO JSON sin markdown:
 }}"""
 
 
-def score_batch(client: anthropic.Anthropic, batch: List[Dict]) -> List[Dict]:
+def score_batch(batch: List[Dict]) -> List[Dict]:
     prompt = build_batch_prompt(batch)
     try:
-        msg = client.messages.create(
-            model=MODEL, max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}]
+        raw = ai_client.call_llm(
+            prompt=prompt,
+            max_tokens=MAX_TOKENS,
+            model=MODEL
         )
-        raw = msg.content[0].text.strip().replace("```json","").replace("```","").strip()
+        raw = raw.strip().replace("```json","").replace("```","").strip()
         return json.loads(raw).get("results", [])
     except Exception as e:
         print(f"  [scorer] Error batch: {e}")
@@ -149,9 +150,9 @@ def score_batch(client: anthropic.Anthropic, batch: List[Dict]) -> List[Dict]:
 def run(min_proyectos: int = 1) -> Dict:
     print("[mandante_scorer] Iniciando scoring de temperatura...")
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        print("[mandante_scorer] ERROR: ANTHROPIC_API_KEY no configurada")
+        print("[mandante_scorer] ERROR: Ni OPENROUTER_API_KEY ni ANTHROPIC_API_KEY están configuradas")
         return {"error": "no_api_key"}
 
     # Obtener todos los mandantes con proyectos
@@ -181,13 +182,12 @@ def run(min_proyectos: int = 1) -> Dict:
     if not items:
         return {"scored": 0}
 
-    client  = anthropic.Anthropic(api_key=api_key)
     scored  = 0
     batches = [items[i:i+BATCH_SIZE] for i in range(0, len(items), BATCH_SIZE)]
 
     for bi, batch in enumerate(batches, 1):
         print(f"  [batch {bi}/{len(batches)}] {len(batch)} mandantes...")
-        results = score_batch(client, batch)
+        results = score_batch(batch)
 
         # Lookup original context by company
         ctx_map = {item["company"]: item["context"] for item in batch}

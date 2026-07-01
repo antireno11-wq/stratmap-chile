@@ -27,10 +27,10 @@ import logging
 from datetime import datetime, timezone
 
 import requests
+import ai_client
 
 logger = logging.getLogger(__name__)
 
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 MODEL = "claude-haiku-4-5-20251001"
 
 # ── Taxonomía de fases y sus servicios típicos (como base/hint para IA) ────────
@@ -109,12 +109,12 @@ def _detect_phase_key(phase: str, title: str) -> str:
 
 def _analyze_project(project: dict) -> dict | None:
     """
-    Llama a Claude Haiku para analizar un proyecto y generar la lista de servicios.
+    Llama a la IA para analizar un proyecto y generar la lista de servicios.
     Retorna dict con services_needed o None si falla.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        logger.error("[demand_intel] ANTHROPIC_API_KEY no configurada")
+        logger.error("[demand_intel] Ni OPENROUTER_API_KEY ni ANTHROPIC_API_KEY están configuradas")
         return None
 
     title = project.get("title", "")
@@ -162,23 +162,11 @@ Responde SOLO con JSON válido, sin texto adicional, sin markdown, exactamente a
 }}"""
 
     try:
-        resp = requests.post(
-            ANTHROPIC_API_URL,
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
-            json={
-                "model": MODEL,
-                "max_tokens": 1500,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
+        text = ai_client.call_llm(
+            prompt=prompt,
+            max_tokens=1500,
+            model=MODEL
         )
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["content"][0]["text"].strip()
 
         # Limpiar posibles backticks
         text = text.replace("```json", "").replace("```", "").strip()
@@ -194,6 +182,40 @@ Responde SOLO con JSON válido, sin texto adicional, sin markdown, exactamente a
 def _get_db_conn():
     import db as _db
     return _db.get_conn()
+
+
+def analyze_opportunity(opp_id: int) -> "dict | None":
+    """Analiza UN proyecto puntual (on-demand desde la UI) y guarda services_needed.
+
+    No mantiene una transacción abierta mientras llama a Claude (lento): lee, cierra,
+    analiza, y recién entonces escribe."""
+    conn = _get_db_conn()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, title, phase, company, region, raw, source, score
+                    FROM opportunities WHERE id = %s
+                """, (opp_id,))
+                row = cur.fetchone()
+        if not row or len(row["title"] or "") < 20:
+            return None
+        project = {
+            "id": row["id"], "title": row["title"] or "", "phase": row["phase"] or "",
+            "company": row["company"] or "", "region": row["region"] or "",
+            "raw": row["raw"] or {}, "source": row["source"] or "", "score": row["score"] or 0,
+        }
+        result = _analyze_project(project)
+        if result:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE opportunities SET services_needed = %s WHERE id = %s",
+                        (json.dumps(result), opp_id),
+                    )
+        return result
+    finally:
+        conn.close()
 
 
 def init_demand_intel_db():

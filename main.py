@@ -9,7 +9,19 @@ from collections import defaultdict, deque
 import asyncio
 import logging
 import os
+import sys
 import time
+
+# Carga .env en local (no-op en Railway, que inyecta las env vars). Debe correr
+# ANTES de importar módulos que leen env al import (p.ej. auth.SECRET_KEY).
+# NO se carga bajo pytest: los tests fijan su propio entorno y el .env local los
+# contaminaría (DATABASE_URL inexistente, ALLOW_SETUP, credenciales MP, etc.).
+if "pytest" not in sys.modules:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -67,6 +79,11 @@ async def lifespan(app: FastAPI):
         logger.info("demand_intel db initialized")
     except Exception as e:
         logger.warning("demand_intel init failed", extra={"err": str(e)})
+    try:
+        import ingest_log
+        ingest_log.ensure_schema()  # tabla ingest_runs para /admin/health
+    except Exception as e:
+        logger.warning("ingest_log ensure_schema failed", extra={"err": str(e)})
     try:
         result = recalc_all_scores()
         logger.info("scores recalculados",
@@ -164,9 +181,30 @@ def _match_rate_rule(path: str):
 
 
 def _client_ip(request: Request) -> str:
+    """IP del cliente para rate limiting.
+
+    Default seguro: usa el PRIMER valor de X-Forwarded-For (la IP original del
+    cliente). Cada cliente legítimo tiene su propia IP → nunca se agrupan en un
+    mismo bucket, así que no hay riesgo de bloqueo global de login. (El tradeoff
+    es que un atacante podría falsificar el header para evadir su propio límite;
+    es un riesgo menor frente a bloquear a todos.)
+
+    Si tu infra antepone N proxies de confianza y querés endurecer contra spoofing,
+    seteá TRUSTED_PROXY_DEPTH=N para tomar el N-ésimo valor desde la derecha (el que
+    añade el proxy de confianza más cercano). NO lo actives sin confirmar la cadena
+    de proxies: un valor equivocado agrupa a todos los usuarios bajo una sola IP."""
     xff = request.headers.get("x-forwarded-for")
     if xff:
-        return xff.split(",")[0].strip()
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            depth_env = os.getenv("TRUSTED_PROXY_DEPTH", "").strip()
+            if depth_env:
+                try:
+                    depth = max(1, int(depth_env))
+                    return parts[max(0, len(parts) - depth)]
+                except ValueError:
+                    pass
+            return parts[0]
     return request.client.host if request.client else "unknown"
 
 

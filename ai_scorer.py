@@ -16,7 +16,7 @@ import os
 import time
 from typing import Any, Dict, List, Tuple
 
-import httpx
+import ai_client
 import db
 
 # ── Campos útiles para enviar a Claude ────────────────────────────────────────
@@ -97,30 +97,15 @@ def _build_prompt(batch: List[Dict], heat_map: dict) -> str:
 
 
 def _call_claude(prompt: str, retries: int = 2) -> List[Dict]:
-    """Llama a la API de Claude y parsea la respuesta JSON."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY no configurada")
-
+    """Llama a la API de OpenRouter (con fallback a Anthropic) y parsea la respuesta JSON."""
     for attempt in range(retries + 1):
         try:
-            resp = httpx.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": "claude-haiku-4-5-20251001",  # rápido y barato para batch scoring
-                    "max_tokens": 1500,
-                    "system": SYSTEM_PROMPT,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=30,
+            text = ai_client.call_llm(
+                prompt=prompt,
+                system=SYSTEM_PROMPT,
+                max_tokens=1500,
+                model="claude-haiku-4-5-20251001"
             )
-            resp.raise_for_status()
-            text = resp.json()["content"][0]["text"].strip()
 
             # Limpiar posibles markdown fences
             if text.startswith("```"):
