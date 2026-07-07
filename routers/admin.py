@@ -1139,3 +1139,51 @@ def run_sigex():
             import traceback; traceback.print_exc()
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "msg": "Ingesta SIGEX iniciada en background"}
+
+
+@router.post("/admin/run-sea-milestones")
+def run_sea_milestones(force: bool = Query(default=False)):
+    """Ejecuta el predictor de hitos de contratación para proyectos SEA."""
+    try:
+        from signals.sea_milestone import run as _run
+        result = _run(force_recompute=force)
+        return {"ok": True, **result}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+@router.post("/admin/run-phase-tracker")
+def run_phase_tracker():
+    """Ejecuta el detector de cambios de fase en proyectos SEA."""
+    try:
+        from signals.phase_tracker import run as _run
+        result = _run()
+        return {"ok": True, **result}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+@router.post("/admin/run-cross-source-boost")
+def run_cross_source_boost():
+    """Ejecuta el booster por confirmación multifuente."""
+    try:
+        from signals.cross_source_boost import run as _run
+        result = _run()
+        return {"ok": True, **result}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+@router.post("/admin/run-news-projects")
+def run_news_projects(force: bool = Query(default=False), limit: int = Query(default=15, ge=1, le=100)):
+    """Ejecuta el clasificador de noticias para detectar/nutrir proyectos e hitos."""
+    try:
+        from signals.news_projects import run as _run
+        result = _run(force_recompute=force, limit=limit)
+        return {"ok": True, **result}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}

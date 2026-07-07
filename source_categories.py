@@ -41,6 +41,7 @@ CATEGORIES: dict[str, str] = {
     # Prospectos (evaluación ambiental / catastros oficiales de inversión /
     # derechos administrativos que anteceden a la fase de proyecto)
     "SEA":                "prospecto",
+    "Noticias Proyectos": "prospecto",   # proyectos e hitos extraídos de la prensa
     "COCHILCO":           "prospecto",   # catastro de inversiones — proyectos con MUSD declarados
     "SIGEX Explotación":  "prospecto",   # bienalidad: confirma faena activa del mandante en una región
     "DGA Agua":           "prospecto",   # derecho de agua minero — señal 6-18m anterior al EIA

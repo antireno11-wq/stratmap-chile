@@ -150,11 +150,29 @@ def run_infomineria():
     from connectors.infomineria import fetch_infomineria
     return ingest(fetch_infomineria(limit=100), "infomineria")
 
-@track_run("signals_jobs")
-def run_signals():
-    from signals.jobs import run as jobs_run
-    jobs_run()
-    return None
+@track_run("sea_milestones")
+def run_sea_milestones():
+    from signals.sea_milestone import run as _run
+    result = _run(force_recompute=False)
+    return {"inserted": result.get("predicted", 0), "updated": result.get("skipped", 0)}
+
+@track_run("phase_tracker")
+def run_phase_tracker():
+    from signals.phase_tracker import run as _run
+    result = _run()
+    return {"inserted": len(result.get("transitions", [])), "updated": 0}
+
+@track_run("cross_source_boost")
+def run_cross_source_boost():
+    from signals.cross_source_boost import run as _run
+    result = _run()
+    return {"inserted": result.get("boosted", 0), "updated": 0}
+
+@track_run("news_projects")
+def run_news_projects():
+    from signals.news_projects import run as _run
+    result = _run(force_recompute=False, limit=20)
+    return {"inserted": result.get("created", 0), "updated": result.get("enriched", 0)}
 
 
 @track_run("score_events")
@@ -185,7 +203,10 @@ PIPELINE: list[tuple[str, callable]] = [
     ("infomineria",        lambda: run_infomineria()),
     ("mundo_mineria",  lambda: run_mundo_mineria()),
     ("empleos",        lambda: run_empleos()),
-    ("signals_jobs",   lambda: run_signals()),
+    ("news_projects",      lambda: run_news_projects()),
+    ("sea_milestones",     lambda: run_sea_milestones()),
+    ("phase_tracker",      lambda: run_phase_tracker()),
+    ("cross_source_boost", lambda: run_cross_source_boost()),
     ("score_events",   lambda: run_score_events()),
 ]
 
