@@ -7,6 +7,30 @@ logger = logging.getLogger("stratmap.ai_client")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_FREE_MODEL = "openrouter/free"
 
+def _call_anthropic(api_key: str, prompt: str, system: str = None, max_tokens: int = 1000, model: str = None) -> str:
+    model_name = model or "claude-haiku-4-5-20251001"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    payload = {
+        "model": model_name,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        payload["system"] = system
+
+    try:
+        resp = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload, timeout=45)
+        resp.raise_for_status()
+        return resp.json()["content"][0]["text"].strip()
+    except Exception as e:
+        logger.error(f"[ai_client] Error llamando a Anthropic: {e}")
+        raise
+
+
 def call_llm(
     prompt: str,
     system: str = None,
@@ -16,21 +40,14 @@ def call_llm(
     """
     Envía una consulta a la API de IA.
     Prioriza OpenRouter si OPENROUTER_API_KEY está configurada,
-    con un fallback compatible hacia Anthropic si se detecta ANTHROPIC_API_KEY.
+    con un fallback automático a Anthropic ante fallos de OpenRouter.
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    is_openrouter = True
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
     
-    if not api_key:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("No se encontró OPENROUTER_API_KEY ni ANTHROPIC_API_KEY en las variables de entorno.")
-        is_openrouter = False
-
-    if is_openrouter:
+    if openrouter_key:
         model_name = os.getenv("OPENROUTER_MODEL", DEFAULT_FREE_MODEL)
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {openrouter_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://stratmap.cl",
             "X-Title": "Stratmap",
@@ -54,27 +71,17 @@ def call_llm(
             return data["choices"][0]["message"]["content"].strip()
         except Exception as e:
             logger.error(f"[ai_client] Error llamando a OpenRouter: {e}")
+            # Fallback de emergencia a Anthropic si la key está disponible
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+            if anthropic_key:
+                logger.info("[ai_client] Intentando fallback de emergencia a Anthropic...")
+                try:
+                    return _call_anthropic(anthropic_key, prompt, system, max_tokens, model)
+                except Exception as ae:
+                    logger.error(f"[ai_client] Fallback a Anthropic también falló: {ae}")
             raise
     else:
-        # Fallback a Anthropic directo
-        model_name = model or "claude-haiku-4-5-20251001"
-        headers = {
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        payload = {
-            "model": model_name,
-            "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        if system:
-            payload["system"] = system
-
-        try:
-            resp = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload, timeout=45)
-            resp.raise_for_status()
-            return resp.json()["content"][0]["text"].strip()
-        except Exception as e:
-            logger.error(f"[ai_client] Error llamando a Anthropic: {e}")
-            raise
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        if not anthropic_key:
+            raise ValueError("No se encontró OPENROUTER_API_KEY ni ANTHROPIC_API_KEY en las variables de entorno.")
+        return _call_anthropic(anthropic_key, prompt, system, max_tokens, model)
