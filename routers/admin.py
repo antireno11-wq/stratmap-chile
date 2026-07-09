@@ -12,6 +12,7 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 import db
 from db import expire_stale_opportunities, recalc_all_scores
@@ -1187,3 +1188,74 @@ def run_news_projects(force: bool = Query(default=False), limit: int = Query(def
     except Exception as e:
         import traceback
         return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+class AdminUpdatePlanPayload(BaseModel):
+    plan: str
+    status: str
+    current_period_end: Optional[str] = None
+    mp_preapproval_id: Optional[str] = None
+
+
+@router.get("/admin/users")
+def admin_list_users():
+    """Listado completo de usuarios registrados y sus planes actuales."""
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT u.id, u.email, u.name, u.created_at, u.last_login,
+                       p.plan, p.status, p.current_period_end, p.mp_preapproval_id
+                FROM users u
+                LEFT JOIN user_plans p ON u.id = p.user_id
+                ORDER BY u.created_at DESC
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+    
+    for r in rows:
+        for f in ["created_at", "last_login", "current_period_end"]:
+            if r.get(f):
+                r[f] = r[f].isoformat()
+    return {"items": rows, "count": len(rows)}
+
+
+@router.post("/admin/users/{user_id}/plan")
+def admin_update_user_plan(user_id: int, payload: AdminUpdatePlanPayload):
+    """Permite al administrador modificar manualmente el plan y estado de un usuario."""
+    import plans
+    if payload.plan not in plans.PLANS:
+        raise HTTPException(status_code=400, detail="Plan inválido")
+    
+    period_end = None
+    if payload.current_period_end:
+        try:
+            period_end = datetime.fromisoformat(payload.current_period_end.replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Fecha de expiración de plan inválida. Usar formato ISO.")
+    
+    db.upsert_user_plan(
+        user_id=user_id,
+        plan=payload.plan,
+        status=payload.status,
+        current_period_end=period_end,
+        mp_preapproval_id=payload.mp_preapproval_id
+    )
+    return {"ok": True}
+
+
+@router.get("/admin/errors")
+def admin_list_errors():
+    """Historial de corridas de ingesta recientes y sus errores/resultados."""
+    with db.get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, source, started_at, finished_at, status, items_in, items_upd, error_msg, duration_ms
+                FROM ingest_runs
+                ORDER BY started_at DESC
+                LIMIT 100
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+    for r in rows:
+        for f in ["started_at", "finished_at"]:
+            if r.get(f):
+                r[f] = r[f].isoformat()
+    return {"items": rows, "count": len(rows)}

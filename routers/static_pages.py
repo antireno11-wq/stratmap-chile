@@ -46,3 +46,8 @@ def serve_preferences():
 @router.get("/health.html")
 def serve_health():
     return _serve("health.html")
+
+
+@router.get("/superadmin.html")
+def serve_superadmin():
+    return _serve("superadmin.html")
