@@ -52,8 +52,8 @@ def _mp_token() -> str:
 def _public_base_url() -> str:
     base = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
     if not base:
-        # Fallback razonable: tu URL de Railway
-        base = "https://stratmap-chile.up.railway.app"
+        # Fallback razonable: tu dominio de producción
+        base = "https://stratmap.cl"
     return base
 
 
