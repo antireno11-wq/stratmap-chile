@@ -433,6 +433,19 @@ ul.features li::before { color: var(--accent) !important; }
   border-color: var(--border) !important;
 }
 
+/* Grids para Dashboard */
+.charts-grid, .dash-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 20px !important;
+  margin-bottom: 20px !important;
+}
+.chart-canvas-wrap {
+  position: relative !important;
+  height: 260px !important;
+  width: 100% !important;
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    MOBILE (≤ 900px) — portado del facelift anterior, adaptado a dark.
    ════════════════════════════════════════════════════════════════════════ */
@@ -485,4 +498,63 @@ ul.features li::before { color: var(--accent) !important; }
   button, .btn, .btn-primary, .btn-login, .btn-outline, .sidebar-item, .chip, .user-avatar { min-height: 44px; }
   #drawer, .drawer { width: 100% !important; max-width: 100% !important; right: -100% !important; }
   #drawer.open, .drawer.open { right: 0 !important; }
+
+  /* Grids adaptadas a móvil */
+  .charts-grid, .dash-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  
+  /* Topbar compacta en móvil */
+  .topbar {
+    padding: 0 12px !important;
+    gap: 8px !important;
+  }
+  .topbar-title {
+    font-size: 14px !important;
+    white-space: nowrap !important;
+  }
+  .topbar-search {
+    max-width: 140px !important;
+    padding: 0 8px !important;
+  }
+  .topbar-search input {
+    font-size: 12px !important;
+    padding: 6px 0 !important;
+  }
+  #limit, #theme-toggle {
+    display: none !important;
+  }
+  #userAvatarLabel {
+    display: none !important;
+  }
+  .user-avatar {
+    padding: 6px 8px !important;
+  }
+
+  /* Tabs de superadmin y vistas con navegación */
+  .tabs {
+    display: flex !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    white-space: nowrap !important;
+  }
+  .tab-btn {
+    flex-shrink: 0 !important;
+  }
+}
+
+/* Pantallas extra chicas (teléfonos de baja resolución) */
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: 1fr !important;
+  }
+  .topbar-search {
+    display: none !important;
+  }
 }

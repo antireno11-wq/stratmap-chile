@@ -396,14 +396,14 @@
           const statusBadge = u.status ? `<span class="badge badge-${escapeHTML(u.status)}">${escapeHTML(u.status)}</span>` : '—';
           return `
             <tr>
-              <td><b>${u.id}</b></td>
-              <td>${escapeHTML(u.name || '—')}</td>
-              <td>${escapeHTML(u.email)}</td>
-              <td>${fmtDate(u.created_at)}</td>
-              <td>${fmtDate(u.last_login)}</td>
-              <td id="plan-cell-${u.id}">${planBadge}</td>
-              <td id="status-cell-${u.id}">${statusBadge}</td>
-              <td>
+              <td data-label="ID"><b>${u.id}</b></td>
+              <td data-label="Nombre">${escapeHTML(u.name || '—')}</td>
+              <td data-label="Email">${escapeHTML(u.email)}</td>
+              <td data-label="Fecha Registro">${fmtDate(u.created_at)}</td>
+              <td data-label="Último Acceso">${fmtDate(u.last_login)}</td>
+              <td data-label="Plan Actual" id="plan-cell-${u.id}">${planBadge}</td>
+              <td data-label="Estado Plan" id="status-cell-${u.id}">${statusBadge}</td>
+              <td data-label="Acciones">
                 <select class="plan-select" onchange="changePlan(${u.id}, this.value, '${escapeHTML(u.status || 'active')}')">
                   <option value="">Cambiar Plan...</option>
                   <option value="free">Free</option>
@@ -468,13 +468,13 @@
           const duration = run.duration_ms ? `${(run.duration_ms / 1000).toFixed(1)}s` : '—';
           return `
             <tr>
-              <td>#${run.id}</td>
-              <td><b>${escapeHTML(run.source)}</b></td>
-              <td>${fmtDate(run.started_at)}</td>
-              <td>${duration}</td>
-              <td>${statusBadge}</td>
-              <td>${run.items_in || 0} / ${run.items_upd || 0}</td>
-              <td>${details}</td>
+              <td data-label="ID Run">#${run.id}</td>
+              <td data-label="Fuente"><b>${escapeHTML(run.source)}</b></td>
+              <td data-label="Fecha Inicio">${fmtDate(run.started_at)}</td>
+              <td data-label="Duración">${duration}</td>
+              <td data-label="Estado">${statusBadge}</td>
+              <td data-label="Nuevos / Act.">${run.items_in || 0} / ${run.items_upd || 0}</td>
+              <td data-label="Detalle / Error">${details}</td>
             </tr>
           `;
         }).join('');
@@ -508,10 +508,10 @@
         tbody.innerHTML = sources.map(s => {
           return `
             <tr>
-              <td><b>${escapeHTML(s.source)}</b></td>
-              <td>${s.total}</td>
-              <td><span style="color:var(--success);font-weight:600">${s.active}</span></td>
-              <td>${fmtDate(s.last_scrape)}</td>
+              <td data-label="Fuente / Conector"><b>${escapeHTML(s.source)}</b></td>
+              <td data-label="Total Oportunidades">${s.total}</td>
+              <td data-label="Activas"><span style="color:var(--success);font-weight:600">${s.active}</span></td>
+              <td data-label="Última Actualización">${fmtDate(s.last_scrape)}</td>
             </tr>
           `;
         }).join('');
